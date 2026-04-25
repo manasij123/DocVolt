@@ -1,4 +1,4 @@
-import React, { useEffect, useRef } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import {
   View,
   Text,
@@ -6,6 +6,7 @@ import {
   Animated,
   Easing,
   Dimensions,
+  ActivityIndicator,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { LinearGradient } from "expo-linear-gradient";
@@ -13,11 +14,13 @@ import { useRouter } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import { colors, radius, gradients } from "../src/theme";
 import PressableScale from "../src/PressableScale";
+import { getLastRole, getToken, setLastRole } from "../src/api";
 
 const { width } = Dimensions.get("window");
 
 export default function Landing() {
   const router = useRouter();
+  const [bootstrapping, setBootstrapping] = useState(true);
 
   const heroFade = useRef(new Animated.Value(0)).current;
   const heroSlide = useRef(new Animated.Value(40)).current;
@@ -26,7 +29,31 @@ export default function Landing() {
   const orb = useRef(new Animated.Value(0)).current;
   const orb2 = useRef(new Animated.Value(0)).current;
 
+  // Auto-redirect if user has a saved role (WhatsApp/FB-style persistent login)
   useEffect(() => {
+    (async () => {
+      try {
+        const role = await getLastRole();
+        if (role === "client") {
+          router.replace("/client/monthly");
+          return;
+        }
+        if (role === "admin") {
+          const token = await getToken();
+          if (token) {
+            router.replace("/admin/(tabs)/upload");
+            return;
+          }
+        }
+      } catch {
+        // ignore — fall through to chooser
+      }
+      setBootstrapping(false);
+    })();
+  }, []);
+
+  useEffect(() => {
+    if (bootstrapping) return;
     Animated.parallel([
       Animated.timing(heroFade, { toValue: 1, duration: 700, useNativeDriver: true }),
       Animated.timing(heroSlide, { toValue: 0, duration: 700, easing: Easing.out(Easing.cubic), useNativeDriver: true }),
@@ -50,7 +77,16 @@ export default function Landing() {
         Animated.timing(orb2, { toValue: 0, duration: 7500, easing: Easing.inOut(Easing.sin), useNativeDriver: true }),
       ])
     ).start();
-  }, []);
+  }, [bootstrapping]);
+
+  const onClient = async () => {
+    await setLastRole("client");
+    router.replace("/client/monthly");
+  };
+
+  const onAdmin = () => {
+    router.push("/admin/login");
+  };
 
   const orbY = orb.interpolate({ inputRange: [0, 1], outputRange: [0, -28] });
   const orbX = orb.interpolate({ inputRange: [0, 1], outputRange: [0, 22] });
@@ -76,6 +112,12 @@ export default function Landing() {
         style={StyleSheet.absoluteFill}
       />
 
+      {bootstrapping ? (
+        <View style={styles.bootWrap}>
+          <ActivityIndicator color="#fff" />
+        </View>
+      ) : (
+        <>
       {/* Floating gradient orbs */}
       <Animated.View
         style={[
@@ -143,7 +185,7 @@ export default function Landing() {
           <Animated.View style={cardTransform(card1)}>
             <PressableScale
               haptic="medium"
-              onPress={() => router.push("/client")}
+              onPress={onClient}
               testID="btn-client-access"
             >
               <LinearGradient
@@ -169,7 +211,7 @@ export default function Landing() {
           <Animated.View style={cardTransform(card2)}>
             <PressableScale
               haptic="light"
-              onPress={() => router.push("/admin/login")}
+              onPress={onAdmin}
               testID="btn-admin-access"
             >
               <View style={styles.secondaryBtn}>
@@ -193,12 +235,15 @@ export default function Landing() {
           </View>
         </View>
       </SafeAreaView>
+        </>
+      )}
     </View>
   );
 }
 
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: colors.primary, overflow: "hidden" },
+  bootWrap: { flex: 1, alignItems: "center", justifyContent: "center" },
   orbBlue: {
     position: "absolute",
     top: -80,

@@ -19,6 +19,7 @@ import { useRouter } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import { colors, radius, shadow, gradients } from "../../src/theme";
 import { useAuth } from "../../src/auth";
+import { setLastRole } from "../../src/api";
 import PressableScale from "../../src/PressableScale";
 import GradientButton from "../../src/GradientButton";
 
@@ -58,6 +59,7 @@ export default function AdminLogin() {
     setLoading(true);
     try {
       await login(email.trim(), password);
+      await setLastRole("admin");
       router.replace("/admin/(tabs)/upload");
     } catch (e: any) {
       const msg = e?.response?.data?.detail || "Login failed";

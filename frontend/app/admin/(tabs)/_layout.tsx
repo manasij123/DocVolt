@@ -6,6 +6,7 @@ import { LinearGradient } from "expo-linear-gradient";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { colors, gradients } from "../../../src/theme";
 import { useAuth } from "../../../src/auth";
+import { setLastRole } from "../../../src/api";
 import PressableScale from "../../../src/PressableScale";
 
 function AdminHeader() {
@@ -14,6 +15,7 @@ function AdminHeader() {
 
   const onLogout = async () => {
     await logout();
+    await setLastRole(null);
     router.replace("/");
   };
 

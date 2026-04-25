@@ -12,42 +12,53 @@ const api = axios.create({
 });
 
 const TOKEN_KEY = "pdfstore_admin_token";
+const ROLE_KEY = "pdfstore_last_role";
 
 const memoryStore: { [key: string]: string } = {};
 
-async function setTokenStorage(value: string | null) {
+async function setItem(key: string, value: string | null) {
   if (Platform.OS === "web") {
     if (value === null) {
-      delete memoryStore[TOKEN_KEY];
+      delete memoryStore[key];
     } else {
-      memoryStore[TOKEN_KEY] = value;
+      memoryStore[key] = value;
     }
     return;
   }
   if (value === null) {
-    await SecureStore.deleteItemAsync(TOKEN_KEY);
+    await SecureStore.deleteItemAsync(key);
   } else {
-    await SecureStore.setItemAsync(TOKEN_KEY, value);
+    await SecureStore.setItemAsync(key, value);
   }
 }
 
-async function getTokenStorage(): Promise<string | null> {
+async function getItem(key: string): Promise<string | null> {
   if (Platform.OS === "web") {
-    return memoryStore[TOKEN_KEY] || null;
+    return memoryStore[key] || null;
   }
-  return await SecureStore.getItemAsync(TOKEN_KEY);
+  return await SecureStore.getItemAsync(key);
 }
 
 export async function setToken(token: string | null) {
-  await setTokenStorage(token);
+  await setItem(TOKEN_KEY, token);
 }
 
 export async function getToken() {
-  return getTokenStorage();
+  return getItem(TOKEN_KEY);
+}
+
+export async function setLastRole(role: "admin" | "client" | null) {
+  await setItem(ROLE_KEY, role);
+}
+
+export async function getLastRole(): Promise<"admin" | "client" | null> {
+  const v = await getItem(ROLE_KEY);
+  if (v === "admin" || v === "client") return v;
+  return null;
 }
 
 api.interceptors.request.use(async (config) => {
-  const token = await getTokenStorage();
+  const token = await getItem(TOKEN_KEY);
   if (token) {
     config.headers.Authorization = `Bearer ${token}`;
   }

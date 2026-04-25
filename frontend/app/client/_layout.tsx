@@ -4,17 +4,24 @@ import { TouchableOpacity, View, Text, StyleSheet } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
 import { colors } from "../../src/theme";
+import { setLastRole } from "../../src/api";
 import { SafeAreaView } from "react-native-safe-area-context";
 import PressableScale from "../../src/PressableScale";
 
 function ClientHeader() {
   const router = useRouter();
+
+  const onSwitchRole = async () => {
+    await setLastRole(null);
+    router.replace("/");
+  };
+
   return (
     <SafeAreaView edges={["top"]} style={{ backgroundColor: colors.surface }}>
       <View style={styles.header}>
-        <PressableScale onPress={() => router.replace("/")} haptic="light" testID="btn-home">
+        <PressableScale onPress={onSwitchRole} haptic="light" testID="btn-home">
           <View style={styles.iconBtn}>
-            <Ionicons name="chevron-back" size={22} color={colors.textPrimary} />
+            <Ionicons name="swap-horizontal" size={20} color={colors.textPrimary} />
           </View>
         </PressableScale>
 
