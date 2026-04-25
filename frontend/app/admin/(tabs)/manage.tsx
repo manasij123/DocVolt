@@ -16,7 +16,10 @@ import {
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import api, { CATEGORY_LABELS, DocumentMeta } from "../../../src/api";
-import { colors, radius, shadow } from "../../../src/theme";
+import { colors, radius, shadow, categoryGradients } from "../../../src/theme";
+import { LinearGradient } from "expo-linear-gradient";
+import PressableScale from "../../../src/PressableScale";
+import GradientButton from "../../../src/GradientButton";
 
 const MONTHS = [
   { v: 1, l: "Jan" }, { v: 2, l: "Feb" }, { v: 3, l: "Mar" }, { v: 4, l: "Apr" },
