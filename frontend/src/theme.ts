@@ -52,7 +52,7 @@ export const colors = {
 export const gradients = {
   primary: ["#1A73E8", "#0D47A1"] as const,        // Royal Blue → Deep Blue
   primarySoft: ["#4285F4", "#1A73E8"] as const,
-  hero: ["#0D47A1", "#1A73E8", "#1565C0"] as const, // Authority hero
+  hero: ["#082B66", "#0D47A1", "#0F4FB3"] as const, // Authority hero (slightly deeper)
   heroOverlay: ["rgba(13,71,161,0.30)", "rgba(13,71,161,0.95)"] as const,
   accent: ["#1A73E8", "#0D47A1"] as const,
   card: ["#FFFFFF", "#F8FAFC"] as const,
