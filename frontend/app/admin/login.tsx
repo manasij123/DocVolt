@@ -9,6 +9,9 @@ import {
   Alert,
   Animated,
   Easing,
+  ScrollView,
+  TouchableWithoutFeedback,
+  Keyboard,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { LinearGradient } from "expo-linear-gradient";
@@ -30,13 +33,14 @@ export default function AdminLogin() {
   const [pwdFocus, setPwdFocus] = useState(false);
 
   const fade = useRef(new Animated.Value(0)).current;
-  const slide = useRef(new Animated.Value(30)).current;
 
   useEffect(() => {
-    Animated.parallel([
-      Animated.timing(fade, { toValue: 1, duration: 600, useNativeDriver: true }),
-      Animated.timing(slide, { toValue: 0, duration: 600, easing: Easing.out(Easing.cubic), useNativeDriver: true }),
-    ]).start();
+    Animated.timing(fade, {
+      toValue: 1,
+      duration: 500,
+      easing: Easing.out(Easing.cubic),
+      useNativeDriver: true,
+    }).start();
   }, []);
 
   useEffect(() => {
@@ -46,6 +50,7 @@ export default function AdminLogin() {
   }, [user]);
 
   const onSubmit = async () => {
+    Keyboard.dismiss();
     if (!email.trim() || !password.trim()) {
       Alert.alert("Missing fields", "Please enter email and password");
       return;
@@ -80,110 +85,119 @@ export default function AdminLogin() {
       <SafeAreaView style={styles.safe} edges={["top", "bottom"]}>
         <KeyboardAvoidingView
           style={{ flex: 1 }}
-          behavior={Platform.OS === "ios" ? "padding" : undefined}
+          behavior={Platform.OS === "ios" ? "padding" : "height"}
+          keyboardVerticalOffset={Platform.OS === "ios" ? 0 : 0}
         >
-          <View style={styles.headerRow}>
-            <PressableScale
-              onPress={() => router.replace("/")}
-              testID="btn-back-landing"
-              haptic="light"
-            >
-              <View style={styles.backBtn}>
-                <Ionicons name="chevron-back" size={22} color="#fff" />
-              </View>
-            </PressableScale>
-            <Text style={styles.headerTitle}>Admin</Text>
-            <View style={{ width: 40 }} />
-          </View>
-
-          <Animated.View
-            style={[
-              styles.body,
-              { opacity: fade, transform: [{ translateY: slide }] },
-            ]}
+          <ScrollView
+            contentContainerStyle={styles.scroll}
+            keyboardShouldPersistTaps="handled"
+            showsVerticalScrollIndicator={false}
+            bounces={false}
           >
-            <LinearGradient
-              colors={["#3B82F6", "#8B5CF6"]}
-              start={{ x: 0, y: 0 }}
-              end={{ x: 1, y: 1 }}
-              style={styles.iconLogo}
-            >
-              <Ionicons name="shield-checkmark" size={30} color="#fff" />
-            </LinearGradient>
-
-            <Text style={styles.title}>Welcome back</Text>
-            <Text style={styles.subtitle}>Sign in to manage your documents</Text>
-
-            <View style={styles.card}>
-              <Text style={styles.label}>Email</Text>
-              <View
-                style={[
-                  styles.inputWrap,
-                  emailFocus && styles.inputWrapFocus,
-                ]}
+            <View style={styles.headerRow}>
+              <PressableScale
+                onPress={() => router.replace("/")}
+                testID="btn-back-landing"
+                haptic="light"
               >
-                <Ionicons name="mail-outline" size={18} color={colors.textSecondary} />
-                <TextInput
-                  value={email}
-                  onChangeText={setEmail}
-                  autoCapitalize="none"
-                  keyboardType="email-address"
-                  placeholder="admin@example.com"
-                  placeholderTextColor={colors.textMuted}
-                  style={styles.input}
-                  onFocus={() => setEmailFocus(true)}
-                  onBlur={() => setEmailFocus(false)}
-                  testID="input-email"
-                />
-              </View>
-
-              <Text style={[styles.label, { marginTop: 18 }]}>Password</Text>
-              <View
-                style={[
-                  styles.inputWrap,
-                  pwdFocus && styles.inputWrapFocus,
-                ]}
-              >
-                <Ionicons name="lock-closed-outline" size={18} color={colors.textSecondary} />
-                <TextInput
-                  value={password}
-                  onChangeText={setPassword}
-                  secureTextEntry={!showPwd}
-                  placeholder="••••••••"
-                  placeholderTextColor={colors.textMuted}
-                  style={styles.input}
-                  onFocus={() => setPwdFocus(true)}
-                  onBlur={() => setPwdFocus(false)}
-                  testID="input-password"
-                />
-                <PressableScale onPress={() => setShowPwd((s) => !s)} haptic="light">
-                  <View style={styles.eyeBtn}>
-                    <Ionicons
-                      name={showPwd ? "eye-off" : "eye"}
-                      size={18}
-                      color={colors.textSecondary}
-                    />
-                  </View>
-                </PressableScale>
-              </View>
-
-              <View style={{ height: 24 }} />
-
-              <GradientButton
-                title="Sign In"
-                onPress={onSubmit}
-                loading={loading}
-                size="lg"
-                icon="arrow-forward"
-                testID="btn-login-submit"
-              />
-
-              <View style={styles.hint}>
-                <Ionicons name="information-circle-outline" size={14} color={colors.textMuted} />
-                <Text style={styles.hintText}>Demo: admin@example.com / admin123</Text>
-              </View>
+                <View style={styles.backBtn}>
+                  <Ionicons name="chevron-back" size={22} color="#fff" />
+                </View>
+              </PressableScale>
+              <Text style={styles.headerTitle}>Admin</Text>
+              <View style={{ width: 40 }} />
             </View>
-          </Animated.View>
+
+            <Animated.View style={[styles.body, { opacity: fade }]}>
+              <LinearGradient
+                colors={["#3B82F6", "#8B5CF6"]}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 1 }}
+                style={styles.iconLogo}
+              >
+                <Ionicons name="shield-checkmark" size={30} color="#fff" />
+              </LinearGradient>
+
+              <Text style={styles.title}>Welcome back</Text>
+              <Text style={styles.subtitle}>Sign in to manage your documents</Text>
+
+              <View style={styles.card}>
+                <Text style={styles.label}>Email</Text>
+                <View
+                  style={[
+                    styles.inputWrap,
+                    emailFocus && styles.inputWrapFocus,
+                  ]}
+                >
+                  <Ionicons name="mail-outline" size={18} color={colors.textSecondary} />
+                  <TextInput
+                    value={email}
+                    onChangeText={setEmail}
+                    autoCapitalize="none"
+                    autoCorrect={false}
+                    keyboardType="email-address"
+                    placeholder="admin@example.com"
+                    placeholderTextColor={colors.textMuted}
+                    style={styles.input}
+                    onFocus={() => setEmailFocus(true)}
+                    onBlur={() => setEmailFocus(false)}
+                    returnKeyType="next"
+                    testID="input-email"
+                  />
+                </View>
+
+                <Text style={[styles.label, { marginTop: 18 }]}>Password</Text>
+                <View
+                  style={[
+                    styles.inputWrap,
+                    pwdFocus && styles.inputWrapFocus,
+                  ]}
+                >
+                  <Ionicons name="lock-closed-outline" size={18} color={colors.textSecondary} />
+                  <TextInput
+                    value={password}
+                    onChangeText={setPassword}
+                    secureTextEntry={!showPwd}
+                    autoCapitalize="none"
+                    autoCorrect={false}
+                    placeholder="••••••••"
+                    placeholderTextColor={colors.textMuted}
+                    style={styles.input}
+                    onFocus={() => setPwdFocus(true)}
+                    onBlur={() => setPwdFocus(false)}
+                    returnKeyType="go"
+                    onSubmitEditing={onSubmit}
+                    testID="input-password"
+                  />
+                  <TouchableWithoutFeedback onPress={() => setShowPwd((s) => !s)}>
+                    <View style={styles.eyeBtn}>
+                      <Ionicons
+                        name={showPwd ? "eye-off" : "eye"}
+                        size={18}
+                        color={colors.textSecondary}
+                      />
+                    </View>
+                  </TouchableWithoutFeedback>
+                </View>
+
+                <View style={{ height: 24 }} />
+
+                <GradientButton
+                  title="Sign In"
+                  onPress={onSubmit}
+                  loading={loading}
+                  size="lg"
+                  icon="arrow-forward"
+                  testID="btn-login-submit"
+                />
+
+                <View style={styles.hint}>
+                  <Ionicons name="information-circle-outline" size={14} color={colors.textMuted} />
+                  <Text style={styles.hintText}>Demo: admin@example.com / admin123</Text>
+                </View>
+              </View>
+            </Animated.View>
+          </ScrollView>
         </KeyboardAvoidingView>
       </SafeAreaView>
     </View>
@@ -208,6 +222,10 @@ const styles = StyleSheet.create({
     borderRadius: 200,
   },
   safe: { flex: 1 },
+  scroll: {
+    flexGrow: 1,
+    paddingBottom: 40,
+  },
   headerRow: {
     flexDirection: "row",
     justifyContent: "space-between",
@@ -232,7 +250,6 @@ const styles = StyleSheet.create({
     letterSpacing: 0.3,
   },
   body: {
-    flex: 1,
     paddingHorizontal: 22,
     paddingTop: 28,
   },
@@ -289,16 +306,12 @@ const styles = StyleSheet.create({
   inputWrapFocus: {
     borderColor: colors.accent,
     backgroundColor: "#fff",
-    shadowColor: colors.accent,
-    shadowOffset: { width: 0, height: 0 },
-    shadowOpacity: 0.18,
-    shadowRadius: 8,
-    elevation: 2,
   },
   input: {
     flex: 1,
     fontSize: 15,
     color: colors.textPrimary,
+    paddingVertical: 0,
   },
   eyeBtn: {
     width: 36,
