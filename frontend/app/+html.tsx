@@ -1,10 +1,13 @@
-// @ts-nocheck
 import { ScrollViewStyleReset } from "expo-router/html";
-import type { PropsWithChildren } from "react";
+import { type PropsWithChildren } from "react";
 
+// This file is used ONLY for web static export (production web build).
+// It customises the root <html> document to inject the PWA manifest,
+// theme-color, and a small service-worker registration snippet.
+// Native (iOS / Android) builds ignore this file completely.
 export default function Root({ children }: PropsWithChildren) {
   return (
-    <html lang="en" style={{ height: "100%" }}>
+    <html lang="en">
       <head>
         <meta charSet="utf-8" />
         <meta httpEquiv="X-UA-Compatible" content="IE=edge" />
@@ -12,33 +15,44 @@ export default function Root({ children }: PropsWithChildren) {
           name="viewport"
           content="width=device-width, initial-scale=1, shrink-to-fit=no"
         />
-        {/*
-          Disable body scrolling on web to make ScrollView components work correctly.
-          If you want to enable scrolling, remove `ScrollViewStyleReset` and
-          set `overflow: auto` on the body style below.
-        */}
-        <ScrollViewStyleReset />
-        <style
+        <meta name="application-name" content="DocVault" />
+        <meta name="apple-mobile-web-app-capable" content="yes" />
+        <meta name="apple-mobile-web-app-title" content="DocVault" />
+        <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+        <meta name="mobile-web-app-capable" content="yes" />
+        <meta name="theme-color" content="#1A73E8" />
+        <meta name="msapplication-navbutton-color" content="#1A73E8" />
+        <meta
+          name="description"
+          content="DocVault — Organised PDF storage for your team. Monthly Returns, Forwarding Letters, IFA Reports."
+        />
+
+        <link rel="manifest" href="/manifest.json" />
+        <link rel="apple-touch-icon" href="/assets/images/icon.png" />
+        <link rel="icon" href="/assets/images/favicon.png" type="image/png" />
+
+        <title>DocVault</title>
+
+        {/* Service-worker registration — gives the browser a PWA "Install" affordance */}
+        <script
           dangerouslySetInnerHTML={{
             __html: `
-              body > div:first-child { position: fixed !important; top: 0; left: 0; right: 0; bottom: 0; }
-              [role="tablist"] [role="tab"] * { overflow: visible !important; }
-              [role="heading"], [role="heading"] * { overflow: visible !important; }
+              if ('serviceWorker' in navigator) {
+                window.addEventListener('load', function () {
+                  navigator.serviceWorker
+                    .register('/service-worker.js')
+                    .catch(function (err) {
+                      console.warn('SW registration failed:', err);
+                    });
+                });
+              }
             `,
           }}
         />
+
+        <ScrollViewStyleReset />
       </head>
-      <body
-        style={{
-          margin: 0,
-          height: "100%",
-          overflow: "hidden",
-          display: "flex",
-          flexDirection: "column",
-        }}
-      >
-        {children}
-      </body>
+      <body>{children}</body>
     </html>
   );
 }

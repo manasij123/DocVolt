@@ -1,0 +1,26 @@
+{
+  "name": "DocVault",
+  "short_name": "DocVault",
+  "description": "Organised PDF storage for your team — Monthly Returns, Forwarding Letters, IFA Reports.",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#0D47A1",
+  "theme_color": "#1A73E8",
+  "lang": "en",
+  "icons": [
+    {
+      "src": "/assets/images/icon.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "/assets/images/icon.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ]
+}
