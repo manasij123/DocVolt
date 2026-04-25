@@ -1,19 +1,23 @@
-import React, { useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import {
   View,
   Text,
   StyleSheet,
-  TouchableOpacity,
   ActivityIndicator,
   Alert,
   ScrollView,
   Platform,
+  Animated,
+  Easing,
 } from "react-native";
 import * as DocumentPicker from "expo-document-picker";
 import { Ionicons } from "@expo/vector-icons";
-import { colors, radius, shadow } from "../../../src/theme";
+import { LinearGradient } from "expo-linear-gradient";
+import { colors, radius, shadow, categoryGradients } from "../../../src/theme";
 import { CATEGORY_LABELS } from "../../../src/api";
 import api, { getToken } from "../../../src/api";
+import PressableScale from "../../../src/PressableScale";
+import GradientButton from "../../../src/GradientButton";
 
 const MONTHS = [
   { v: 1, l: "Jan" }, { v: 2, l: "Feb" }, { v: 3, l: "Mar" }, { v: 4, l: "Apr" },
@@ -75,6 +79,20 @@ export default function UploadScreen() {
 
   const [uploading, setUploading] = useState(false);
   const [lastUpload, setLastUpload] = useState<string | null>(null);
+
+  const cardFade = useRef(new Animated.Value(0)).current;
+  const cardSlide = useRef(new Animated.Value(20)).current;
+
+  useEffect(() => {
+    if (stage !== "idle") {
+      cardFade.setValue(0);
+      cardSlide.setValue(20);
+      Animated.parallel([
+        Animated.timing(cardFade, { toValue: 1, duration: 400, useNativeDriver: true }),
+        Animated.timing(cardSlide, { toValue: 0, duration: 400, easing: Easing.out(Easing.cubic), useNativeDriver: true }),
+      ]).start();
+    }
+  }, [stage]);
 
   const reset = () => {
     setPicked(null);
@@ -167,18 +185,17 @@ export default function UploadScreen() {
     doUpload(detectedCategory, yearToSend, detectedMonth);
   };
 
-  const goManual = () => {
-    setStage("manual");
-  };
+  const goManual = () => setStage("manual");
 
-  const submitManual = () => {
-    doUpload(category, year, month);
-  };
+  const submitManual = () => doUpload(category, year, month);
 
   const yearOptions = [year - 2, year - 1, year, year + 1];
   const monthLabel = (m: number | null) => (m ? MONTHS[m - 1].l : "—");
 
-  const formatLooksGood = detectedCategory !== "OTHERS" && detectedYear !== null && detectedMonth !== null;
+  const formatLooksGood =
+    detectedCategory !== "OTHERS" && detectedYear !== null && detectedMonth !== null;
+
+  const detectGrad = formatLooksGood ? categoryGradients[detectedCategory] : (["#F59E0B", "#D97706"] as const);
 
   return (
     <ScrollView style={styles.root} contentContainerStyle={{ paddingBottom: 60 }}>
@@ -188,83 +205,126 @@ export default function UploadScreen() {
       </Text>
 
       {/* Step 1: file picker */}
-      <TouchableOpacity onPress={pick} style={styles.dropzone} testID="btn-pick-file">
-        <Ionicons name="cloud-upload-outline" size={36} color={colors.accent} />
-        <Text style={styles.dropTitle}>{picked ? picked.name : "Tap to choose a PDF"}</Text>
-        <Text style={styles.dropSub}>
-          {picked ? `${(picked.size / 1024).toFixed(0)} KB · Tap to change` : "PDF only"}
-        </Text>
-      </TouchableOpacity>
+      <PressableScale onPress={pick} haptic="medium" testID="btn-pick-file">
+        <LinearGradient
+          colors={picked ? ["#EFF6FF", "#F5F3FF"] : ["#F8FAFC", "#F1F5F9"]}
+          style={styles.dropzone}
+        >
+          <View style={styles.dropIconWrap}>
+            <LinearGradient
+              colors={["#3B82F6", "#8B5CF6"]}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 1 }}
+              style={styles.dropIconBg}
+            >
+              <Ionicons
+                name={picked ? "document-attach" : "cloud-upload"}
+                size={26}
+                color="#fff"
+              />
+            </LinearGradient>
+          </View>
+          <Text style={styles.dropTitle} numberOfLines={2}>
+            {picked ? picked.name : "Tap to choose a PDF"}
+          </Text>
+          <Text style={styles.dropSub}>
+            {picked ? `${(picked.size / 1024).toFixed(0)} KB · Tap to change` : "PDF files only"}
+          </Text>
+        </LinearGradient>
+      </PressableScale>
 
       {/* Step 2: detection result */}
       {stage === "scanned" && picked && (
-        <View style={styles.detectCard} testID="detection-card">
+        <Animated.View
+          style={[
+            styles.detectCard,
+            { opacity: cardFade, transform: [{ translateY: cardSlide }] },
+          ]}
+          testID="detection-card"
+        >
           <View style={styles.detectHeader}>
-            <Ionicons
-              name={formatLooksGood ? "checkmark-circle" : "alert-circle"}
-              size={20}
-              color={formatLooksGood ? colors.success : colors.warning}
-            />
-            <Text style={styles.detectTitle}>
-              {formatLooksGood ? "Filename matched a known format" : "Filename format not fully recognised"}
-            </Text>
+            <LinearGradient
+              colors={detectGrad}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 1 }}
+              style={styles.detectStatusIcon}
+            >
+              <Ionicons
+                name={formatLooksGood ? "checkmark-circle" : "alert-circle"}
+                size={18}
+                color="#fff"
+              />
+            </LinearGradient>
+            <View style={{ flex: 1 }}>
+              <Text style={styles.detectTitle}>
+                {formatLooksGood ? "Filename matched" : "Format unclear"}
+              </Text>
+              <Text style={styles.detectHint}>
+                {formatLooksGood ? "Auto-detected from filename" : "Some details missing"}
+              </Text>
+            </View>
           </View>
 
-          <View style={styles.detectRow}>
-            <Text style={styles.detectLabel}>Tab</Text>
-            <Text style={[styles.detectValue, detectedCategory === "OTHERS" && styles.detectValueWarn]}>
-              {CATEGORY_LABELS[detectedCategory]}
-            </Text>
-          </View>
-          <View style={styles.detectRow}>
-            <Text style={styles.detectLabel}>Year</Text>
-            <Text style={[styles.detectValue, !detectedYear && styles.detectValueWarn]}>
-              {detectedYear ?? "—"}
-            </Text>
-          </View>
-          <View style={[styles.detectRow, { borderBottomWidth: 0 }]}>
-            <Text style={styles.detectLabel}>Month</Text>
-            <Text style={[styles.detectValue, !detectedMonth && styles.detectValueWarn]}>
-              {monthLabel(detectedMonth)}
-            </Text>
+          <View style={styles.detectBody}>
+            <View style={styles.detectRow}>
+              <Text style={styles.detectLabel}>Tab</Text>
+              <View style={styles.detectValueWrap}>
+                <View style={[styles.dotInline, { backgroundColor: detectGrad[0] }]} />
+                <Text style={[styles.detectValue, detectedCategory === "OTHERS" && styles.detectValueWarn]}>
+                  {CATEGORY_LABELS[detectedCategory]}
+                </Text>
+              </View>
+            </View>
+            <View style={styles.detectRow}>
+              <Text style={styles.detectLabel}>Year</Text>
+              <Text style={[styles.detectValue, !detectedYear && styles.detectValueWarn]}>
+                {detectedYear ?? "—"}
+              </Text>
+            </View>
+            <View style={[styles.detectRow, { borderBottomWidth: 0 }]}>
+              <Text style={styles.detectLabel}>Month</Text>
+              <Text style={[styles.detectValue, !detectedMonth && styles.detectValueWarn]}>
+                {monthLabel(detectedMonth)}
+              </Text>
+            </View>
           </View>
 
           <Text style={styles.askText}>Is this format correct?</Text>
 
           <View style={styles.confirmRow}>
-            <TouchableOpacity
-              style={[styles.confirmBtn, styles.btnNo]}
-              onPress={goManual}
-              disabled={uploading}
-              testID="btn-format-no"
-            >
-              <Ionicons name="close" size={18} color={colors.textPrimary} />
-              <Text style={styles.btnNoText}>No, set manually</Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={[styles.confirmBtn, styles.btnYes, uploading && { opacity: 0.6 }]}
-              onPress={confirmDetection}
-              disabled={uploading}
-              testID="btn-format-yes"
-            >
-              {uploading ? (
-                <ActivityIndicator color="#fff" />
-              ) : (
-                <>
-                  <Ionicons name="checkmark" size={18} color="#fff" />
-                  <Text style={styles.btnYesText}>Yes, upload</Text>
-                </>
-              )}
-            </TouchableOpacity>
+            <View style={{ flex: 1 }}>
+              <GradientButton
+                title="No, set manually"
+                variant="ghost"
+                icon="close"
+                onPress={goManual}
+                disabled={uploading}
+                testID="btn-format-no"
+                haptic="light"
+              />
+            </View>
+            <View style={{ flex: 1 }}>
+              <GradientButton
+                title="Yes, upload"
+                icon="checkmark"
+                onPress={confirmDetection}
+                loading={uploading}
+                testID="btn-format-yes"
+                haptic="medium"
+              />
+            </View>
           </View>
-        </View>
+        </Animated.View>
       )}
 
-      {/* Step 3: manual select */}
+      {/* Step 3: manual */}
       {stage === "manual" && picked && (
-        <View style={styles.manualWrap} testID="manual-form">
+        <Animated.View
+          style={[styles.manualWrap, { opacity: cardFade, transform: [{ translateY: cardSlide }] }]}
+          testID="manual-form"
+        >
           <View style={styles.manualHeader}>
-            <Ionicons name="settings-outline" size={18} color={colors.textPrimary} />
+            <Ionicons name="settings" size={18} color={colors.accent} />
             <Text style={styles.manualTitle}>Set category & date manually</Text>
           </View>
 
@@ -273,15 +333,29 @@ export default function UploadScreen() {
             <View style={styles.chipRow}>
               {Object.keys(CATEGORY_LABELS).map((k) => {
                 const active = k === category;
+                const cgrad = categoryGradients[k];
                 return (
-                  <TouchableOpacity
+                  <PressableScale
                     key={k}
-                    style={[styles.chip, active && styles.chipActive]}
                     onPress={() => setCategory(k)}
+                    haptic="light"
                     testID={`chip-cat-${k}`}
                   >
-                    <Text style={[styles.chipText, active && styles.chipTextActive]}>{CATEGORY_LABELS[k]}</Text>
-                  </TouchableOpacity>
+                    {active ? (
+                      <LinearGradient
+                        colors={cgrad}
+                        start={{ x: 0, y: 0 }}
+                        end={{ x: 1, y: 1 }}
+                        style={[styles.chip, styles.chipActive]}
+                      >
+                        <Text style={styles.chipTextActive}>{CATEGORY_LABELS[k]}</Text>
+                      </LinearGradient>
+                    ) : (
+                      <View style={styles.chip}>
+                        <Text style={styles.chipText}>{CATEGORY_LABELS[k]}</Text>
+                      </View>
+                    )}
+                  </PressableScale>
                 );
               })}
             </View>
@@ -293,14 +367,25 @@ export default function UploadScreen() {
               {yearOptions.map((y) => {
                 const active = y === year;
                 return (
-                  <TouchableOpacity
+                  <PressableScale
                     key={y}
-                    style={[styles.chip, active && styles.chipActive]}
                     onPress={() => setYear(y)}
+                    haptic="light"
                     testID={`chip-year-${y}`}
                   >
-                    <Text style={[styles.chipText, active && styles.chipTextActive]}>{y}</Text>
-                  </TouchableOpacity>
+                    {active ? (
+                      <LinearGradient
+                        colors={["#0B1220", "#1E293B"]}
+                        style={[styles.chip, styles.chipActive]}
+                      >
+                        <Text style={styles.chipTextActive}>{y}</Text>
+                      </LinearGradient>
+                    ) : (
+                      <View style={styles.chip}>
+                        <Text style={styles.chipText}>{y}</Text>
+                      </View>
+                    )}
+                  </PressableScale>
                 );
               })}
             </View>
@@ -309,61 +394,80 @@ export default function UploadScreen() {
           <View style={styles.section}>
             <Text style={styles.sectionLabel}>Month</Text>
             <View style={styles.chipRow}>
-              <TouchableOpacity
-                style={[styles.chip, month === null && styles.chipActive]}
-                onPress={() => setMonth(null)}
-              >
-                <Text style={[styles.chipText, month === null && styles.chipTextActive]}>None</Text>
-              </TouchableOpacity>
+              <PressableScale onPress={() => setMonth(null)} haptic="light">
+                {month === null ? (
+                  <LinearGradient
+                    colors={["#0B1220", "#1E293B"]}
+                    style={[styles.chip, styles.chipActive]}
+                  >
+                    <Text style={styles.chipTextActive}>None</Text>
+                  </LinearGradient>
+                ) : (
+                  <View style={styles.chip}>
+                    <Text style={styles.chipText}>None</Text>
+                  </View>
+                )}
+              </PressableScale>
               {MONTHS.map((m) => {
                 const active = m.v === month;
                 return (
-                  <TouchableOpacity
+                  <PressableScale
                     key={m.v}
-                    style={[styles.chip, active && styles.chipActive]}
                     onPress={() => setMonth(m.v)}
+                    haptic="light"
                     testID={`chip-month-${m.v}`}
                   >
-                    <Text style={[styles.chipText, active && styles.chipTextActive]}>{m.l}</Text>
-                  </TouchableOpacity>
+                    {active ? (
+                      <LinearGradient
+                        colors={["#0B1220", "#1E293B"]}
+                        style={[styles.chip, styles.chipActive]}
+                      >
+                        <Text style={styles.chipTextActive}>{m.l}</Text>
+                      </LinearGradient>
+                    ) : (
+                      <View style={styles.chip}>
+                        <Text style={styles.chipText}>{m.l}</Text>
+                      </View>
+                    )}
+                  </PressableScale>
                 );
               })}
             </View>
           </View>
 
           <View style={styles.manualActions}>
-            <TouchableOpacity
-              style={[styles.confirmBtn, styles.btnNo]}
-              onPress={() => setStage("scanned")}
-              disabled={uploading}
-              testID="btn-manual-back"
-            >
-              <Ionicons name="chevron-back" size={18} color={colors.textPrimary} />
-              <Text style={styles.btnNoText}>Back</Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={[styles.confirmBtn, styles.btnYes, uploading && { opacity: 0.6 }]}
-              onPress={submitManual}
-              disabled={uploading}
-              testID="btn-manual-upload"
-            >
-              {uploading ? (
-                <ActivityIndicator color="#fff" />
-              ) : (
-                <>
-                  <Ionicons name="cloud-upload" size={18} color="#fff" />
-                  <Text style={styles.btnYesText}>Upload</Text>
-                </>
-              )}
-            </TouchableOpacity>
+            <View style={{ flex: 1 }}>
+              <GradientButton
+                title="Back"
+                variant="ghost"
+                icon="chevron-back"
+                onPress={() => setStage("scanned")}
+                disabled={uploading}
+                testID="btn-manual-back"
+              />
+            </View>
+            <View style={{ flex: 1 }}>
+              <GradientButton
+                title="Upload"
+                icon="cloud-upload"
+                onPress={submitManual}
+                loading={uploading}
+                testID="btn-manual-upload"
+                haptic="medium"
+              />
+            </View>
           </View>
-        </View>
+        </Animated.View>
       )}
 
       {lastUpload && (
         <View style={styles.successBanner} testID="upload-success-banner">
-          <Ionicons name="checkmark-circle" size={18} color={colors.success} />
-          <Text style={styles.successText} numberOfLines={2}>Uploaded: {lastUpload}</Text>
+          <View style={styles.successIcon}>
+            <Ionicons name="checkmark" size={14} color="#fff" />
+          </View>
+          <Text style={styles.successText} numberOfLines={2}>
+            Uploaded: {lastUpload}
+          </Text>
         </View>
       )}
     </ScrollView>
@@ -371,83 +475,101 @@ export default function UploadScreen() {
 }
 
 const styles = StyleSheet.create({
-  root: { flex: 1, backgroundColor: colors.background, padding: 24 },
-  title: { fontSize: 24, fontWeight: "700", color: colors.textPrimary },
-  subtitle: { fontSize: 13, color: colors.textSecondary, marginTop: 4, marginBottom: 24, lineHeight: 18 },
+  root: { flex: 1, backgroundColor: colors.background, padding: 22 },
+  title: { fontSize: 26, fontWeight: "800", color: colors.textPrimary, letterSpacing: -0.6 },
+  subtitle: { fontSize: 13, color: colors.textSecondary, marginTop: 4, marginBottom: 22, lineHeight: 18 },
 
   dropzone: {
-    borderWidth: 2,
-    borderColor: "#CBD5E1",
+    borderWidth: 1.5,
+    borderColor: colors.borderStrong,
     borderStyle: "dashed",
-    backgroundColor: colors.inputBg,
-    borderRadius: radius.lg,
+    borderRadius: radius.xl,
     padding: 32,
     alignItems: "center",
     justifyContent: "center",
-    minHeight: 160,
+    minHeight: 180,
   },
-  dropTitle: { marginTop: 14, fontSize: 15, fontWeight: "600", color: colors.textPrimary, textAlign: "center" },
+  dropIconWrap: { marginBottom: 14 },
+  dropIconBg: {
+    width: 56,
+    height: 56,
+    borderRadius: 16,
+    alignItems: "center",
+    justifyContent: "center",
+    shadowColor: "#3B82F6",
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.35,
+    shadowRadius: 16,
+    elevation: 8,
+  },
+  dropTitle: { fontSize: 15, fontWeight: "700", color: colors.textPrimary, textAlign: "center" },
   dropSub: { fontSize: 12, color: colors.textSecondary, marginTop: 6 },
 
   detectCard: {
     marginTop: 22,
     backgroundColor: colors.surface,
-    borderRadius: radius.lg,
+    borderRadius: radius.xl,
     padding: 18,
-    ...shadow.sm,
+    borderWidth: 1,
+    borderColor: colors.border,
+    ...shadow.md,
   },
   detectHeader: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 8,
-    marginBottom: 14,
+    gap: 12,
+    marginBottom: 16,
   },
-  detectTitle: { fontSize: 14, fontWeight: "700", color: colors.textPrimary, flex: 1 },
+  detectStatusIcon: {
+    width: 38,
+    height: 38,
+    borderRadius: 12,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  detectTitle: { fontSize: 15, fontWeight: "800", color: colors.textPrimary, letterSpacing: -0.2 },
+  detectHint: { fontSize: 12, color: colors.textSecondary, marginTop: 2 },
+
+  detectBody: {
+    backgroundColor: colors.inputBg,
+    borderRadius: radius.md,
+    padding: 4,
+  },
   detectRow: {
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
+    paddingHorizontal: 12,
     paddingVertical: 12,
     borderBottomWidth: 1,
     borderBottomColor: colors.border,
   },
-  detectLabel: { fontSize: 13, color: colors.textSecondary, fontWeight: "600" },
-  detectValue: { fontSize: 15, color: colors.textPrimary, fontWeight: "700" },
+  detectLabel: { fontSize: 12, color: colors.textSecondary, fontWeight: "700", textTransform: "uppercase", letterSpacing: 0.5 },
+  detectValueWrap: { flexDirection: "row", alignItems: "center", gap: 8 },
+  dotInline: { width: 8, height: 8, borderRadius: 4 },
+  detectValue: { fontSize: 14, color: colors.textPrimary, fontWeight: "700" },
   detectValueWarn: { color: colors.warning },
+
   askText: {
     marginTop: 18,
     marginBottom: 12,
-    fontSize: 13,
-    fontWeight: "700",
+    fontSize: 11,
+    fontWeight: "800",
     color: colors.textSecondary,
     textTransform: "uppercase",
-    letterSpacing: 0.5,
+    letterSpacing: 0.8,
+    textAlign: "center",
   },
   confirmRow: { flexDirection: "row", gap: 10 },
-  confirmBtn: {
-    flex: 1,
-    height: 48,
-    borderRadius: radius.md,
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-    gap: 6,
-  },
-  btnNo: {
-    backgroundColor: colors.inputBg,
-    borderWidth: 1,
-    borderColor: colors.border,
-  },
-  btnNoText: { color: colors.textPrimary, fontWeight: "700", fontSize: 14 },
-  btnYes: { backgroundColor: colors.accent },
-  btnYesText: { color: "#fff", fontWeight: "700", fontSize: 14 },
 
   manualWrap: {
     marginTop: 22,
     backgroundColor: colors.surface,
-    borderRadius: radius.lg,
+    borderRadius: radius.xl,
     padding: 18,
-    ...shadow.sm,
+    borderWidth: 1,
+    borderColor: colors.border,
+    ...shadow.md,
   },
   manualHeader: {
     flexDirection: "row",
@@ -455,29 +577,29 @@ const styles = StyleSheet.create({
     gap: 8,
     marginBottom: 4,
   },
-  manualTitle: { fontSize: 15, fontWeight: "700", color: colors.textPrimary },
+  manualTitle: { fontSize: 15, fontWeight: "800", color: colors.textPrimary, letterSpacing: -0.2 },
 
   section: { marginTop: 18 },
   sectionLabel: {
-    fontSize: 12,
-    fontWeight: "700",
+    fontSize: 11,
+    fontWeight: "800",
     color: colors.textSecondary,
     textTransform: "uppercase",
-    letterSpacing: 0.5,
+    letterSpacing: 0.8,
     marginBottom: 10,
   },
   chipRow: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
   chip: {
     paddingHorizontal: 14,
-    paddingVertical: 8,
+    paddingVertical: 9,
     borderRadius: 999,
     borderWidth: 1,
     borderColor: colors.border,
     backgroundColor: colors.surface,
   },
-  chipActive: { backgroundColor: colors.primary, borderColor: colors.primary },
-  chipText: { color: colors.textSecondary, fontSize: 13, fontWeight: "600" },
-  chipTextActive: { color: "#fff" },
+  chipActive: { borderColor: "transparent" },
+  chipText: { color: colors.textSecondary, fontSize: 13, fontWeight: "700" },
+  chipTextActive: { color: "#fff", fontSize: 13, fontWeight: "700" },
 
   manualActions: { flexDirection: "row", gap: 10, marginTop: 22 },
 
@@ -485,10 +607,20 @@ const styles = StyleSheet.create({
     marginTop: 18,
     padding: 12,
     borderRadius: radius.md,
-    backgroundColor: "#ECFDF5",
+    backgroundColor: colors.successSoft,
     flexDirection: "row",
     alignItems: "center",
-    gap: 8,
+    gap: 10,
+    borderWidth: 1,
+    borderColor: "#A7F3D0",
   },
-  successText: { color: "#065F46", fontSize: 13, flex: 1 },
+  successIcon: {
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    backgroundColor: colors.success,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  successText: { color: "#065F46", fontSize: 13, flex: 1, fontWeight: "600" },
 });

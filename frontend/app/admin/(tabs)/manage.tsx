@@ -120,27 +120,39 @@ export default function ManageScreen() {
     );
   }
 
-  const renderItem = ({ item }: { item: DocumentMeta }) => (
-    <View style={styles.card} testID={`manage-card-${item.id}`}>
-      <View style={styles.iconWrap}>
-        <Ionicons name="document-text" size={20} color={colors.accent} />
+  const renderItem = ({ item }: { item: DocumentMeta }) => {
+    const grad = categoryGradients[item.category] || categoryGradients.OTHERS;
+    return (
+      <View style={styles.card} testID={`manage-card-${item.id}`}>
+        <LinearGradient
+          colors={grad}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 1 }}
+          style={styles.iconWrap}
+        >
+          <Ionicons name="document-text" size={18} color="#fff" />
+        </LinearGradient>
+        <View style={styles.metaWrap}>
+          <Text style={styles.docTitle} numberOfLines={2}>{item.display_name}</Text>
+          <Text style={styles.docSub} numberOfLines={1}>
+            {CATEGORY_LABELS[item.category]} · {item.month_label ? `${item.month_label} ` : ""}{item.year}
+          </Text>
+        </View>
+        <View style={styles.actions}>
+          <PressableScale onPress={() => openEdit(item)} haptic="light" testID={`btn-edit-${item.id}`}>
+            <View style={[styles.iconBtn, styles.editBtn]}>
+              <Ionicons name="create-outline" size={18} color={colors.accent} />
+            </View>
+          </PressableScale>
+          <PressableScale onPress={() => onDelete(item)} haptic="medium" testID={`btn-delete-${item.id}`}>
+            <View style={[styles.iconBtn, styles.delBtn]}>
+              <Ionicons name="trash-outline" size={18} color={colors.danger} />
+            </View>
+          </PressableScale>
+        </View>
       </View>
-      <View style={styles.metaWrap}>
-        <Text style={styles.docTitle} numberOfLines={2}>{item.display_name}</Text>
-        <Text style={styles.docSub} numberOfLines={1}>
-          {CATEGORY_LABELS[item.category]} · {item.month_label ? `${item.month_label} ` : ""}{item.year}
-        </Text>
-      </View>
-      <View style={styles.actions}>
-        <TouchableOpacity onPress={() => openEdit(item)} style={[styles.iconBtn, styles.editBtn]} testID={`btn-edit-${item.id}`}>
-          <Ionicons name="create-outline" size={18} color={colors.accent} />
-        </TouchableOpacity>
-        <TouchableOpacity onPress={() => onDelete(item)} style={[styles.iconBtn, styles.delBtn]} testID={`btn-delete-${item.id}`}>
-          <Ionicons name="trash-outline" size={18} color={colors.danger} />
-        </TouchableOpacity>
-      </View>
-    </View>
-  );
+    );
+  };
 
   return (
     <View style={styles.root}>
@@ -152,9 +164,20 @@ export default function ManageScreen() {
           const active = k === filterCat;
           const label = k === "ALL" ? "All" : CATEGORY_LABELS[k];
           return (
-            <TouchableOpacity key={k} style={[styles.filterChip, active && styles.filterChipActive]} onPress={() => setFilterCat(k)}>
-              <Text style={[styles.filterText, active && styles.filterTextActive]}>{label}</Text>
-            </TouchableOpacity>
+            <PressableScale key={k} onPress={() => setFilterCat(k)} haptic="light">
+              {active ? (
+                <LinearGradient
+                  colors={["#0B1220", "#1E293B"]}
+                  style={[styles.filterChip, styles.filterChipActive]}
+                >
+                  <Text style={[styles.filterText, styles.filterTextActive]}>{label}</Text>
+                </LinearGradient>
+              ) : (
+                <View style={styles.filterChip}>
+                  <Text style={styles.filterText}>{label}</Text>
+                </View>
+              )}
+            </PressableScale>
           );
         })}
       </ScrollView>
@@ -235,12 +258,19 @@ export default function ManageScreen() {
             </ScrollView>
 
             <View style={styles.sheetActions}>
-              <TouchableOpacity style={[styles.sheetBtn, styles.btnCancel]} onPress={closeEdit}>
-                <Text style={styles.btnCancelText}>Cancel</Text>
-              </TouchableOpacity>
-              <TouchableOpacity style={[styles.sheetBtn, styles.btnSave, saving && { opacity: 0.6 }]} onPress={saveEdit} disabled={saving} testID="btn-save-edit">
-                {saving ? <ActivityIndicator color="#fff" /> : <Text style={styles.btnSaveText}>Save</Text>}
-              </TouchableOpacity>
+              <View style={{ flex: 1 }}>
+                <GradientButton title="Cancel" variant="ghost" onPress={closeEdit} />
+              </View>
+              <View style={{ flex: 1 }}>
+                <GradientButton
+                  title="Save"
+                  icon="checkmark"
+                  onPress={saveEdit}
+                  loading={saving}
+                  testID="btn-save-edit"
+                  haptic="medium"
+                />
+              </View>
             </View>
           </View>
         </KeyboardAvoidingView>
