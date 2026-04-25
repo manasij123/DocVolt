@@ -168,18 +168,22 @@ export default function ManageScreen() {
           const label = k === "ALL" ? "All" : CATEGORY_LABELS[k];
           return (
             <PressableScale key={k} onPress={() => setFilterCat(k)} haptic="light">
-              {active ? (
-                <LinearGradient
-                  colors={["#0B1220", "#1E293B"]}
-                  style={[styles.filterChip, styles.filterChipActive]}
+              <View
+                style={[
+                  styles.filterChip,
+                  active ? styles.filterChipActive : null,
+                ]}
+              >
+                <Text
+                  numberOfLines={1}
+                  style={[
+                    styles.filterText,
+                    active ? styles.filterTextActive : null,
+                  ]}
                 >
-                  <Text style={[styles.filterText, styles.filterTextActive]}>{label}</Text>
-                </LinearGradient>
-              ) : (
-                <View style={styles.filterChip}>
-                  <Text style={styles.filterText}>{label}</Text>
-                </View>
-              )}
+                  {label}
+                </Text>
+              </View>
             </PressableScale>
           );
         })}
@@ -288,17 +292,20 @@ const styles = StyleSheet.create({
   subtitle: { fontSize: 13, color: colors.textSecondary, paddingHorizontal: 24, marginTop: 4 },
   filterRow: { paddingHorizontal: 24, paddingVertical: 14, gap: 8 },
   filterChip: {
-    paddingHorizontal: 14,
-    paddingVertical: 8,
+    minHeight: 38,
+    paddingHorizontal: 16,
+    paddingVertical: 9,
     borderRadius: 999,
     borderWidth: 1,
     borderColor: colors.border,
     backgroundColor: colors.surface,
     marginRight: 8,
+    justifyContent: "center",
+    alignItems: "center",
   },
   filterChipActive: { backgroundColor: colors.primary, borderColor: colors.primary },
-  filterText: { color: colors.textSecondary, fontSize: 13, fontWeight: "600" },
-  filterTextActive: { color: "#fff" },
+  filterText: { color: colors.textPrimary, fontSize: 13, fontWeight: "600" },
+  filterTextActive: { color: "#fff", fontWeight: "700" },
   center: { flex: 1, alignItems: "center", justifyContent: "center" },
   empty: { color: colors.textSecondary, marginTop: 12 },
   card: {
@@ -318,10 +325,10 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     marginRight: 12,
   },
-  metaWrap: { flex: 1 },
-  docTitle: { fontSize: 14, fontWeight: "600", color: colors.textPrimary },
+  metaWrap: { flex: 1, minWidth: 0, marginRight: 8 },
+  docTitle: { fontSize: 14, fontWeight: "700", color: colors.textPrimary },
   docSub: { fontSize: 12, color: colors.textSecondary, marginTop: 4 },
-  actions: { flexDirection: "row", gap: 8 },
+  actions: { flexDirection: "row", gap: 8, flexShrink: 0 },
   iconBtn: { width: 38, height: 38, borderRadius: 10, alignItems: "center", justifyContent: "center" },
   editBtn: { backgroundColor: colors.iconBlueBg },
   delBtn: { backgroundColor: "#FEF2F2" },

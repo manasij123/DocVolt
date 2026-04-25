@@ -156,8 +156,8 @@ export default function Landing() {
                   <Ionicons name="people" size={22} color="#3B82F6" />
                 </View>
                 <View style={styles.btnTextWrap}>
-                  <Text style={styles.btnTitle}>Client</Text>
-                  <Text style={styles.btnSub}>Browse and share documents</Text>
+                  <Text style={styles.btnTitle} numberOfLines={1}>Client</Text>
+                  <Text style={styles.btnSub} numberOfLines={1}>Browse and share documents</Text>
                 </View>
                 <View style={styles.chevWrap}>
                   <Ionicons name="arrow-forward" size={20} color="#fff" />
@@ -177,8 +177,8 @@ export default function Landing() {
                   <Ionicons name="shield-checkmark" size={22} color="#fff" />
                 </View>
                 <View style={styles.btnTextWrap}>
-                  <Text style={styles.btnTitleDark}>Admin</Text>
-                  <Text style={styles.btnSubDark}>Upload & manage documents</Text>
+                  <Text style={styles.btnTitleDark} numberOfLines={1}>Admin</Text>
+                  <Text style={styles.btnSubDark} numberOfLines={1}>Upload & manage documents</Text>
                 </View>
                 <View style={styles.chevWrapGhost}>
                   <Ionicons name="arrow-forward" size={20} color="#CBD5E1" />
@@ -316,11 +316,11 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     marginRight: 14,
   },
-  btnTextWrap: { flex: 1 },
-  btnTitle: { color: "#fff", fontSize: 18, fontWeight: "700", letterSpacing: -0.2 },
-  btnSub: { color: "#E0E7FF", fontSize: 13, marginTop: 2 },
-  btnTitleDark: { color: "#fff", fontSize: 18, fontWeight: "700", letterSpacing: -0.2 },
-  btnSubDark: { color: "#94A3B8", fontSize: 13, marginTop: 2 },
+  btnTextWrap: { flex: 1, minWidth: 0, marginRight: 8 },
+  btnTitle: { color: "#fff", fontSize: 17, fontWeight: "700", letterSpacing: -0.2 },
+  btnSub: { color: "#E0E7FF", fontSize: 12, marginTop: 2 },
+  btnTitleDark: { color: "#fff", fontSize: 17, fontWeight: "700", letterSpacing: -0.2 },
+  btnSubDark: { color: "#94A3B8", fontSize: 12, marginTop: 2 },
   chevWrap: {
     width: 36,
     height: 36,

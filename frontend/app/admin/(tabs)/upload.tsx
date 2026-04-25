@@ -294,7 +294,7 @@ export default function UploadScreen() {
           <View style={styles.confirmRow}>
             <View style={{ flex: 1 }}>
               <GradientButton
-                title="No, set manually"
+                title="No, manual"
                 variant="ghost"
                 icon="close"
                 onPress={goManual}

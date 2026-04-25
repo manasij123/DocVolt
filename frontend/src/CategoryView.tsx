@@ -364,7 +364,7 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     marginRight: 14,
   },
-  docMeta: { flex: 1 },
+  docMeta: { flex: 1, minWidth: 0, marginRight: 8 },
   docTitle: {
     fontSize: 14,
     fontWeight: "700",

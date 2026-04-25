@@ -56,9 +56,11 @@ export default function GradientButton({
           <Text
             style={[
               styles.text,
+              { flexShrink: 1 },
               isGhost && { color: colors.textPrimary },
               textStyle,
             ]}
+            numberOfLines={1}
           >
             {title}
           </Text>
@@ -149,5 +151,5 @@ const styles = StyleSheet.create({
   wrapper: { width: "100%" },
   gradient: { width: "100%", justifyContent: "center", alignItems: "center" },
   row: { flexDirection: "row", alignItems: "center", justifyContent: "center" },
-  text: { color: "#fff", fontWeight: "700", fontSize: 15, letterSpacing: 0.2 },
+  text: { color: "#fff", fontWeight: "700", fontSize: 14, letterSpacing: 0.2 },
 });
