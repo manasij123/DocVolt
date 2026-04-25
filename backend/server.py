@@ -14,9 +14,10 @@ from datetime import datetime, timezone, timedelta
 from typing import List, Optional
 
 from fastapi import FastAPI, APIRouter, UploadFile, File, Form, HTTPException, Depends, Request
-from fastapi.responses import FileResponse
+from fastapi.responses import StreamingResponse
 from starlette.middleware.cors import CORSMiddleware
-from motor.motor_asyncio import AsyncIOMotorClient
+from motor.motor_asyncio import AsyncIOMotorClient, AsyncIOMotorGridFSBucket
+from bson import ObjectId
 from pydantic import BaseModel, Field
 
 
@@ -29,6 +30,7 @@ UPLOAD_DIR.mkdir(exist_ok=True)
 mongo_url = os.environ["MONGO_URL"]
 client = AsyncIOMotorClient(mongo_url)
 db = client[os.environ["DB_NAME"]]
+fs_bucket = AsyncIOMotorGridFSBucket(db, bucket_name="pdfs")
 
 JWT_ALGORITHM = "HS256"
 JWT_SECRET = os.environ["JWT_SECRET"]
@@ -226,10 +228,14 @@ async def upload_document(
         raise HTTPException(status_code=400, detail="Only PDF files are allowed")
 
     file_id = str(uuid.uuid4())
-    file_path = UPLOAD_DIR / f"{file_id}.pdf"
     contents = await file.read()
-    with open(file_path, "wb") as f:
-        f.write(contents)
+
+    # Store in GridFS (persistent across restarts)
+    gridfs_id = await fs_bucket.upload_from_stream(
+        file.filename,
+        contents,
+        metadata={"content_type": "application/pdf", "doc_id": file_id},
+    )
 
     detected_category = categorize_filename(file.filename)
     detected_month, detected_year = extract_month_year(file.filename)
@@ -249,7 +255,7 @@ async def upload_document(
         "year": int(year),
         "month": int(month) if month else None,
         "size": len(contents),
-        "file_path": str(file_path),
+        "gridfs_id": str(gridfs_id),
         "uploaded_at": datetime.now(timezone.utc).isoformat(),
         "uploaded_by": current["id"],
     }
@@ -292,13 +298,31 @@ async def get_document_file(doc_id: str):
     doc = await db.documents.find_one({"id": doc_id}, {"_id": 0})
     if not doc:
         raise HTTPException(status_code=404, detail="Document not found")
-    file_path = Path(doc["file_path"])
-    if not file_path.exists():
+
+    gridfs_id = doc.get("gridfs_id")
+    if not gridfs_id:
         raise HTTPException(status_code=404, detail="File missing on server")
-    return FileResponse(
-        path=str(file_path),
+
+    try:
+        grid_out = await fs_bucket.open_download_stream(ObjectId(gridfs_id))
+    except Exception:
+        raise HTTPException(status_code=404, detail="File missing on server")
+
+    async def streamer():
+        while True:
+            chunk = await grid_out.readchunk()
+            if not chunk:
+                break
+            yield chunk
+
+    safe_name = doc["original_name"].replace('"', "")
+    return StreamingResponse(
+        streamer(),
         media_type="application/pdf",
-        filename=doc["original_name"],
+        headers={
+            "Content-Disposition": f'inline; filename="{safe_name}"',
+            "Content-Length": str(doc.get("size", grid_out.length)),
+        },
     )
 
 
@@ -332,12 +356,14 @@ async def delete_document(doc_id: str, current=Depends(get_current_admin)):
     doc = await db.documents.find_one({"id": doc_id}, {"_id": 0})
     if not doc:
         raise HTTPException(status_code=404, detail="Document not found")
-    file_path = Path(doc["file_path"])
-    if file_path.exists():
+
+    gridfs_id = doc.get("gridfs_id")
+    if gridfs_id:
         try:
-            file_path.unlink()
+            await fs_bucket.delete(ObjectId(gridfs_id))
         except Exception:
             pass
+
     await db.documents.delete_one({"id": doc_id})
     return {"ok": True}
 
@@ -365,6 +391,33 @@ async def on_startup():
             {"email": ADMIN_EMAIL},
             {"$set": {"password_hash": hash_password(ADMIN_PASSWORD)}},
         )
+
+    # Migrate any legacy disk-based files to GridFS
+    legacy_dir = ROOT_DIR / "uploads"
+    async for doc in db.documents.find({"gridfs_id": {"$in": [None, ""]}}):
+        legacy_path = doc.get("file_path")
+        if not legacy_path:
+            continue
+        path = Path(legacy_path)
+        if path.exists():
+            try:
+                with open(path, "rb") as f:
+                    content = f.read()
+                gid = await fs_bucket.upload_from_stream(
+                    doc["original_name"],
+                    content,
+                    metadata={"content_type": "application/pdf", "doc_id": doc["id"]},
+                )
+                await db.documents.update_one(
+                    {"id": doc["id"]},
+                    {"$set": {"gridfs_id": str(gid)}, "$unset": {"file_path": ""}},
+                )
+                try:
+                    path.unlink()
+                except Exception:
+                    pass
+            except Exception as e:
+                logging.error(f"Migration failed for doc {doc.get('id')}: {e}")
 
 
 @app.on_event("shutdown")
