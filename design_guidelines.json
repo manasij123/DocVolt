@@ -1,0 +1,152 @@
+{
+  "theme": "Light",
+  "archetype": "4 (Swiss & High-Contrast)",
+  "app_type": "React Native Expo",
+  "domain": "Finance/Utility Document Storage",
+  "design_philosophy": "A professional document management utility app for financial/business context. Prioritizes clarity, fast scanning of PDF lists, and obvious tap targets. High-contrast typography and structured layouts ensure trust and usability.",
+  "colors": {
+    "background": "#F4F5F7",
+    "surface": "#FFFFFF",
+    "primary": "#0F172A",
+    "primary_active": "#1E293B",
+    "accent": "#2563EB",
+    "accent_hover": "#1D4ED8",
+    "text_primary": "#0F172A",
+    "text_secondary": "#64748B",
+    "border": "#E2E8F0",
+    "success": "#10B981",
+    "danger": "#EF4444",
+    "warning": "#F59E0B",
+    "overlay": "rgba(0,0,0,0.5)"
+  },
+  "typography": {
+    "heading_font": "Outfit",
+    "body_font": "Manrope",
+    "scales": {
+      "h1": {
+        "size": 32,
+        "weight": "700",
+        "letterSpacing": -0.5,
+        "lineHeight": 40
+      },
+      "h2": {
+        "size": 24,
+        "weight": "700",
+        "letterSpacing": -0.3,
+        "lineHeight": 32
+      },
+      "h3": {
+        "size": 20,
+        "weight": "600",
+        "letterSpacing": -0.2,
+        "lineHeight": 28
+      },
+      "body_large": {
+        "size": 16,
+        "weight": "400",
+        "lineHeight": 24
+      },
+      "body_base": {
+        "size": 14,
+        "weight": "500",
+        "lineHeight": 20
+      },
+      "caption": {
+        "size": 12,
+        "weight": "600",
+        "letterSpacing": 0.5,
+        "textTransform": "uppercase"
+      }
+    }
+  },
+  "spacing_and_layout": {
+    "container_padding": 24,
+    "card_padding": 16,
+    "border_radius": {
+      "sm": 6,
+      "md": 12,
+      "lg": 16,
+      "xl": 24
+    },
+    "shadows": {
+      "sm": {
+        "shadowColor": "#000",
+        "shadowOffset": { "width": 0, "height": 1 },
+        "shadowOpacity": 0.05,
+        "shadowRadius": 2,
+        "elevation": 1
+      },
+      "md": {
+        "shadowColor": "#000",
+        "shadowOffset": { "width": 0, "height": 4 },
+        "shadowOpacity": 0.08,
+        "shadowRadius": 12,
+        "elevation": 3
+      }
+    }
+  },
+  "components_strategy": {
+    "buttons": {
+      "primary": "Solid #0F172A background, white text, 12px border radius, h-48px.",
+      "secondary": "Transparent background, 1px solid #E2E8F0 border, #0F172A text, 12px border radius, h-48px.",
+      "accent": "Solid #2563EB background, white text, 12px border radius, h-48px. Used for main actions like Upload or Share."
+    },
+    "inputs": {
+      "style": "h-48px, 12px border radius, 1px solid #E2E8F0, #F8FAFC background. Focus state: 1px solid #2563EB."
+    },
+    "cards": {
+      "style": "#FFFFFF surface, 12px border radius, subtle md shadow. Used for Year List items and PDF items."
+    },
+    "bottom_tabs": {
+      "style": "White background, top border #E2E8F0, active color #2563EB, inactive #64748B. Font size 11px.",
+      "icons": "Use Phosphor Icons or Lucide (e.g. Calendar, Paperclip, FileText, Folder)."
+    },
+    "pdf_list_item": {
+      "layout": "Row flex, left: PDF Icon (with subtle blue background), middle: Title and Date, right: Share Button.",
+      "share_button": "Prominent touch target (min 44x44px), Icon-only (ShareNetwork), color: #2563EB."
+    },
+    "admin_upload_zone": {
+      "layout": "Dashed border #CBD5E1, background #F8FAFC, center-aligned upload icon and text. Minimalist and clear."
+    }
+  },
+  "navigation_structure": {
+    "auth_flow": {
+      "screens": ["Landing", "AdminLogin"]
+    },
+    "client_flow": {
+      "type": "BottomTabs",
+      "tabs": [
+        { "name": "Monthly Return", "icon": "file-text" },
+        { "name": "Forwarding Letter", "icon": "paperclip" },
+        { "name": "IFA Report", "icon": "chart-bar" },
+        { "name": "Others", "icon": "folder" }
+      ],
+      "nested_stack": "Tab -> YearListScreen -> PDFListScreen"
+    },
+    "admin_flow": {
+      "type": "BottomTabs",
+      "tabs": [
+        { "name": "Upload", "icon": "upload" },
+        { "name": "Manage", "icon": "settings" }
+      ]
+    }
+  },
+  "media": {
+    "images": [
+      {
+        "category": "landing_background",
+        "url": "https://images.unsplash.com/photo-1767300258298-21f93cbe723f?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NjY2NzV8MHwxfHNlYXJjaHwxfHxidXNpbmVzcyUyMHByb2Zlc3Npb25hbCUyMGFic3RyYWN0JTIwdGV4dHVyZXxlbnwwfHx8fDE3NzcxNDg0NDZ8MA&ixlib=rb-4.1.0&q=85",
+        "description": "Modern building facade with reflective glass panels to be used as a subtle hero header image or background on the landing screen, heavily darkened or overlaid with #0F172A/80 for contrast."
+      }
+    ],
+    "icons": {
+      "library": "lucide-react-native or @expo/vector-icons",
+      "style": "Stroke-based, consistent 1.5px to 2px width. Professional and unobtrusive."
+    }
+  },
+  "logic_instructions": {
+    "auto_categorization": "Extract month/year and category from filename (e.g. 'Monthly return Feb'2026'). Map strictly to the 4 categories based on substring match. Unmatched go to 'OTHERS'.",
+    "sharing": "Use React Native `Share` API to share the PDF file URI. Provide a clean fallback if direct WhatsApp sharing fails.",
+    "testing": "All interactive elements must have testID props (e.g., testID='btn-client-access', testID='tab-monthly-return', testID='btn-share-pdf')."
+  }
+}
