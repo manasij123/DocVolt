@@ -124,6 +124,12 @@ class RegisterRequest(BaseModel):
     password: str
     name: str
     role: Optional[str] = "client"  # "client" or "admin"
+    admin_email: Optional[str] = None  # if a client registers WITH an admin's email,
+    # we instantly create a connection so the client lands inside that admin's space.
+
+
+class ConnectRequest(BaseModel):
+    peer_email: str  # email of the other side (admin's email if I'm a client, & vice versa)
 
 
 class TokenResponse(BaseModel):
@@ -279,8 +285,8 @@ async def root():
 
 @api_router.post("/auth/register", response_model=TokenResponse)
 async def register(payload: RegisterRequest):
-    """Anyone can self-register as a client. Admin role is also permitted
-    to support multi-admin tenancy (per user request)."""
+    """Anyone can self-register as a client OR admin (admin self-signup is allowed
+    because the user wants multi-admin tenancy)."""
     role = (payload.role or "client").lower()
     if role not in ("client", "admin"):
         raise HTTPException(status_code=400, detail="Invalid role")
@@ -305,14 +311,47 @@ async def register(payload: RegisterRequest):
     await db.users.insert_one(user)
     token = create_access_token(user["id"], user["email"], user["role"])
 
-    # Notify all admins of a new client registration
-    if role == "client":
-        await manager.send_to_role("admin", {
-            "type": "client:registered",
-            "client": safe_user(user),
-        })
+    # Optional instant connection at registration time (clients can paste an admin email)
+    auto_admin = None
+    if role == "client" and payload.admin_email:
+        target_email = payload.admin_email.strip().lower()
+        admin_user = await db.users.find_one(
+            {"email": target_email, "role": "admin"}, {"_id": 0, "password_hash": 0}
+        )
+        if admin_user:
+            await _create_connection(admin_user["id"], user["id"], user["id"])
+            auto_admin = safe_user(admin_user)
 
-    return TokenResponse(access_token=token, user=safe_user(user))
+    # Notify admins about a new client signup so they can choose to connect later
+    if role == "client":
+        await manager.send_to_role("admin", {"type": "client:registered", "client": safe_user(user)})
+
+    resp = TokenResponse(access_token=token, user=safe_user(user))
+    if auto_admin:
+        # add auto-connection info onto the response (extra dict field is fine for pydantic)
+        return {**resp.model_dump(), "auto_connected_admin": auto_admin}
+    return resp
+
+
+async def _create_connection(admin_id: str, client_id: str, initiated_by: str) -> bool:
+    """Idempotently create an admin↔client connection. Returns True if newly created."""
+    existing = await db.connections.find_one({"admin_id": admin_id, "client_id": client_id})
+    if existing:
+        return False
+    await db.connections.insert_one({
+        "id": str(uuid.uuid4()),
+        "admin_id": admin_id,
+        "client_id": client_id,
+        "initiated_by": initiated_by,
+        "created_at": datetime.now(timezone.utc).isoformat(),
+    })
+    # Live notify both endpoints
+    admin_user = await db.users.find_one({"id": admin_id}, {"_id": 0, "password_hash": 0})
+    client_user = await db.users.find_one({"id": client_id}, {"_id": 0, "password_hash": 0})
+    if admin_user and client_user:
+        await manager.send_to_user(admin_id, {"type": "connection:created", "peer": safe_user(client_user)})
+        await manager.send_to_user(client_id, {"type": "connection:created", "peer": safe_user(admin_user)})
+    return True
 
 
 @api_router.post("/auth/login", response_model=TokenResponse)
@@ -335,63 +374,108 @@ async def me(current=Depends(get_current_user)):
 # ============================================================
 @api_router.get("/clients")
 async def list_clients(current=Depends(get_current_admin)):
-    """All registered clients. For each, include how many documents the
-    *current admin* has uploaded for them — so the admin can see who is
-    actually 'under' them."""
-    clients = await db.users.find(
-        {"role": "client"}, {"_id": 0, "password_hash": 0}
-    ).sort("created_at", -1).to_list(2000)
-
-    if not clients:
+    """Clients connected to the current admin (via /api/connections), with the
+    current admin's per-client document counts attached."""
+    client_ids = [c["client_id"] async for c in db.connections.find({"admin_id": current["id"]})]
+    if not client_ids:
         return []
 
+    clients = await db.users.find(
+        {"id": {"$in": client_ids}, "role": "client"}, {"_id": 0, "password_hash": 0}
+    ).to_list(2000)
+
     pipeline = [
-        {"$match": {"admin_id": current["id"]}},
+        {"$match": {"admin_id": current["id"], "client_id": {"$in": client_ids}}},
         {"$group": {"_id": "$client_id", "count": {"$sum": 1}, "last": {"$max": "$uploaded_at"}}},
     ]
     counts = {c["_id"]: c async for c in db.documents.aggregate(pipeline)}
 
     out = []
     for c in clients:
-        info = counts.get(c["id"], None)
+        info = counts.get(c["id"])
         out.append({
             **safe_user(c),
             "created_at": c.get("created_at"),
             "doc_count": (info or {}).get("count", 0),
             "last_upload_at": (info or {}).get("last"),
         })
+    out.sort(key=lambda x: x.get("last_upload_at") or x.get("created_at") or "", reverse=True)
     return out
 
 
 @api_router.get("/admins/connected")
 async def connected_admins(current=Depends(get_current_client)):
-    """Admins who have uploaded at least one document for the current client."""
-    pipeline = [
-        {"$match": {"client_id": current["id"]}},
-        {"$group": {"_id": "$admin_id", "count": {"$sum": 1}, "last": {"$max": "$uploaded_at"}}},
-    ]
-    rows = []
-    async for r in db.documents.aggregate(pipeline):
-        rows.append(r)
-    if not rows:
+    """Admins this client is connected to."""
+    admin_ids = [c["admin_id"] async for c in db.connections.find({"client_id": current["id"]})]
+    if not admin_ids:
         return []
-    admin_ids = [r["_id"] for r in rows]
     admins = await db.users.find(
         {"id": {"$in": admin_ids}, "role": "admin"}, {"_id": 0, "password_hash": 0}
     ).to_list(1000)
-    by_id = {a["id"]: a for a in admins}
+    pipeline = [
+        {"$match": {"client_id": current["id"], "admin_id": {"$in": admin_ids}}},
+        {"$group": {"_id": "$admin_id", "count": {"$sum": 1}, "last": {"$max": "$uploaded_at"}}},
+    ]
+    counts = {c["_id"]: c async for c in db.documents.aggregate(pipeline)}
     out = []
-    for r in rows:
-        a = by_id.get(r["_id"])
-        if not a:
-            continue
-        out.append({
-            **safe_user(a),
-            "doc_count": r["count"],
-            "last_upload_at": r["last"],
-        })
+    for a in admins:
+        info = counts.get(a["id"])
+        out.append({**safe_user(a), "doc_count": (info or {}).get("count", 0), "last_upload_at": (info or {}).get("last")})
     out.sort(key=lambda x: x.get("last_upload_at") or "", reverse=True)
     return out
+
+
+# ============================================================
+# Connections (admin <-> client linkage)
+# ============================================================
+@api_router.get("/users/lookup")
+async def lookup_user(email: str, role: Optional[str] = None, current=Depends(get_current_user)):
+    """Look up a user by email. Used by the 'Connect' UI to verify the peer
+    exists before forming a connection. Optionally restricted by role."""
+    user = await db.users.find_one({"email": email.strip().lower()}, {"_id": 0, "password_hash": 0})
+    if not user:
+        raise HTTPException(status_code=404, detail="No user with that email")
+    if role and user["role"] != role:
+        raise HTTPException(status_code=404, detail=f"That email is not a {role} account")
+    if user["id"] == current["id"]:
+        raise HTTPException(status_code=400, detail="That's your own account")
+    return safe_user(user)
+
+
+@api_router.post("/connections")
+async def connect_to_peer(payload: ConnectRequest, current=Depends(get_current_user)):
+    peer = await db.users.find_one(
+        {"email": payload.peer_email.strip().lower()}, {"_id": 0, "password_hash": 0}
+    )
+    if not peer:
+        raise HTTPException(status_code=404, detail="No user with that email")
+    if peer["id"] == current["id"]:
+        raise HTTPException(status_code=400, detail="Cannot connect to yourself")
+    # Determine which side is admin / client
+    if current["role"] == "admin" and peer["role"] == "client":
+        admin_id, client_id = current["id"], peer["id"]
+    elif current["role"] == "client" and peer["role"] == "admin":
+        admin_id, client_id = peer["id"], current["id"]
+    else:
+        raise HTTPException(status_code=400, detail="Connections must be between an admin and a client")
+
+    created = await _create_connection(admin_id, client_id, current["id"])
+    return {"status": "created" if created else "exists", "peer": safe_user(peer)}
+
+
+@api_router.delete("/connections/{peer_id}")
+async def remove_connection(peer_id: str, current=Depends(get_current_user)):
+    """Either side can break the connection."""
+    if current["role"] == "admin":
+        q = {"admin_id": current["id"], "client_id": peer_id}
+    else:
+        q = {"client_id": current["id"], "admin_id": peer_id}
+    res = await db.connections.delete_one(q)
+    if res.deleted_count == 0:
+        raise HTTPException(status_code=404, detail="Connection not found")
+    await manager.send_to_user(current["id"], {"type": "connection:removed", "peer_id": peer_id})
+    await manager.send_to_user(peer_id, {"type": "connection:removed", "peer_id": current["id"]})
+    return {"ok": True}
 
 
 # ============================================================
@@ -675,6 +759,32 @@ async def on_startup():
             {"$or": [{"client_id": {"$exists": False}}, {"client_id": None}]},
             {"$set": {"client_id": demo_client["id"]}},
         )
+
+    # Auto-create connections for any (admin_id, client_id) pair that has docs
+    # but no connection yet. Keeps multi-tenant pages populated for legacy data.
+    await db.connections.create_index([("admin_id", 1), ("client_id", 1)], unique=True)
+    seen_pairs: set[tuple[str, str]] = set()
+    async for d in db.documents.find({}, {"admin_id": 1, "client_id": 1, "_id": 0}):
+        a, c = d.get("admin_id"), d.get("client_id")
+        if a and c:
+            seen_pairs.add((a, c))
+    for a, c in seen_pairs:
+        try:
+            await db.connections.update_one(
+                {"admin_id": a, "client_id": c},
+                {
+                    "$setOnInsert": {
+                        "id": str(uuid.uuid4()),
+                        "admin_id": a,
+                        "client_id": c,
+                        "initiated_by": a,
+                        "created_at": datetime.now(timezone.utc).isoformat(),
+                    }
+                },
+                upsert=True,
+            )
+        except Exception:
+            pass
 
     # Migrate any legacy disk-based files to GridFS (kept from previous version)
     async for doc in db.documents.find({"gridfs_id": {"$in": [None, ""]}}):

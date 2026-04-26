@@ -6,6 +6,7 @@ export default function ClientRegister() {
   const nav = useNavigate();
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
+  const [adminEmail, setAdminEmail] = useState("");
   const [password, setPassword] = useState("");
   const [confirm, setConfirm] = useState("");
   const [showPwd, setShowPwd] = useState(false);
@@ -19,9 +20,11 @@ export default function ClientRegister() {
     if (password !== confirm) { setErr("Passwords do not match"); return; }
     setLoading(true);
     try {
-      const res = await api.post("/auth/register", {
+      const body: any = {
         name: name.trim(), email: email.trim(), password, role: "client",
-      });
+      };
+      if (adminEmail.trim()) body.admin_email = adminEmail.trim();
+      const res = await api.post("/auth/register", body);
       setToken(res.data.access_token);
       setUser(res.data.user);
       nav("/client");
@@ -67,6 +70,13 @@ export default function ClientRegister() {
               <div className="input-with-icon">
                 <span className="field-prefix">✅</span>
                 <input className="input" type={showPwd ? "text" : "password"} value={confirm} onChange={(e) => setConfirm(e.target.value)} placeholder="Repeat password" required autoComplete="new-password" />
+              </div>
+            </div>
+            <div className="field">
+              <label>Admin email <span className="muted" style={{ fontSize: 11, fontWeight: 600 }}>(optional — auto-connect)</span></label>
+              <div className="input-with-icon">
+                <span className="field-prefix">🛡️</span>
+                <input className="input" type="email" value={adminEmail} onChange={(e) => setAdminEmail(e.target.value)} placeholder="admin@org.com (skip if you'll add later)" />
               </div>
             </div>
             <button type="submit" className="btn btn-primary btn-lg" style={{ width: "100%", marginTop: 4 }} disabled={loading}>

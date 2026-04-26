@@ -4,12 +4,9 @@ import { getToken, getUser } from "../api";
 
 export default function Landing() {
   const navigate = useNavigate();
-
   useEffect(() => {
     const u = getUser();
-    if (u && getToken()) {
-      navigate(u.role === "admin" ? "/admin" : "/client", { replace: true });
-    }
+    if (u && getToken()) navigate(u.role === "admin" ? "/admin" : "/client", { replace: true });
   }, [navigate]);
 
   return (
@@ -32,32 +29,31 @@ export default function Landing() {
         </div>
 
         <div className="choose-stack">
-          <span className="choose-label">Continue as</span>
+          <span className="choose-label">I'm a Client</span>
 
           <Link to="/client/login" className="choose-card choose-client">
             <div className="choose-icon">👥</div>
-            <div className="choose-text">
-              <h4>Client — Login</h4>
-              <p>Browse documents shared with you</p>
-            </div>
+            <div className="choose-text"><h4>Client — Login</h4><p>Browse documents shared with you</p></div>
             <span className="choose-arrow">→</span>
           </Link>
 
           <Link to="/client/register" className="choose-card choose-client-alt">
             <div className="choose-icon">✨</div>
-            <div className="choose-text">
-              <h4>Client — Register</h4>
-              <p>Create a new client account in 30 seconds</p>
-            </div>
+            <div className="choose-text"><h4>Client — Register</h4><p>Create an account & connect with your admin</p></div>
             <span className="choose-arrow">→</span>
           </Link>
 
+          <span className="choose-label" style={{ marginTop: 14 }}>I'm an Admin</span>
+
           <Link to="/admin/login" className="choose-card choose-admin">
             <div className="choose-icon">🛡️</div>
-            <div className="choose-text">
-              <h4>Admin</h4>
-              <p>Upload & manage documents per client</p>
-            </div>
+            <div className="choose-text"><h4>Admin — Login</h4><p>Manage your clients & documents</p></div>
+            <span className="choose-arrow">→</span>
+          </Link>
+
+          <Link to="/admin/register" className="choose-card choose-admin-alt">
+            <div className="choose-icon">🚀</div>
+            <div className="choose-text"><h4>Admin — Register</h4><p>Set up your own admin workspace</p></div>
             <span className="choose-arrow">→</span>
           </Link>
         </div>

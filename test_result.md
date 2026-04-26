@@ -146,15 +146,18 @@ backend:
 
   - task: "Multi-tenant document endpoints: upload/list/file/update/delete"
     implemented: true
-    working: true
+    working: false
     file: "/app/backend/server.py"
-    stuck_count: 0
+    stuck_count: 1
     priority: "high"
-    needs_retesting: false
+    needs_retesting: true
     status_history:
         - working: true
           agent: "testing"
           comment: "All scoped document operations verified. Upload of \"monthly return Mar'2026.pdf\" with admin token to demo client correctly auto-detected category=MONTHLY_RETURN, year=2026, month=3, with admin_id+client_id set. Missing client_id -> 422, invalid client_id -> 400 'Target client not found', client token -> 403. Listing scoped correctly: admin sees only their uploads (filterable by client_id), demo client sees uploaded doc + migrated legacy docs, freshly registered client sees []. File fetch authorized for uploader admin (200, content-type application/pdf) and receiving client (200), unrelated client -> 403. PUT display_name -> 200 updated, PUT with client token -> 403. DELETE -> {ok:true}, then file fetch -> 404."
+        - working: false
+          agent: "testing"
+          comment: "REGRESSION (2026-01 connection-flow round): POST /api/documents/upload does NOT enforce the new admin↔client connection. Uploading with admin token + client_id of a freshly-registered client we are NOT connected to returns 200 (file is stored) instead of 403 'You are not connected with this client'. Root cause: in server.py upload_document() only validates `db.users.find_one({id: client_id, role: 'client'})` but never checks `db.connections.find_one({admin_id: current.id, client_id: client_id})`. Add that lookup right after the target-client check and raise HTTPException(status_code=403, detail='You are not connected with this client') when missing. Step 13a (boss admin id -> 400 Target client not found) does work correctly."
 
   - task: "WebSocket /api/ws token authentication and broadcast"
     implemented: true
@@ -240,15 +243,14 @@ metadata:
 
 test_plan:
   current_focus:
-    - "Multi-tenant auth + per-client document scoping"
-    - "Web — multi-tenant pages"
+    - "Multi-tenant document endpoints: upload/list/file/update/delete"
   stuck_tasks: []
   test_all: false
   test_priority: "high_first"
 
 agent_communication:
-    - agent: "main"
-      message: "Round 3 (multi-tenant) complete. Each client has a private document space; admin sees a clients dashboard with 'Under You' (those they have uploaded for) vs 'Registered Clients' (newly signed-up, not yet served). Real-time client:registered toast lights up the admin instantly. Same client can have multiple admins, and the client side shows one tab per admin who has shared with them. Backend agent verified all 26 endpoint cases. Mobile app is intentionally NOT updated yet — it still uses the legacy unauth list flow, so mobile screens will be incomplete until next round. Web flow signed-off pending user verification."
+    - agent: "testing"
+      message: "Connection-flow regression run (29 cases / 28 PASS / 1 FAIL). All connection-management endpoints work correctly: /auth/login, /auth/register (with and without admin_email auto-connect), /clients & /admins/connected gating by connection presence, /users/lookup (200 / 404 role-mismatch / 404 not-found), POST /connections (created / exists / admin↔admin 400 / self 400), DELETE /connections/{peer_id} (ok then 404), and WebSocket hello with valid token. ❌ ONE BUG: POST /api/documents/upload does NOT enforce the new admin↔client connection requirement. Uploading with an admin token + a freshly-registered client_id we have no connection with returns 200 instead of 403 'You are not connected with this client'. Step 13a (uploading to an admin id) correctly returns 400 'Target client not found' because of the role==client filter, but there is no separate connection lookup. Fix in /app/backend/server.py upload_document(): right after the existing target-client check, add `conn = await db.connections.find_one({admin_id: current[id], client_id: client_id})` and raise 403 when missing."
 
 agent_communication:
     - agent: "main"

@@ -1,352 +1,447 @@
+"""Backend regression for the NEW connection flow.
+
+Covers admin↔client connections, lookup, upload guarding, deletion of
+connections, and a quick websocket smoke check.
+
+Public base URL is read from /app/frontend/.env (EXPO_PUBLIC_BACKEND_URL)
+and all routes are prefixed with /api per ingress rules.
 """
-Comprehensive backend tests for DocVault multi-tenant FastAPI server.
-Run: python /app/backend_test.py
-"""
-import asyncio
 import io
 import json
+import os
 import random
 import string
 import sys
-import uuid
+import time
+from pathlib import Path
 
 import requests
 import websockets
-
-BASE = "http://localhost:8001/api"
-WS_BASE = "ws://localhost:8001/api/ws"
-
-results = []  # (name, ok, detail)
+import asyncio
 
 
-def record(name, ok, detail=""):
-    status = "PASS" if ok else "FAIL"
-    print(f"[{status}] {name}  {detail if not ok else ''}")
+def _read_backend_url() -> str:
+    env_path = Path("/app/frontend/.env")
+    for line in env_path.read_text().splitlines():
+        if line.startswith("EXPO_PUBLIC_BACKEND_URL"):
+            return line.split("=", 1)[1].strip().strip('"').strip("'")
+    raise SystemExit("EXPO_PUBLIC_BACKEND_URL missing")
+
+
+BASE = _read_backend_url().rstrip("/")
+API = f"{BASE}/api"
+WS_BASE = "wss://" + BASE.split("://", 1)[1] + "/api/ws"
+
+ADMIN_EMAIL = "admin@example.com"
+ADMIN_PASSWORD = "admin123"
+DEMO_CLIENT_EMAIL = "client@example.com"
+DEMO_CLIENT_PASSWORD = "client123"
+
+
+# --- Tiny test runner -------------------------------------------------------
+results: list[tuple[str, bool, str]] = []
+
+
+def record(name: str, ok: bool, detail: str = "") -> bool:
     results.append((name, ok, detail))
+    print(f"{'PASS' if ok else 'FAIL'} | {name} | {detail}")
+    return ok
 
 
-def rand_email():
-    s = "".join(random.choices(string.ascii_lowercase + string.digits, k=8))
-    return f"newclient_{s}@test.com"
+def rand_suffix(n: int = 8) -> str:
+    return "".join(random.choices(string.ascii_lowercase + string.digits, k=n))
 
 
-def make_pdf_bytes():
-    # Tiny valid-ish PDF
+def auth_headers(token: str) -> dict:
+    return {"Authorization": f"Bearer {token}"}
+
+
+def login(email: str, password: str) -> tuple[int, dict]:
+    r = requests.post(f"{API}/auth/login", json={"email": email, "password": password}, timeout=20)
+    try:
+        body = r.json()
+    except Exception:
+        body = {"raw": r.text}
+    return r.status_code, body
+
+
+def register(name: str, email: str, password: str, role: str = "client", admin_email: str | None = None) -> tuple[int, dict]:
+    body = {"name": name, "email": email, "password": password, "role": role}
+    if admin_email:
+        body["admin_email"] = admin_email
+    r = requests.post(f"{API}/auth/register", json=body, timeout=20)
+    try:
+        return r.status_code, r.json()
+    except Exception:
+        return r.status_code, {"raw": r.text}
+
+
+# --- Tests ------------------------------------------------------------------
+
+def make_minimal_pdf(name: str = "doc.pdf") -> bytes:
+    # Real-ish minimal PDF
     return (
-        b"%PDF-1.4\n%\xe2\xe3\xcf\xd3\n"
-        b"1 0 obj<<>>endobj\n"
-        b"trailer<</Root 1 0 R>>\n"
-        b"%%EOF\n"
+        b"%PDF-1.4\n1 0 obj<<>>endobj\ntrailer<<>>\n%%EOF\n"
     )
 
 
-def main():
-    admin_token = client_token = new_token = None
-    new_client_id = None
-    demo_client_id = None
-    uploaded_doc_id = None
+def main() -> int:
+    # 1. admin login
+    code, body = login(ADMIN_EMAIL, ADMIN_PASSWORD)
+    if not record(
+        "1. POST /auth/login admin", code == 200 and body.get("user", {}).get("role") == "admin",
+        f"status={code} body_keys={list(body.keys())}",
+    ):
+        return _summary()
+    admin_token = body["access_token"]
+    admin_id = body["user"]["id"]
 
-    # 1. login admin
-    r = requests.post(f"{BASE}/auth/login", json={"email": "admin@example.com", "password": "admin123"})
-    ok = r.status_code == 200 and r.json().get("user", {}).get("role") == "admin"
-    record("1. POST /auth/login admin", ok, f"status={r.status_code} body={r.text[:200]}")
-    if ok:
-        admin_token = r.json()["access_token"]
+    # 2. client login
+    code, body = login(DEMO_CLIENT_EMAIL, DEMO_CLIENT_PASSWORD)
+    if not record(
+        "2. POST /auth/login demo client",
+        code == 200 and body.get("user", {}).get("role") == "client",
+        f"status={code}",
+    ):
+        return _summary()
+    demo_client_token = body["access_token"]
+    demo_client_id = body["user"]["id"]
 
-    # 2. login client
-    r = requests.post(f"{BASE}/auth/login", json={"email": "client@example.com", "password": "client123"})
-    ok = r.status_code == 200 and r.json().get("user", {}).get("role") == "client"
-    record("2. POST /auth/login client", ok, f"status={r.status_code} body={r.text[:200]}")
-    if ok:
-        client_token = r.json()["access_token"]
-
-    # 3. login wrong password
-    r = requests.post(f"{BASE}/auth/login", json={"email": "admin@example.com", "password": "wrongpass"})
-    record("3. POST /auth/login wrong pwd -> 401", r.status_code == 401, f"status={r.status_code} body={r.text[:200]}")
-
-    # 4. register new client
-    new_email = rand_email()
-    r = requests.post(f"{BASE}/auth/register", json={
-        "name": "Tester",
-        "email": new_email,
-        "password": "test1234",
-        "role": "client",
-    })
-    ok = r.status_code == 200 and r.json().get("user", {}).get("role") == "client"
-    record("4. POST /auth/register new client", ok, f"status={r.status_code} body={r.text[:200]}")
-    if ok:
-        new_token = r.json()["access_token"]
-        new_client_id = r.json()["user"]["id"]
-
-    # 5. register duplicate
-    r = requests.post(f"{BASE}/auth/register", json={
-        "name": "Tester2",
-        "email": new_email,
-        "password": "test1234",
-        "role": "client",
-    })
-    record("5. POST /auth/register duplicate -> 409", r.status_code == 409, f"status={r.status_code} body={r.text[:200]}")
-
-    # 6. password too short
-    r = requests.post(f"{BASE}/auth/register", json={
-        "name": "Short",
-        "email": rand_email(),
-        "password": "12345",
-        "role": "client",
-    })
-    record("6. POST /auth/register short pwd -> 400", r.status_code == 400, f"status={r.status_code} body={r.text[:200]}")
-
-    # 7. /auth/me admin
-    r = requests.get(f"{BASE}/auth/me", headers={"Authorization": f"Bearer {admin_token}"})
-    ok = r.status_code == 200 and r.json().get("role") == "admin" and r.json().get("email") == "admin@example.com"
-    record("7. GET /auth/me admin", ok, f"status={r.status_code} body={r.text[:200]}")
-
-    # 8. /auth/me no token
-    r = requests.get(f"{BASE}/auth/me")
-    record("8. GET /auth/me no token -> 401", r.status_code == 401, f"status={r.status_code} body={r.text[:200]}")
-
-    # 9. /clients admin
-    r = requests.get(f"{BASE}/clients", headers={"Authorization": f"Bearer {admin_token}"})
-    ok = r.status_code == 200 and isinstance(r.json(), list)
-    detail = f"status={r.status_code} body={r.text[:300]}"
-    if ok:
-        clients = r.json()
-        emails = {c["email"]: c for c in clients}
-        # demo client present?
-        demo_present = "client@example.com" in emails
-        new_present = new_email in emails
-        all_have_doc_count = all("doc_count" in c for c in clients)
-        all_have_last_upload = all("last_upload_at" in c for c in clients)
-        ok = demo_present and new_present and all_have_doc_count and all_have_last_upload
-        detail += f" demo={demo_present} new={new_present} doc_count_field={all_have_doc_count} last_upload_field={all_have_last_upload}"
-        if demo_present:
-            demo_client_id = emails["client@example.com"]["id"]
-    record("9. GET /clients admin", ok, detail)
-
-    # 10. /clients with client token
-    r = requests.get(f"{BASE}/clients", headers={"Authorization": f"Bearer {client_token}"})
-    record("10. GET /clients client -> 403", r.status_code == 403, f"status={r.status_code} body={r.text[:200]}")
-
-    # 11. /admins/connected with client token
-    r = requests.get(f"{BASE}/admins/connected", headers={"Authorization": f"Bearer {client_token}"})
-    ok = r.status_code == 200 and isinstance(r.json(), list)
-    record("11. GET /admins/connected demo client", ok, f"status={r.status_code} body={r.text[:300]}")
-
-    # 12. /admins/connected with admin token
-    r = requests.get(f"{BASE}/admins/connected", headers={"Authorization": f"Bearer {admin_token}"})
-    record("12. GET /admins/connected admin -> 403", r.status_code == 403, f"status={r.status_code} body={r.text[:200]}")
-
-    # 13. upload doc
-    if demo_client_id:
-        files = {"file": ("monthly return Mar'2026.pdf", make_pdf_bytes(), "application/pdf")}
-        data = {"client_id": demo_client_id}
-        r = requests.post(
-            f"{BASE}/documents/upload",
-            headers={"Authorization": f"Bearer {admin_token}"},
-            files=files,
-            data=data,
+    # 3. GET /clients admin → includes demo client (doc_count >= 1, expected 6)
+    r = requests.get(f"{API}/clients", headers=auth_headers(admin_token), timeout=20)
+    arr = r.json() if r.ok else []
+    demo_row = next((c for c in arr if c.get("email") == DEMO_CLIENT_EMAIL), None)
+    record(
+        "3. GET /clients (admin) includes demo client",
+        r.status_code == 200 and demo_row is not None,
+        f"status={r.status_code} found={bool(demo_row)} doc_count={(demo_row or {}).get('doc_count')}",
+    )
+    if demo_row is not None and demo_row.get("doc_count") != 6:
+        record(
+            "3b. demo client doc_count == 6 (legacy migration)",
+            False,
+            f"actual={demo_row.get('doc_count')} (expected 6 from legacy migration)",
         )
-        ok = r.status_code == 200
-        body = r.json() if ok else {}
-        detail = f"status={r.status_code} body={r.text[:300]}"
-        if ok:
-            cat_ok = body.get("category") == "MONTHLY_RETURN"
-            year_ok = body.get("year") == 2026
-            month_ok = body.get("month") == 3
-            client_ok = body.get("client_id") == demo_client_id
-            admin_ok = bool(body.get("admin_id"))
-            ok = cat_ok and year_ok and month_ok and client_ok and admin_ok
-            detail += f" cat={cat_ok} year={year_ok} month={month_ok} client_id={client_ok} admin_id={admin_ok}"
-            uploaded_doc_id = body.get("id")
-        record("13. POST /documents/upload admin", ok, detail)
     else:
-        record("13. POST /documents/upload admin", False, "demo_client_id not found")
+        record("3b. demo client doc_count == 6", demo_row is not None, "ok")
 
-    # 14. upload missing client_id
-    files = {"file": ("test.pdf", make_pdf_bytes(), "application/pdf")}
-    r = requests.post(
-        f"{BASE}/documents/upload",
-        headers={"Authorization": f"Bearer {admin_token}"},
-        files=files,
+    # 4. GET /admins/connected client → includes admin
+    r = requests.get(f"{API}/admins/connected", headers=auth_headers(demo_client_token), timeout=20)
+    arr = r.json() if r.ok else []
+    has_admin = any(a.get("email") == ADMIN_EMAIL for a in arr)
+    record(
+        "4. GET /admins/connected (demo client) includes admin",
+        r.status_code == 200 and has_admin,
+        f"status={r.status_code} count={len(arr)} has_admin={has_admin}",
     )
-    record("14. POST /documents/upload no client_id -> 422", r.status_code == 422, f"status={r.status_code} body={r.text[:200]}")
 
-    # 15. upload bad client_id
-    files = {"file": ("test.pdf", make_pdf_bytes(), "application/pdf")}
-    data = {"client_id": str(uuid.uuid4())}
-    r = requests.post(
-        f"{BASE}/documents/upload",
-        headers={"Authorization": f"Bearer {admin_token}"},
-        files=files,
-        data=data,
+    # 5. Solo client (no admin_email)
+    solo_email = f"solo_{rand_suffix()}@test.com"
+    code, body = register("Solo", solo_email, "test123", role="client")
+    record(
+        "5a. POST /auth/register Solo (no admin_email)",
+        code == 200 and body.get("user", {}).get("role") == "client",
+        f"status={code}",
     )
-    ok = r.status_code == 400 and "Target client not found" in r.text
-    record("15. POST /documents/upload bad client_id -> 400", ok, f"status={r.status_code} body={r.text[:200]}")
+    if code != 200:
+        return _summary()
+    solo_token = body["access_token"]
+    solo_id = body["user"]["id"]
 
-    # 16. upload with client token
-    files = {"file": ("test.pdf", make_pdf_bytes(), "application/pdf")}
-    data = {"client_id": demo_client_id or str(uuid.uuid4())}
-    r = requests.post(
-        f"{BASE}/documents/upload",
-        headers={"Authorization": f"Bearer {client_token}"},
-        files=files,
-        data=data,
+    r = requests.get(f"{API}/admins/connected", headers=auth_headers(solo_token), timeout=20)
+    arr = r.json() if r.ok else None
+    record(
+        "5b. Solo /admins/connected returns []",
+        r.status_code == 200 and arr == [],
+        f"status={r.status_code} body={arr}",
     )
-    record("16. POST /documents/upload client token -> 403", r.status_code == 403, f"status={r.status_code} body={r.text[:200]}")
 
-    # 17. /documents admin no params
-    r = requests.get(f"{BASE}/documents", headers={"Authorization": f"Bearer {admin_token}"})
-    ok = r.status_code == 200 and isinstance(r.json(), list)
-    detail = f"status={r.status_code} count={len(r.json()) if ok else 0}"
-    if ok and uploaded_doc_id:
-        ids = [d["id"] for d in r.json()]
-        ok = uploaded_doc_id in ids
-        detail += f" uploaded_present={ok}"
-    record("17. GET /documents admin no params", ok, detail)
+    r = requests.get(f"{API}/clients", headers=auth_headers(admin_token), timeout=20)
+    arr = r.json() if r.ok else []
+    has_solo = any(c.get("id") == solo_id for c in arr)
+    record(
+        "5c. /clients (admin) does NOT include Solo (no connection)",
+        r.status_code == 200 and not has_solo,
+        f"has_solo={has_solo}",
+    )
 
-    # 18. /documents admin filter client_id
-    if demo_client_id:
-        r = requests.get(f"{BASE}/documents?client_id={demo_client_id}", headers={"Authorization": f"Bearer {admin_token}"})
-        ok = r.status_code == 200 and isinstance(r.json(), list)
-        if ok:
-            all_match = all(d["client_id"] == demo_client_id for d in r.json())
-            ok = all_match
-        record("18. GET /documents?client_id=demo admin", ok, f"status={r.status_code}")
-    else:
-        record("18. GET /documents?client_id admin", False, "no demo_client_id")
+    # 6. Register brand new admin Boss
+    boss_email = f"boss_{rand_suffix()}@test.com"
+    code, body = register("Boss", boss_email, "test123", role="admin")
+    record(
+        "6. POST /auth/register Boss (role=admin)",
+        code == 200 and body.get("user", {}).get("role") == "admin",
+        f"status={code} role={body.get('user', {}).get('role')}",
+    )
+    if code != 200:
+        return _summary()
+    boss_token = body["access_token"]
+    boss_id = body["user"]["id"]
 
-    # 19. /documents demo client
-    r = requests.get(f"{BASE}/documents", headers={"Authorization": f"Bearer {client_token}"})
-    ok = r.status_code == 200 and isinstance(r.json(), list)
-    detail = f"status={r.status_code} count={len(r.json()) if ok else 0}"
-    if ok and uploaded_doc_id:
-        ids = [d["id"] for d in r.json()]
-        ok = uploaded_doc_id in ids
-        detail += f" uploaded_present={ok}"
-    record("19. GET /documents demo client", ok, detail)
+    # 7. Auto-connect client with Boss
+    auto_email = f"auto_{rand_suffix()}@test.com"
+    code, body = register("Auto", auto_email, "test123", role="client", admin_email=boss_email)
+    record(
+        "7a. POST /auth/register Auto with admin_email=Boss",
+        code == 200 and body.get("user", {}).get("role") == "client",
+        f"status={code}",
+    )
+    if code != 200:
+        return _summary()
+    auto_token = body["access_token"]
+    auto_id = body["user"]["id"]
 
-    # 20. /documents new client
-    r = requests.get(f"{BASE}/documents", headers={"Authorization": f"Bearer {new_token}"})
-    ok = r.status_code == 200 and r.json() == []
-    record("20. GET /documents new client -> []", ok, f"status={r.status_code} body={r.text[:200]}")
+    r = requests.get(f"{API}/admins/connected", headers=auth_headers(auto_token), timeout=20)
+    arr = r.json() if r.ok else []
+    has_boss = any(a.get("id") == boss_id for a in arr)
+    record(
+        "7b. Auto /admins/connected includes Boss",
+        r.status_code == 200 and has_boss,
+        f"status={r.status_code} has_boss={has_boss}",
+    )
 
-    # 21. file fetch admin
-    if uploaded_doc_id:
-        r = requests.get(f"{BASE}/documents/{uploaded_doc_id}/file", headers={"Authorization": f"Bearer {admin_token}"})
-        ok = r.status_code == 200 and r.headers.get("content-type", "").startswith("application/pdf")
-        record("21. GET /documents/{id}/file admin", ok, f"status={r.status_code} ct={r.headers.get('content-type')}")
-    else:
-        record("21. GET /documents/{id}/file admin", False, "no doc id")
+    r = requests.get(f"{API}/clients", headers=auth_headers(boss_token), timeout=20)
+    arr = r.json() if r.ok else []
+    has_auto = any(c.get("id") == auto_id for c in arr)
+    record(
+        "7c. Boss /clients includes Auto",
+        r.status_code == 200 and has_auto,
+        f"status={r.status_code} has_auto={has_auto}",
+    )
 
-    # 22. file fetch demo client
-    if uploaded_doc_id:
-        r = requests.get(f"{BASE}/documents/{uploaded_doc_id}/file", headers={"Authorization": f"Bearer {client_token}"})
-        ok = r.status_code == 200
-        record("22. GET /documents/{id}/file demo client", ok, f"status={r.status_code}")
+    # 8. Lookup user
+    r = requests.get(
+        f"{API}/users/lookup",
+        params={"email": ADMIN_EMAIL},
+        headers=auth_headers(solo_token),
+        timeout=20,
+    )
+    record(
+        "8a. /users/lookup admin email (solo client)",
+        r.status_code == 200 and r.json().get("email") == ADMIN_EMAIL,
+        f"status={r.status_code}",
+    )
 
-    # 23. file fetch new client (forbidden)
-    if uploaded_doc_id:
-        r = requests.get(f"{BASE}/documents/{uploaded_doc_id}/file", headers={"Authorization": f"Bearer {new_token}"})
-        record("23. GET /documents/{id}/file new client -> 403", r.status_code == 403, f"status={r.status_code} body={r.text[:200]}")
+    r = requests.get(
+        f"{API}/users/lookup",
+        params={"email": ADMIN_EMAIL, "role": "client"},
+        headers=auth_headers(solo_token),
+        timeout=20,
+    )
+    record(
+        "8b. /users/lookup admin email with role=client → 404",
+        r.status_code == 404,
+        f"status={r.status_code}",
+    )
 
-    # 24. PUT /documents/{id} admin
-    if uploaded_doc_id:
-        r = requests.put(
-            f"{BASE}/documents/{uploaded_doc_id}",
-            headers={"Authorization": f"Bearer {admin_token}"},
-            json={"display_name": "Updated Name"},
-        )
-        ok = r.status_code == 200 and r.json().get("display_name") == "Updated Name"
-        record("24. PUT /documents/{id} admin", ok, f"status={r.status_code} body={r.text[:200]}")
+    r = requests.get(
+        f"{API}/users/lookup",
+        params={"email": f"nonexistent_{rand_suffix()}@test.com"},
+        headers=auth_headers(solo_token),
+        timeout=20,
+    )
+    record(
+        "8c. /users/lookup nonexistent → 404",
+        r.status_code == 404,
+        f"status={r.status_code}",
+    )
 
-    # 25. PUT /documents/{id} client (should be 403, but admin dependency raises 403)
-    if uploaded_doc_id:
-        r = requests.put(
-            f"{BASE}/documents/{uploaded_doc_id}",
-            headers={"Authorization": f"Bearer {client_token}"},
-            json={"display_name": "Hacker"},
-        )
-        record("25. PUT /documents/{id} client -> 403", r.status_code == 403, f"status={r.status_code} body={r.text[:200]}")
+    # 9. Solo client adds admin connection
+    r = requests.post(
+        f"{API}/connections",
+        json={"peer_email": ADMIN_EMAIL},
+        headers=auth_headers(solo_token),
+        timeout=20,
+    )
+    body = r.json() if r.ok else {}
+    record(
+        "9a. POST /connections (solo→admin) status=created",
+        r.status_code == 200 and body.get("status") == "created" and body.get("peer", {}).get("email") == ADMIN_EMAIL,
+        f"status={r.status_code} body={body}",
+    )
 
-    # 26. DELETE
-    if uploaded_doc_id:
-        r = requests.delete(f"{BASE}/documents/{uploaded_doc_id}", headers={"Authorization": f"Bearer {admin_token}"})
-        ok = r.status_code == 200 and r.json().get("ok") is True
-        record("26a. DELETE /documents/{id} admin", ok, f"status={r.status_code} body={r.text[:200]}")
-        r = requests.get(f"{BASE}/documents/{uploaded_doc_id}/file", headers={"Authorization": f"Bearer {admin_token}"})
-        record("26b. GET deleted doc file -> 404", r.status_code == 404, f"status={r.status_code} body={r.text[:200]}")
+    r = requests.post(
+        f"{API}/connections",
+        json={"peer_email": ADMIN_EMAIL},
+        headers=auth_headers(solo_token),
+        timeout=20,
+    )
+    body = r.json() if r.ok else {}
+    record(
+        "9b. POST /connections again → status=exists",
+        r.status_code == 200 and body.get("status") == "exists",
+        f"status={r.status_code} body_status={body.get('status')}",
+    )
 
-    # WebSocket tests
-    asyncio.run(websocket_tests(admin_token))
+    r = requests.get(f"{API}/admins/connected", headers=auth_headers(solo_token), timeout=20)
+    arr = r.json() if r.ok else []
+    has_admin = any(a.get("email") == ADMIN_EMAIL for a in arr)
+    record(
+        "9c. Solo /admins/connected now includes admin",
+        r.status_code == 200 and has_admin,
+        f"has_admin={has_admin}",
+    )
 
-    # Static site tests
-    r = requests.get(f"{BASE}/web/", allow_redirects=True)
-    ok = r.status_code == 200 and "<html" in r.text.lower()
-    record("WS1. GET /api/web/ -> 200 html", ok, f"status={r.status_code}")
+    r = requests.get(f"{API}/clients", headers=auth_headers(admin_token), timeout=20)
+    arr = r.json() if r.ok else []
+    has_solo = any(c.get("id") == solo_id for c in arr)
+    record(
+        "9d. /clients (admin) now includes Solo",
+        r.status_code == 200 and has_solo,
+        f"has_solo={has_solo}",
+    )
 
-    r = requests.get(f"{BASE}/web/admin/login", allow_redirects=True)
-    ok = r.status_code == 200 and "<html" in r.text.lower()
-    record("WS2. GET /api/web/admin/login -> 200 html (SPA fallback)", ok, f"status={r.status_code}")
+    # 10. Admin adds Solo client → exists
+    r = requests.post(
+        f"{API}/connections",
+        json={"peer_email": solo_email},
+        headers=auth_headers(admin_token),
+        timeout=20,
+    )
+    body = r.json() if r.ok else {}
+    record(
+        "10. POST /connections (admin→solo) status=exists",
+        r.status_code == 200 and body.get("status") == "exists",
+        f"status={r.status_code} body_status={body.get('status')}",
+    )
 
-    print()
-    print("=" * 70)
-    failed = [r for r in results if not r[1]]
-    print(f"TOTAL: {len(results)}  PASSED: {len(results) - len(failed)}  FAILED: {len(failed)}")
-    if failed:
-        print("FAILED CASES:")
-        for n, _, d in failed:
-            print(f"  - {n}: {d}")
-        sys.exit(1)
-
-
-async def websocket_tests(admin_token):
-    # valid token: should get hello
+    # 11. Admin connecting to another admin → 400
+    r = requests.post(
+        f"{API}/connections",
+        json={"peer_email": boss_email},
+        headers=auth_headers(admin_token),
+        timeout=20,
+    )
     try:
-        async with websockets.connect(f"{WS_BASE}?token={admin_token}", open_timeout=5) as ws:
-            msg = await asyncio.wait_for(ws.recv(), timeout=5)
-            payload = json.loads(msg)
-            ok = payload.get("type") == "hello" and payload.get("user", {}).get("role") == "admin"
-            record("WS-1. /api/ws valid token handshake + hello", ok, f"msg={msg[:200]}")
-    except Exception as e:
-        record("WS-1. /api/ws valid token handshake", False, f"exc={e}")
+        body = r.json()
+    except Exception:
+        body = {}
+    record(
+        "11. POST /connections admin→admin → 400",
+        r.status_code == 400 and "admin and a client" in (body.get("detail") or ""),
+        f"status={r.status_code} detail={body.get('detail')}",
+    )
 
-    # missing token: should close with 4401
+    # 12. Self-connect
+    r = requests.post(
+        f"{API}/connections",
+        json={"peer_email": ADMIN_EMAIL},
+        headers=auth_headers(admin_token),
+        timeout=20,
+    )
     try:
-        async with websockets.connect(f"{WS_BASE}", open_timeout=5) as ws:
-            try:
-                await asyncio.wait_for(ws.recv(), timeout=5)
-            except websockets.ConnectionClosed as cc:
-                ok = cc.code == 4401
-                record("WS-2. /api/ws missing token -> close 4401", ok, f"code={cc.code}")
-                return
-            record("WS-2. /api/ws missing token -> close 4401", False, "no close received")
-    except websockets.InvalidStatus as e:
-        # If server rejects handshake before accept, capture that
-        record("WS-2. /api/ws missing token -> close 4401", False, f"InvalidStatus={e}")
-    except Exception as e:
-        # Some versions raise ConnectionClosed at connect time
+        body = r.json()
+    except Exception:
+        body = {}
+    record(
+        "12. POST /connections self → 400",
+        r.status_code == 400 and "yourself" in (body.get("detail") or "").lower(),
+        f"status={r.status_code} detail={body.get('detail')}",
+    )
+
+    # 13a. Upload to a non-client (boss admin id) → 400 Target client not found
+    pdf_bytes = make_minimal_pdf()
+    files = {"file": ("monthly return Mar'2026.pdf", pdf_bytes, "application/pdf")}
+    data = {"client_id": boss_id}
+    r = requests.post(
+        f"{API}/documents/upload", headers=auth_headers(admin_token), files=files, data=data, timeout=30,
+    )
+    body = r.json() if r.headers.get("content-type", "").startswith("application/json") else {}
+    record(
+        "13a. Upload with client_id=boss(admin) → 400 Target client not found",
+        r.status_code == 400 and "Target client not found" in body.get("detail", ""),
+        f"status={r.status_code} detail={body.get('detail')}",
+    )
+
+    # 13b. Upload to a client we are NOT connected to (Detached, no admin_email)
+    detached_email = f"detached_{rand_suffix()}@test.com"
+    code, body = register("Detached", detached_email, "test123", role="client")
+    record(
+        "13b-pre. register Detached client",
+        code == 200,
+        f"status={code}",
+    )
+    detached_id = body["user"]["id"]
+
+    files = {"file": ("ifa report Mar'2026.pdf", pdf_bytes, "application/pdf")}
+    data = {"client_id": detached_id}
+    r = requests.post(
+        f"{API}/documents/upload", headers=auth_headers(admin_token), files=files, data=data, timeout=30,
+    )
+    try:
+        body = r.json()
+    except Exception:
+        body = {}
+    record(
+        "13b. Upload to non-connected client → 403 not connected",
+        r.status_code == 403 and "not connected" in body.get("detail", "").lower(),
+        f"status={r.status_code} detail={body.get('detail')}",
+    )
+
+    # 14. DELETE /connections/{peer_id}
+    r = requests.delete(
+        f"{API}/connections/{admin_id}", headers=auth_headers(solo_token), timeout=20,
+    )
+    body = r.json() if r.ok else {}
+    record(
+        "14a. DELETE /connections/admin (solo) → ok",
+        r.status_code == 200 and body.get("ok") is True,
+        f"status={r.status_code} body={body}",
+    )
+
+    r = requests.get(f"{API}/admins/connected", headers=auth_headers(solo_token), timeout=20)
+    arr = r.json() if r.ok else []
+    record(
+        "14b. After delete, /admins/connected does NOT include admin",
+        r.status_code == 200 and not any(a.get("email") == ADMIN_EMAIL for a in arr),
+        f"count={len(arr)}",
+    )
+
+    r = requests.delete(
+        f"{API}/connections/{admin_id}", headers=auth_headers(solo_token), timeout=20,
+    )
+    body = r.json() if r.headers.get("content-type", "").startswith("application/json") else {}
+    record(
+        "14c. DELETE again → 404",
+        r.status_code == 404,
+        f"status={r.status_code} detail={body.get('detail')}",
+    )
+
+    # 15. WebSocket smoke
+    async def ws_check():
+        url = f"{WS_BASE}?token={admin_token}"
         try:
-            code = getattr(e, "code", None) or getattr(getattr(e, "rcvd", None), "code", None)
-            ok = code == 4401
-            record("WS-2. /api/ws missing token -> close 4401", ok, f"exc={e} code={code}")
-        except Exception:
-            record("WS-2. /api/ws missing token -> close 4401", False, f"exc={e}")
+            async with websockets.connect(url, open_timeout=15, close_timeout=5) as ws:
+                # First message must be 'hello'
+                msg = await asyncio.wait_for(ws.recv(), timeout=10)
+                payload = json.loads(msg)
+                return payload.get("type") == "hello" and payload.get("user", {}).get("role") == "admin", payload
+        except Exception as e:
+            return False, str(e)
 
-    # invalid token
-    try:
-        async with websockets.connect(f"{WS_BASE}?token=invalid.jwt.here", open_timeout=5) as ws:
-            try:
-                await asyncio.wait_for(ws.recv(), timeout=5)
-            except websockets.ConnectionClosed as cc:
-                ok = cc.code == 4401
-                record("WS-3. /api/ws invalid token -> close 4401", ok, f"code={cc.code}")
-                return
-            record("WS-3. /api/ws invalid token -> close 4401", False, "no close received")
-    except Exception as e:
-        code = getattr(e, "code", None) or getattr(getattr(e, "rcvd", None), "code", None)
-        ok = code == 4401
-        record("WS-3. /api/ws invalid token -> close 4401", ok, f"exc={e} code={code}")
+    ok, payload = asyncio.run(ws_check())
+    record(
+        "15. WebSocket /api/ws connect with valid token → hello",
+        ok,
+        f"payload={payload}",
+    )
+
+    return _summary()
+
+
+def _summary() -> int:
+    print("\n" + "=" * 70)
+    print("SUMMARY")
+    print("=" * 70)
+    fails = [r for r in results if not r[1]]
+    for name, ok, detail in results:
+        flag = "✅" if ok else "❌"
+        print(f"{flag} {name}")
+        if not ok:
+            print(f"     -> {detail}")
+    print(f"\nTotal: {len(results)} | Passed: {len(results)-len(fails)} | Failed: {len(fails)}")
+    return 0 if not fails else 1
 
 
 if __name__ == "__main__":
-    main()
+    sys.exit(main())

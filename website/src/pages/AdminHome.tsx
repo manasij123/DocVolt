@@ -3,6 +3,7 @@ import { Link, useNavigate } from "react-router-dom";
 import api, { ClientRow, getToken, getUser, logout, initials, colorFromString } from "../api";
 import { useDocsSocket } from "../useDocsSocket";
 import LiveBadge from "../LiveBadge";
+import ConnectModal from "../ConnectModal";
 
 type Toast = { id: string; title: string; sub?: string; leaving?: boolean };
 
@@ -13,6 +14,7 @@ export default function AdminHome() {
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
   const [toasts, setToasts] = useState<Toast[]>([]);
+  const [showConnect, setShowConnect] = useState(false);
   const [highlightId, setHighlightId] = useState<string | null>(null);
 
   useEffect(() => {
@@ -22,10 +24,8 @@ export default function AdminHome() {
 
   const reload = async () => {
     setLoading(true);
-    try {
-      const r = await api.get<ClientRow[]>("/clients");
-      setClients(r.data);
-    } finally { setLoading(false); }
+    try { const r = await api.get<ClientRow[]>("/clients"); setClients(r.data); }
+    finally { setLoading(false); }
   };
 
   const pushToast = (t: Omit<Toast, "id">) => {
@@ -37,16 +37,20 @@ export default function AdminHome() {
     }, 4200);
   };
 
-  // Real-time: new client registration toast + auto-add to list with brief highlight
+  // Real-time: notify on new client signup, auto-refresh on connection events
   useDocsSocket((e) => {
     if (e.type === "client:registered") {
       const c = e.client;
-      pushToast({ title: "🎉 New client registered", sub: `${c.name} · ${c.email}` });
-      setClients((prev) => prev.some((x) => x.id === c.id) ? prev : [{ ...c, doc_count: 0, last_upload_at: null } as ClientRow, ...prev]);
-      setHighlightId(c.id);
+      pushToast({ title: "🆕 New client signed up", sub: `${c.name} · ${c.email} · They can now connect to you` });
+    } else if (e.type === ("connection:created" as any)) {
+      const peer = (e as any).peer;
+      pushToast({ title: "🔗 New connection", sub: `${peer.name} · ${peer.email}` });
+      reload();
+      setHighlightId(peer.id);
       setTimeout(() => setHighlightId(null), 4000);
+    } else if (e.type === ("connection:removed" as any)) {
+      reload();
     } else if (e.type === "doc:created" || e.type === "doc:deleted" || e.type === "doc:updated") {
-      // refresh counts in the background
       reload();
     }
   });
@@ -57,29 +61,9 @@ export default function AdminHome() {
     return clients.filter((c) => c.name.toLowerCase().includes(q) || c.email.toLowerCase().includes(q));
   }, [clients, search]);
 
-  const myClients = filtered.filter((c) => c.doc_count > 0);
-  const newClients = filtered.filter((c) => c.doc_count === 0);
   const totalDocs = clients.reduce((s, c) => s + (c.doc_count || 0), 0);
 
   const onLogout = () => { logout(); nav("/", { replace: true }); };
-
-  const renderRow = (c: ClientRow, isNew = false) => (
-    <Link key={c.id} to={`/admin/c/${c.id}`} className={`client-row ${highlightId === c.id ? "highlight" : ""}`}>
-      <div className="avatar" style={{ background: colorFromString(c.id) }}>{initials(c.name)}</div>
-      <div className="client-meta">
-        <div className="client-name">
-          {c.name}
-          {isNew && <span className="new-tag">NEW</span>}
-        </div>
-        <div className="client-email">{c.email}</div>
-      </div>
-      <div className="client-stats">
-        <div className="stat-num">{c.doc_count}</div>
-        <div className="stat-lbl">{c.doc_count === 1 ? "file" : "files"}</div>
-      </div>
-      <span className="client-arrow">→</span>
-    </Link>
-  );
 
   return (
     <div className="app-shell">
@@ -95,12 +79,19 @@ export default function AdminHome() {
       </header>
 
       <main className="container page-anim" style={{ padding: "24px 24px 60px" }}>
-        <h1 style={{ fontSize: 28, fontWeight: 800, margin: "0 0 4px", letterSpacing: -0.5 }}>Your clients</h1>
-        <p className="muted" style={{ marginTop: 0, marginBottom: 18 }}>
-          {clients.length} registered · <strong>{myClients.length}</strong> under you · {totalDocs} total files
-        </p>
+        <div className="head-row">
+          <div>
+            <h1 style={{ fontSize: 28, fontWeight: 800, margin: "0 0 4px", letterSpacing: -0.5 }}>Your clients</h1>
+            <p className="muted" style={{ marginTop: 0, marginBottom: 0 }}>
+              <strong>{clients.length}</strong> connected · {totalDocs} total files · Share <span className="kbd">{me?.email}</span> with new clients
+            </p>
+          </div>
+          <button className="btn btn-primary btn-lg" onClick={() => setShowConnect(true)}>
+            ＋ Add Client
+          </button>
+        </div>
 
-        <div className="search-row">
+        <div className="search-row" style={{ marginTop: 18 }}>
           <span>🔍</span>
           <input className="search-input" value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search by name or email…" />
         </div>
@@ -111,25 +102,38 @@ export default function AdminHome() {
           <div className="empty">
             <div className="empty-icon">👥</div>
             <h3>No clients yet</h3>
-            <p>When a client registers, they'll appear here automatically.</p>
+            <p style={{ marginBottom: 14 }}>Share your email <strong>{me?.email}</strong> with clients so they can connect during register, or click <strong>＋ Add Client</strong> above to invite an already-registered client.</p>
+            <button className="btn btn-primary" onClick={() => setShowConnect(true)}>＋ Add Client</button>
           </div>
+        ) : filtered.length === 0 ? (
+          <div className="empty"><p>No clients match "{search}".</p></div>
         ) : (
-          <>
-            {myClients.length > 0 && (
-              <section>
-                <div className="section-head"><span className="section-dot MONTHLY_RETURN" /><span className="section-title">Under You</span><span className="section-count">· {myClients.length}</span></div>
-                <div className="client-grid">{myClients.map((c) => renderRow(c))}</div>
-              </section>
-            )}
-            {newClients.length > 0 && (
-              <section>
-                <div className="section-head"><span className="section-dot FORWARDING_LETTER" /><span className="section-title">Registered Clients</span><span className="section-count">· {newClients.length} · not yet served</span></div>
-                <div className="client-grid">{newClients.map((c) => renderRow(c, true))}</div>
-              </section>
-            )}
-          </>
+          <div className="client-grid">
+            {filtered.map((c) => (
+              <Link key={c.id} to={`/admin/c/${c.id}`} className={`client-row ${highlightId === c.id ? "highlight" : ""}`}>
+                <div className="avatar" style={{ background: colorFromString(c.id) }}>{initials(c.name)}</div>
+                <div className="client-meta">
+                  <div className="client-name">{c.name}</div>
+                  <div className="client-email">{c.email}</div>
+                </div>
+                <div className="client-stats">
+                  <div className="stat-num">{c.doc_count}</div>
+                  <div className="stat-lbl">{c.doc_count === 1 ? "file" : "files"}</div>
+                </div>
+                <span className="client-arrow">→</span>
+              </Link>
+            ))}
+          </div>
         )}
       </main>
+
+      {showConnect && (
+        <ConnectModal
+          peerRole="client"
+          onClose={() => setShowConnect(false)}
+          onConnected={() => { setShowConnect(false); reload(); }}
+        />
+      )}
 
       <div className="toast-stack" aria-live="polite">
         {toasts.map((t) => (

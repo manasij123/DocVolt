@@ -629,3 +629,27 @@ input { font-family: inherit; }
 .stat-lbl { font-size: 10.5px; color: var(--text-secondary); font-weight: 700; text-transform: uppercase; letter-spacing: 0.8px; margin-top: 4px; }
 .client-arrow { color: var(--text-muted); font-size: 18px; transition: transform 0.18s var(--ease-out); }
 .client-row:hover .client-arrow { transform: translateX(3px); color: var(--primary); }
+
+/* ─── Round-4: head row, choose-admin-alt, peer preview ─── */
+.head-row {
+  display: flex; align-items: flex-start; justify-content: space-between;
+  gap: 16px; flex-wrap: wrap;
+}
+.head-row > div { min-width: 0; flex: 1; }
+
+.choose-admin-alt {
+  background: rgba(255,255,255,0.06);
+  border: 1px solid rgba(255,255,255,0.14);
+  color: #fff;
+}
+.choose-admin-alt:hover { background: rgba(255,255,255,0.10); }
+.choose-admin-alt .choose-icon { background: linear-gradient(135deg, #43A047, #1B5E20); color: #fff; }
+
+.peer-preview {
+  display: flex; align-items: center; gap: 12px;
+  padding: 12px 14px;
+  background: var(--primary-soft); border: 1px solid #BBDBFB;
+  border-radius: var(--radius-md);
+  margin-top: 6px;
+  animation: scaleIn 0.25s var(--ease-out) both;
+}
