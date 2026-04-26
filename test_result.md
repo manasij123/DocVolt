@@ -101,3 +101,48 @@
 #====================================================================================================
 # Testing Data - Main Agent and testing sub agent both should log testing data below this section
 #====================================================================================================
+
+user_problem_statement: "Build a data storage app with admin/client sides; 4 tabs (MONTHLY RETURN, FORWARDING LETTER, IFA REPORT, OTHERS); auto-detect tab/month/year from PDF filename; admin uploads/edits/deletes; client views & shares via WhatsApp; WB Government colour scheme. Plus standalone Web version like 'WhatsApp Web' connected to same backend & DB."
+
+backend:
+  - task: "Static SPA hosting at /api/web/ for the standalone Vite website"
+    implemented: true
+    working: true
+    file: "/app/backend/server.py"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: false
+    status_history:
+        - working: true
+          agent: "main"
+          comment: "Mounted /app/website/dist on FastAPI at /api/web with a SPAStaticFiles class that falls back to index.html on 404 so React-Router deep links (e.g. /api/web/admin, /api/web/client) survive a hard refresh. Verified locally and on the public preview host: GET /api/web/ -> 200, GET /api/web/assets/* -> 200, GET /api/web/admin/login -> 200 (SPA fallback). Existing /api/* JSON endpoints unaffected."
+
+frontend:
+  - task: "Standalone Vite + React website (Landing, AdminLogin, AdminDashboard, ClientView)"
+    implemented: true
+    working: true
+    file: "/app/website/src/*"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: false
+    status_history:
+        - working: true
+          agent: "main"
+          comment: "Built with `yarn build` (Vite). Configured base='/api/web/' and BrowserRouter basename='/api/web' so it can be served from FastAPI under the only ingress-routable backend prefix. Manual e2e via Playwright screenshot tool: Landing renders, Admin login works with admin@example.com / admin123, Admin Dashboard shows the 6 documents stored by the mobile app (proves shared MongoDB + same backend). Client view rendering and category tabs work."
+
+metadata:
+  created_by: "main_agent"
+  version: "1.1"
+  test_sequence: 1
+  run_ui: false
+
+test_plan:
+  current_focus:
+    - "Static SPA hosting at /api/web/ for the standalone Vite website"
+  stuck_tasks: []
+  test_all: false
+  test_priority: "high_first"
+
+agent_communication:
+    - agent: "main"
+      message: "Standalone web portal is live at /api/web/ on the same backend host. Same MongoDB / same APIs as the mobile app. Public URL example: https://<preview-host>/api/web/. Admin (admin@example.com / admin123) and Client roles both work. Next planned step (per user): real-time WebSocket sync between mobile and web — to be picked up only after user confirms the website is good."

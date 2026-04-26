@@ -14,7 +14,9 @@ from datetime import datetime, timezone, timedelta
 from typing import List, Optional
 
 from fastapi import FastAPI, APIRouter, UploadFile, File, Form, HTTPException, Depends, Request
-from fastapi.responses import StreamingResponse
+from fastapi.responses import StreamingResponse, FileResponse
+from fastapi.staticfiles import StaticFiles
+from starlette.exceptions import HTTPException as StarletteHTTPException
 from starlette.middleware.cors import CORSMiddleware
 from motor.motor_asyncio import AsyncIOMotorClient, AsyncIOMotorGridFSBucket
 from bson import ObjectId
@@ -435,6 +437,36 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# ============================================================
+# Static website (Vite build) — served at /api/web/*
+# Only /api/* is routed to backend by the ingress, so the
+# standalone "WhatsApp Web" style portal lives under /api/web/.
+# ============================================================
+WEBSITE_DIR = Path("/app/website/dist")
+
+
+class SPAStaticFiles(StaticFiles):
+    """StaticFiles that falls back to index.html for unknown paths
+    (so client-side react-router routes resolve correctly on refresh)."""
+
+    async def get_response(self, path: str, scope):
+        try:
+            return await super().get_response(path, scope)
+        except StarletteHTTPException as ex:
+            if ex.status_code == 404:
+                index_file = Path(self.directory) / "index.html"
+                if index_file.exists():
+                    return FileResponse(index_file)
+            raise
+
+
+if WEBSITE_DIR.exists():
+    app.mount(
+        "/api/web",
+        SPAStaticFiles(directory=str(WEBSITE_DIR), html=True),
+        name="website",
+    )
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s")
 logger = logging.getLogger(__name__)
