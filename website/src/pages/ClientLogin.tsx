@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import api, { setToken, setUser } from "../api";
+import AuthHeroIcon from "../AuthHeroIcon";
 
 export default function ClientLogin() {
   const nav = useNavigate();
@@ -31,6 +32,7 @@ export default function ClientLogin() {
       <div className="login-card">
         <Link to="/" style={{ color: "#fff", display: "inline-block", marginBottom: 18, opacity: 0.85, fontSize: 14, fontWeight: 600 }}>← Back</Link>
         <div className="login-icon">👥</div>
+        <AuthHeroIcon mode="login" role="client" />
         <h2 className="login-title">Client Login</h2>
         <p className="login-sub">Welcome back — sign in to view your documents</p>
         <div className="card card-md">

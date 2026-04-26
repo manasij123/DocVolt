@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import api, { setToken, setUser } from "../api";
+import AuthHeroIcon from "../AuthHeroIcon";
 
 export default function AdminRegister() {
   const nav = useNavigate();
@@ -35,6 +36,7 @@ export default function AdminRegister() {
       <div className="login-card">
         <Link to="/" style={{ color: "#fff", display: "inline-block", marginBottom: 18, opacity: 0.85, fontSize: 14, fontWeight: 600 }}>← Back</Link>
         <div className="login-icon">🚀</div>
+        <AuthHeroIcon mode="register" role="admin" />
         <h2 className="login-title">Become an Admin</h2>
         <p className="login-sub">Create your admin workspace — invite clients with your email.</p>
         <div className="card card-md">

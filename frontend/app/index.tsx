@@ -46,29 +46,63 @@ export default function Landing() {
     );
   }
 
-  const Card = ({ icon, gradient, title, sub, onPress, dark = false, testID }: any) => (
-    <PressableScale onPress={onPress} testID={testID}>
-      {gradient ? (
-        <LinearGradient colors={gradient} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={styles.cardPrimary}>
-          <View style={styles.cardIconLight}><Ionicons name={icon} size={22} color="#3B82F6" /></View>
-          <View style={{ flex: 1, minWidth: 0, marginRight: 8 }}>
-            <Text style={styles.cardTitle} numberOfLines={1}>{title}</Text>
-            <Text style={styles.cardSub} numberOfLines={1}>{sub}</Text>
+  // RoleCard — single tile per role with the role badge, tagline, and two
+  // inline action buttons (Login / Register). Replaces the previous 4-card
+  // layout so the landing page feels compact and tab-like.
+  const RoleCard = ({
+    role, gradient, dark = false, headerIcon, title, sub, lockIcon, clipboardIcon,
+  }: {
+    role: "client" | "admin";
+    gradient?: string[];
+    dark?: boolean;
+    headerIcon: keyof typeof Ionicons.glyphMap;
+    title: string;
+    sub: string;
+    lockIcon: keyof typeof Ionicons.glyphMap;
+    clipboardIcon: keyof typeof Ionicons.glyphMap;
+  }) => {
+    const Container: any = gradient ? LinearGradient : View;
+    const containerProps = gradient
+      ? { colors: gradient, start: { x: 0, y: 0 }, end: { x: 1, y: 1 } }
+      : {};
+    return (
+      <View style={[styles.roleCard, dark && styles.roleCardDark]}>
+        <Container {...containerProps} style={[styles.roleHeader, dark && styles.roleHeaderDark]}>
+          <View style={[styles.roleHeaderIcon, dark && styles.roleHeaderIconDark]}>
+            <Ionicons name={headerIcon} size={22} color={dark ? "#fff" : "#3B82F6"} />
           </View>
-          <View style={styles.chev}><Ionicons name="arrow-forward" size={18} color="#fff" /></View>
-        </LinearGradient>
-      ) : (
-        <View style={[styles.cardSecondary, dark && styles.cardSecondaryDark]}>
-          <View style={styles.cardIconDark}><Ionicons name={icon} size={22} color="#fff" /></View>
-          <View style={{ flex: 1, minWidth: 0, marginRight: 8 }}>
-            <Text style={styles.cardTitle} numberOfLines={1}>{title}</Text>
-            <Text style={styles.cardSubDark} numberOfLines={1}>{sub}</Text>
+          <View style={{ flex: 1, minWidth: 0 }}>
+            <Text style={styles.roleHeaderTitle} numberOfLines={1}>{title}</Text>
+            <Text style={[styles.roleHeaderSub, dark && styles.roleHeaderSubDark]} numberOfLines={1}>{sub}</Text>
           </View>
-          <View style={styles.chevGhost}><Ionicons name="arrow-forward" size={18} color="#CBD5E1" /></View>
+        </Container>
+        <View style={styles.roleActions}>
+          <PressableScale
+            onPress={() => router.push(`/${role}/login`)}
+            testID={`btn-${role}-login`}
+            style={{ flex: 1 }}
+          >
+            <View style={styles.roleAction}>
+              <Ionicons name={lockIcon} size={18} color="#1E293B" />
+              <Text style={styles.roleActionText}>Login</Text>
+              <Ionicons name="chevron-forward" size={14} color="#475569" />
+            </View>
+          </PressableScale>
+          <PressableScale
+            onPress={() => router.push(`/${role}/register`)}
+            testID={`btn-${role}-register`}
+            style={{ flex: 1 }}
+          >
+            <View style={[styles.roleAction, styles.roleActionAlt]}>
+              <Ionicons name={clipboardIcon} size={18} color="#fff" />
+              <Text style={[styles.roleActionText, { color: "#fff" }]}>Register</Text>
+              <Ionicons name="chevron-forward" size={14} color="rgba(255,255,255,0.85)" />
+            </View>
+          </PressableScale>
         </View>
-      )}
-    </PressableScale>
-  );
+      </View>
+    );
+  };
 
   return (
     <View style={styles.root}>
@@ -113,19 +147,25 @@ export default function Landing() {
 
           <View style={{ height: 10 }} />
 
-          <View style={{ maxWidth: 640, alignSelf: "center", width: "100%", gap: 12 }}>
-            <Text style={styles.section}>I'm a Client</Text>
-            <Card icon="people" gradient={["#3B82F6", "#8B5CF6"]} title="Client — Login" sub="Browse documents shared with you"
-              onPress={() => router.push("/client/login")} testID="btn-client-login" />
-            <Card icon="sparkles" title="Client — Register" sub="Create an account & connect with your admin" dark
-              onPress={() => router.push("/client/register")} testID="btn-client-register" />
-
-            <View style={{ height: 8 }} />
-            <Text style={styles.section}>I'm an Admin</Text>
-            <Card icon="shield-checkmark" title="Admin — Login" sub="Manage your clients & documents" dark
-              onPress={() => router.push("/admin/login")} testID="btn-admin-login" />
-            <Card icon="rocket" title="Admin — Register" sub="Set up your own admin workspace" dark
-              onPress={() => router.push("/admin/register")} testID="btn-admin-register" />
+          <View style={{ maxWidth: 640, alignSelf: "center", width: "100%", gap: 14 }}>
+            <RoleCard
+              role="client"
+              gradient={["#3B82F6", "#8B5CF6"]}
+              headerIcon="people"
+              title="I'm a Client"
+              sub="Browse documents shared with you"
+              lockIcon="lock-closed"
+              clipboardIcon="clipboard"
+            />
+            <RoleCard
+              role="admin"
+              dark
+              headerIcon="shield-checkmark"
+              title="I'm an Admin"
+              sub="Manage your clients & documents"
+              lockIcon="lock-open"
+              clipboardIcon="document-text"
+            />
           </View>
 
           <View style={{ flex: 1 }} />
@@ -145,6 +185,52 @@ const styles = StyleSheet.create({
   cardPrimary: { flexDirection: "row", alignItems: "center", borderRadius: radius.lg, padding: 14 },
   cardSecondary: { flexDirection: "row", alignItems: "center", backgroundColor: "rgba(255,255,255,0.06)", borderRadius: radius.lg, padding: 14, borderWidth: 1, borderColor: "rgba(255,255,255,0.14)" },
   cardSecondaryDark: {},
+  // === New compact RoleCard layout (replaces old 4-card section) ===
+  roleCard: {
+    borderRadius: radius.lg,
+    overflow: "hidden",
+    backgroundColor: "rgba(255,255,255,0.06)",
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.14)",
+  },
+  roleCardDark: {
+    backgroundColor: "rgba(15,23,42,0.55)",
+    borderColor: "rgba(255,255,255,0.10)",
+  },
+  roleHeader: {
+    flexDirection: "row", alignItems: "center", gap: 12,
+    paddingHorizontal: 14, paddingVertical: 14,
+  },
+  roleHeaderDark: {
+    backgroundColor: "transparent",
+  },
+  roleHeaderIcon: {
+    width: 44, height: 44, borderRadius: 12,
+    backgroundColor: "#fff",
+    alignItems: "center", justifyContent: "center",
+  },
+  roleHeaderIconDark: {
+    backgroundColor: "rgba(255,255,255,0.10)",
+    borderWidth: 1, borderColor: "rgba(255,255,255,0.18)",
+  },
+  roleHeaderTitle: { color: "#fff", fontSize: 17, fontWeight: "800", letterSpacing: -0.3 },
+  roleHeaderSub:   { color: "#E0E7FF", fontSize: 12, marginTop: 2 },
+  roleHeaderSubDark: { color: "#94A3B8" },
+  roleActions: {
+    flexDirection: "row", gap: 8,
+    paddingHorizontal: 12, paddingBottom: 12, paddingTop: 4,
+  },
+  roleAction: {
+    flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8,
+    paddingVertical: 12, paddingHorizontal: 12,
+    backgroundColor: "#fff",
+    borderRadius: radius.md,
+  },
+  roleActionAlt: {
+    backgroundColor: "rgba(255,255,255,0.18)",
+    borderWidth: 1, borderColor: "rgba(255,255,255,0.30)",
+  },
+  roleActionText: { color: "#1E293B", fontSize: 14, fontWeight: "800", letterSpacing: -0.2 },
   cardIconLight: { width: 42, height: 42, borderRadius: 11, backgroundColor: "#fff", alignItems: "center", justifyContent: "center", marginRight: 12 },
   cardIconDark: { width: 42, height: 42, borderRadius: 11, backgroundColor: "rgba(255,255,255,0.10)", borderWidth: 1, borderColor: "rgba(255,255,255,0.18)", alignItems: "center", justifyContent: "center", marginRight: 12 },
   cardTitle: { color: "#fff", fontSize: 16, fontWeight: "700", letterSpacing: -0.2 },

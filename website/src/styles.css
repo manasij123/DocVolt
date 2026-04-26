@@ -308,12 +308,41 @@ main {
   z-index: 1;
 }
 
-/* Honour reduced-motion preferences — drop all animations to a static state. */
-@media (prefers-reduced-motion: reduce) {
-  .security-bg .sec-blob,
-  .security-bg .sec-icon { animation: none !important; }
-  .security-bg .sec-icon { opacity: 0.10; }
+/* ============================================================
+ * Auth hero icon — composite circular badge for login/register pages
+ * ============================================================ */
+.auth-hero-icon {
+  position: relative;
+  width: 92px; height: 92px;
+  margin: 0 auto 14px;
 }
+.auth-hero-icon .ahi-disc {
+  width: 80px; height: 80px;
+  border-radius: 50%;
+  display: flex; align-items: center; justify-content: center;
+  box-shadow: 0 12px 24px rgba(15, 23, 42, 0.20);
+  margin: 6px;
+}
+.auth-hero-icon .ahi-main svg { width: 40px; height: 40px; display: block; }
+.auth-hero-icon .ahi-overlay {
+  position: absolute; right: 0; bottom: 0;
+  width: 32px; height: 32px;
+  background: #fff;
+  border-radius: 50%;
+  display: flex; align-items: center; justify-content: center;
+  box-shadow: 0 4px 10px rgba(15, 23, 42, 0.18);
+  border: 2px solid rgba(255, 255, 255, 0.9);
+}
+.auth-hero-icon .ahi-overlay svg { width: 18px; height: 18px; display: block; }
+@keyframes authIconPop {
+  0%   { opacity: 0; transform: scale(0.6) translateY(8px); }
+  70%  { opacity: 1; transform: scale(1.05) translateY(-2px); }
+  100% { opacity: 1; transform: scale(1) translateY(0); }
+}
+.auth-hero-icon { animation: authIconPop 0.55s cubic-bezier(0.22, 1, 0.36, 1) both; }
+
+/* Hide the legacy emoji icon when AuthHeroIcon is present */
+.login-card .login-icon { display: none; }
 
 /* ============================================================
  * Page transitions, card-tap, icon, and modal animations

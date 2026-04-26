@@ -73,7 +73,24 @@ export default function AuthForm({ mode, role, defaultEmail = "" }: { mode: Mode
   };
 
   const isClient = role === "client";
-  const heroIcon = role === "admin" ? (mode === "register" ? "rocket" : "shield-checkmark") : (mode === "register" ? "sparkles" : "people");
+  // Role + mode → composite icon spec (big + small overlay) matching the
+  // user-supplied references: padlock badge for LOGIN, clipboard+pencil for
+  // REGISTER. Each role gets a distinct main glyph so admin/client feel
+  // related but visually different.
+  const iconSpec = (() => {
+    if (mode === "login") {
+      // LOGIN — padlock badge style
+      if (role === "admin") {
+        return { main: "shield-checkmark", overlay: "lock-closed", colors: ["#1E3A8A", "#1E40AF"] as [string, string] };
+      }
+      return { main: "person", overlay: "lock-closed", colors: ["#0F4C81", "#1E66A8"] as [string, string] };
+    }
+    // REGISTER — clipboard + pencil style
+    if (role === "admin") {
+      return { main: "clipboard", overlay: "shield-checkmark", colors: ["#F59E0B", "#EF4444"] as [string, string] };
+    }
+    return { main: "clipboard-outline", overlay: "create", colors: ["#FB923C", "#F43F5E"] as [string, string] };
+  })();
   const heroTitle = mode === "login"
     ? (isClient ? "Client Login" : "Admin Login")
     : (isClient ? "Create your account" : "Become an Admin");
@@ -104,9 +121,14 @@ export default function AuthForm({ mode, role, defaultEmail = "" }: { mode: Mode
             </TouchableOpacity>
 
             <View style={{ alignItems: "center", marginVertical: 16 }}>
-              <LinearGradient colors={gradients.primary} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={st.iconWrap}>
-                <Ionicons name={heroIcon as any} size={26} color="#fff" />
-              </LinearGradient>
+              <View style={st.iconBadgeWrap}>
+                <LinearGradient colors={iconSpec.colors} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={st.iconBadge}>
+                  <Ionicons name={iconSpec.main as any} size={36} color="#fff" />
+                </LinearGradient>
+                <View style={st.iconOverlay}>
+                  <Ionicons name={iconSpec.overlay as any} size={18} color={iconSpec.colors[1]} />
+                </View>
+              </View>
               <Text style={st.title}>{heroTitle}</Text>
               <Text style={st.sub}>{heroSub}</Text>
             </View>
@@ -207,6 +229,24 @@ function Field({ label, icon, children, onLayoutY }: any) {
 const st = StyleSheet.create({
   root: { flex: 1, backgroundColor: colors.primary },
   iconWrap: { width: 60, height: 60, borderRadius: 16, alignItems: "center", justifyContent: "center", marginBottom: 12 },
+  // Composite hero badge — large gradient circle + small overlay glyph at
+  // bottom-right (mimics the lock-badge / clipboard-pencil reference icons).
+  iconBadgeWrap: { width: 88, height: 88, marginBottom: 12, alignItems: "center", justifyContent: "center" },
+  iconBadge: {
+    width: 80, height: 80, borderRadius: 40,
+    alignItems: "center", justifyContent: "center",
+    shadowColor: "#000", shadowOpacity: 0.25, shadowOffset: { width: 0, height: 8 }, shadowRadius: 14,
+    elevation: 8,
+  },
+  iconOverlay: {
+    position: "absolute", right: 0, bottom: 0,
+    width: 30, height: 30, borderRadius: 15,
+    backgroundColor: "#fff",
+    alignItems: "center", justifyContent: "center",
+    borderWidth: 2, borderColor: "rgba(255,255,255,0.85)",
+    shadowColor: "#000", shadowOpacity: 0.18, shadowOffset: { width: 0, height: 3 }, shadowRadius: 6,
+    elevation: 4,
+  },
   title: { color: "#fff", fontSize: 26, fontWeight: "800", letterSpacing: -0.4 },
   sub: { color: "#CBD5E1", fontSize: 13, marginTop: 4, textAlign: "center", paddingHorizontal: 20 },
   card: { backgroundColor: "#fff", borderRadius: radius.xl, padding: 22, marginTop: 12 },
