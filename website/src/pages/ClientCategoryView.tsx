@@ -2,7 +2,8 @@ import { useEffect, useMemo, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import api, {
   CATEGORY_DESCRIPTIONS, CATEGORY_ICONS, CATEGORY_LABELS,
-  DocumentMeta, fileUrl, getToken, getUser, logout, UserInfo, initials, colorFromString,
+  DocumentMeta, fileUrl, bulkDownloadDocs,
+  getToken, getUser, logout, UserInfo, initials, colorFromString,
 } from "../api";
 import { useDocsSocket } from "../useDocsSocket";
 import LiveBadge from "../LiveBadge";
@@ -19,6 +20,14 @@ export default function ClientCategoryView() {
   const [docs, setDocs] = useState<DocumentMeta[]>([]);
   const [year, setYear] = useState<number | null>(null);
   const [loading, setLoading] = useState(true);
+  // Multi-select / bulk-download
+  const [selecting, setSelecting] = useState(false);
+  const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [bulkBusy, setBulkBusy] = useState(false);
+  const toggleId = (id: string) => {
+    setSelected((p) => { const n = new Set(p); n.has(id) ? n.delete(id) : n.add(id); return n; });
+  };
+  const exitSelectionMode = () => { setSelecting(false); setSelected(new Set()); };
 
   useEffect(() => {
     if (!getToken() || me?.role !== "client") { nav("/client/login", { replace: true }); return; }
@@ -116,27 +125,82 @@ export default function ClientCategoryView() {
             {filtered.length === 0 ? (
               <div className="empty"><p>No documents for {year}</p></div>
             ) : (
-              <div className="doc-grid">
-                {filtered.map((d, i) => (
-                  <div key={d.id} className="doc-card" style={{ animationDelay: `${Math.min(i, 8) * 40}ms` }}>
-                    <div className="doc-top">
-                      <div className={`doc-icon ${d.category}`}>📄</div>
-                      <div className="doc-meta">
-                        <div className="doc-title">{d.display_name}</div>
-                        <div className="doc-sub">
-                          {d.month_label && <span className="badge">{d.month_label}</span>}
-                          <span className="badge year">{d.year}</span>
-                          <span>{(d.size / 1024).toFixed(0)} KB</span>
+              <>
+                <div className="bulk-bar" style={{ marginBottom: 12 }}>
+                  {!selecting ? (
+                    <>
+                      <span className="muted" style={{ flex: 1, fontSize: 13 }}>{filtered.length} document{filtered.length !== 1 ? "s" : ""}</span>
+                      <button className="btn btn-ghost btn-sm" onClick={() => setSelecting(true)}>☑ Select</button>
+                    </>
+                  ) : (
+                    <>
+                      <button
+                        className="btn btn-ghost btn-sm"
+                        onClick={() => {
+                          const all = filtered.every((d) => selected.has(d.id)) && filtered.length > 0;
+                          setSelected((p) => {
+                            const n = new Set(p);
+                            for (const d of filtered) all ? n.delete(d.id) : n.add(d.id);
+                            return n;
+                          });
+                        }}
+                      >
+                        {filtered.every((d) => selected.has(d.id)) && filtered.length > 0 ? "✕ Deselect all" : "☑ Select all"}
+                      </button>
+                      <span className="bulk-count">{selected.size} selected</span>
+                      <span style={{ flex: 1 }} />
+                      <button
+                        className="btn btn-primary btn-sm"
+                        disabled={selected.size === 0 || bulkBusy}
+                        onClick={async () => {
+                          if (selected.size === 0) return;
+                          setBulkBusy(true);
+                          try { await bulkDownloadDocs(Array.from(selected)); exitSelectionMode(); }
+                          catch (e: any) { alert(e?.response?.data?.detail || e?.message || "Bulk download failed"); }
+                          finally { setBulkBusy(false); }
+                        }}
+                      >
+                        {bulkBusy ? "⏳ Building zip…" : `⬇ Download ZIP (${selected.size})`}
+                      </button>
+                      <button className="btn btn-ghost btn-sm" onClick={exitSelectionMode} disabled={bulkBusy}>Cancel</button>
+                    </>
+                  )}
+                </div>
+                <div className="doc-grid">
+                  {filtered.map((d, i) => {
+                    const isSelected = selected.has(d.id);
+                    return (
+                      <div
+                        key={d.id}
+                        className={`doc-card ${selecting ? "selecting" : ""} ${isSelected ? "selected" : ""}`}
+                        style={{ animationDelay: `${Math.min(i, 8) * 40}ms` }}
+                        onClick={selecting ? () => toggleId(d.id) : undefined}
+                      >
+                        {selecting && (
+                          <span className={`doc-checkbox ${isSelected ? "checked" : ""}`} aria-hidden>{isSelected ? "✓" : ""}</span>
+                        )}
+                        <div className="doc-top">
+                          <div className={`doc-icon ${d.category}`}>📄</div>
+                          <div className="doc-meta">
+                            <div className="doc-title">{d.display_name}</div>
+                            <div className="doc-sub">
+                              {d.month_label && <span className="badge">{d.month_label}</span>}
+                              <span className="badge year">{d.year}</span>
+                              <span>{(d.size / 1024).toFixed(0)} KB</span>
+                            </div>
+                          </div>
                         </div>
+                        {!selecting && (
+                          <div className="doc-actions">
+                            <button className="act-btn view" onClick={() => window.open(fileUrl(d.id), "_blank")}>👁️ View</button>
+                            <button className="act-btn share" onClick={() => share(d)}>⇗ Share</button>
+                          </div>
+                        )}
                       </div>
-                    </div>
-                    <div className="doc-actions">
-                      <button className="act-btn view" onClick={() => window.open(fileUrl(d.id), "_blank")}>👁️ View</button>
-                      <button className="act-btn share" onClick={() => share(d)}>⇗ Share</button>
-                    </div>
-                  </div>
-                ))}
-              </div>
+                    );
+                  })}
+                </div>
+              </>
             )}
           </>
         )}

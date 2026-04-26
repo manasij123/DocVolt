@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import api, {
-  CATEGORY_LABELS, CATEGORY_ICONS, DocumentMeta, fileUrl,
+  CATEGORY_LABELS, CATEGORY_ICONS, DocumentMeta, fileUrl, bulkDownloadDocs,
   getToken, getUser, logout, UserInfo, initials, colorFromString,
 } from "../api";
 import { useDocsSocket } from "../useDocsSocket";
@@ -240,6 +240,19 @@ function ManagePanel({ docs, setDocs, filter, setFilter, setEditing }: {
   docs: DocumentMeta[]; setDocs: (d: DocumentMeta[]) => void;
   filter: string; setFilter: (f: string) => void; setEditing: (d: DocumentMeta | null) => void;
 }) {
+  // ===== Multi-select / bulk-download state =====
+  const [selecting, setSelecting] = useState(false);
+  const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [bulkBusy, setBulkBusy] = useState(false);
+  const toggleId = (id: string) => {
+    setSelected((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id); else next.add(id);
+      return next;
+    });
+  };
+  const exitSelectionMode = () => { setSelecting(false); setSelected(new Set()); };
+
   const onDelete = async (d: DocumentMeta) => {
     if (!window.confirm(`Delete "${d.display_name}"?`)) return;
     try { await api.delete(`/documents/${d.id}`); setDocs(docs.filter((x) => x.id !== d.id)); }
@@ -251,33 +264,96 @@ function ManagePanel({ docs, setDocs, filter, setFilter, setEditing }: {
     return g;
   }, [docs]);
   const filtered = filter === "ALL" ? docs : docs.filter((d) => d.category === filter);
+  const visibleIds = useMemo(() => filtered.map((d) => d.id), [filtered]);
+  const allSelectedInView = selecting && visibleIds.length > 0 && visibleIds.every((id) => selected.has(id));
+  const selectAllInView = () => {
+    setSelected((prev) => {
+      const next = new Set(prev);
+      if (allSelectedInView) {
+        for (const id of visibleIds) next.delete(id);
+      } else {
+        for (const id of visibleIds) next.add(id);
+      }
+      return next;
+    });
+  };
+  const startBulkDownload = async () => {
+    if (selected.size === 0) return;
+    setBulkBusy(true);
+    try {
+      await bulkDownloadDocs(Array.from(selected));
+      exitSelectionMode();
+    } catch (e: any) {
+      alert(e?.response?.data?.detail || e?.message || "Bulk download failed");
+    } finally {
+      setBulkBusy(false);
+    }
+  };
 
-  const renderCard = (d: DocumentMeta, i: number) => (
-    <div key={d.id} className="doc-card" style={{ animationDelay: `${Math.min(i, 8) * 35}ms` }}>
-      <div className="doc-top">
-        <div className={`doc-icon ${d.category}`}>📄</div>
-        <div className="doc-meta">
-          <div className="doc-title">{d.display_name}</div>
-          <div className="doc-sub">
-            <span className="badge">{CATEGORY_LABELS[d.category]}</span>
-            {d.month_label && <span className="badge">{d.month_label}</span>}
-            <span className="badge year">{d.year}</span>
-            <span>{(d.size / 1024).toFixed(0)} KB</span>
+  const renderCard = (d: DocumentMeta, i: number) => {
+    const isSelected = selected.has(d.id);
+    return (
+      <div
+        key={d.id}
+        className={`doc-card ${selecting ? "selecting" : ""} ${isSelected ? "selected" : ""}`}
+        style={{ animationDelay: `${Math.min(i, 8) * 35}ms` }}
+        onClick={selecting ? () => toggleId(d.id) : undefined}
+      >
+        {selecting && (
+          <span className={`doc-checkbox ${isSelected ? "checked" : ""}`} aria-hidden>
+            {isSelected ? "✓" : ""}
+          </span>
+        )}
+        <div className="doc-top">
+          <div className={`doc-icon ${d.category}`}>📄</div>
+          <div className="doc-meta">
+            <div className="doc-title">{d.display_name}</div>
+            <div className="doc-sub">
+              <span className="badge">{CATEGORY_LABELS[d.category]}</span>
+              {d.month_label && <span className="badge">{d.month_label}</span>}
+              <span className="badge year">{d.year}</span>
+              <span>{(d.size / 1024).toFixed(0)} KB</span>
+            </div>
           </div>
         </div>
+        {!selecting && (
+          <div className="doc-actions">
+            <button className="act-btn view" onClick={() => window.open(fileUrl(d.id), "_blank")}>👁️ View</button>
+            <button className="act-btn edit" onClick={() => setEditing(d)}>✎ Edit</button>
+            <button className="act-btn delete" onClick={() => onDelete(d)}>🗑 Delete</button>
+          </div>
+        )}
       </div>
-      <div className="doc-actions">
-        <button className="act-btn view" onClick={() => window.open(fileUrl(d.id), "_blank")}>👁️ View</button>
-        <button className="act-btn edit" onClick={() => setEditing(d)}>✎ Edit</button>
-        <button className="act-btn delete" onClick={() => onDelete(d)}>🗑 Delete</button>
-      </div>
-    </div>
-  );
+    );
+  };
 
   return (
     <>
-      <h2 style={{ fontSize: 22, fontWeight: 800, margin: "0 0 4px" }}>Manage Documents</h2>
-      <p className="muted" style={{ marginTop: 0, marginBottom: 18 }}>{docs.length} total · only this client</p>
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 8 }}>
+        <div>
+          <h2 style={{ fontSize: 22, fontWeight: 800, margin: "0 0 4px" }}>Manage Documents</h2>
+          <p className="muted" style={{ marginTop: 0, marginBottom: 0 }}>{docs.length} total · only this client</p>
+        </div>
+        {!selecting && docs.length > 0 && (
+          <button className="btn btn-ghost btn-sm" onClick={() => setSelecting(true)} title="Select multiple documents">
+            ☑ Select
+          </button>
+        )}
+      </div>
+      {selecting && (
+        <div className="bulk-bar">
+          <button className="btn btn-ghost btn-sm" onClick={selectAllInView}>
+            {allSelectedInView ? "✕ Deselect all" : "☑ Select all"}
+          </button>
+          <span className="bulk-count">{selected.size} selected</span>
+          <span style={{ flex: 1 }} />
+          <button className="btn btn-primary btn-sm" disabled={selected.size === 0 || bulkBusy} onClick={startBulkDownload}>
+            {bulkBusy ? "⏳ Building zip…" : `⬇ Download ZIP (${selected.size})`}
+          </button>
+          <button className="btn btn-ghost btn-sm" onClick={exitSelectionMode} disabled={bulkBusy}>Cancel</button>
+        </div>
+      )}
+      <div style={{ height: 14 }} />
       <div className="tab-row">
         {["ALL", "MONTHLY_RETURN", "FORWARDING_LETTER", "IFA_REPORT", "OTHERS"].map((k) => (
           <button key={k} className={`tab ${filter === k ? "active" : ""}`} onClick={() => setFilter(k)}>

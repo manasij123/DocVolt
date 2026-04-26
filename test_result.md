@@ -105,6 +105,21 @@
 user_problem_statement: "Build a data storage app with admin/client sides; 4 tabs (MONTHLY RETURN, FORWARDING LETTER, IFA REPORT, OTHERS); auto-detect tab/month/year from PDF filename; admin uploads/edits/deletes; client views & shares via WhatsApp; WB Government colour scheme. Plus standalone Web version like 'WhatsApp Web' connected to same backend & DB."
 
 backend:
+  - task: "Phase-2A: Bulk-download — POST /api/documents/bulk-download → streaming ZIP"
+    implemented: true
+    working: true
+    file: "/app/backend/server.py"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: false
+    status_history:
+        - working: "NA"
+          agent: "main"
+          comment: "New endpoint at /api/documents/bulk-download. Body: {doc_ids: [str]}. Streams a single ZIP (ZIP_STORED, no compression). Reuses single-file auth, validations (400/401/403/404), name-sanitisation and de-dup."
+        - working: true
+          agent: "testing"
+          comment: "14/14 PASS via /app/backend_test_bulk.py against the public preview host. (1) admin & client login — both 200. (2) admin has 9 docs, client 6, 6 of them shared. (3) Happy-path admin: POST with 2 ids → 200, Content-Type=application/zip, Content-Disposition starts with 'attachment; filename=\"docvault-bundle-', valid ZIP with exactly 2 entries; bytes of each entry match bytes returned by GET /api/documents/{id}/file (de-duped: second entry renamed 'ifa report Mar2026 (2).pdf'). (4) Happy-path client: same flow with client token → 200, 2 entries, byte-for-byte match. (5) Cross-role 403: client requesting an admin doc whose client_id is NOT the demo client → 403 {detail:'Forbidden'} (used a freshly created 2nd client + admin upload to obtain an off-limits doc id, then cleaned up). (6) Cross-tenant 403 between admins: registered a fresh admin2 and POSTed admin1's doc id → 403 {detail:'Forbidden'}. (7) No Authorization header → 401 {detail:'Not authenticated'}. (8) Authorization: Bearer foo → 401 {detail:'Not authenticated'}. (9) Empty body {doc_ids:[]} → 400 {detail:'doc_ids required'}. (10) 201 fake uuids → 400 {detail:'Maximum 200 documents per bulk download'}. (11) [valid-id, 'non-existent-uuid'] → 404 {detail:'Documents not found: 1'} (transactional). (12) Duplicate display_name de-dup: two admin docs with same display_name → ZIP contains '<name>.pdf' AND '<name> (2).pdf', no overwrite. (13) ZIP integrity sha256: 3 docs, sha256 of each ZIP entry matches sha256 of single-file endpoint response (ZIP_STORED, no compression confirmed). (14) Headers: Content-Disposition starts with 'attachment; filename=\"docvault-bundle-' (timestamp suffix YYYYMMDD-HHMMSS), Content-Length matches body size byte-for-byte (e.g. cl=364 == body_len=364). Test DB left in original state — any temp clients/docs created for cases 5 and 12 were deleted. No flakiness observed."
+
   - task: "Phase-1: Connection-removal — DELETE /api/connections/{target_id} (re-verification)"
     implemented: true
     working: true
@@ -299,6 +314,10 @@ agent_communication:
 agent_communication:
     - agent: "testing"
       message: "Connection-flow regression run (29 cases / 28 PASS / 1 FAIL). All connection-management endpoints work correctly: /auth/login, /auth/register (with and without admin_email auto-connect), /clients & /admins/connected gating by connection presence, /users/lookup (200 / 404 role-mismatch / 404 not-found), POST /connections (created / exists / admin↔admin 400 / self 400), DELETE /connections/{peer_id} (ok then 404), and WebSocket hello with valid token. ❌ ONE BUG: POST /api/documents/upload does NOT enforce the new admin↔client connection requirement. Uploading with an admin token + a freshly-registered client_id we have no connection with returns 200 instead of 403 'You are not connected with this client'. Step 13a (uploading to an admin id) correctly returns 400 'Target client not found' because of the role==client filter, but there is no separate connection lookup. Fix in /app/backend/server.py upload_document(): right after the existing target-client check, add `conn = await db.connections.find_one({admin_id: current[id], client_id: client_id})` and raise 403 when missing."
+
+agent_communication:
+    - agent: "testing"
+      message: "Phase-2A bulk-download (POST /api/documents/bulk-download) — 14/14 PASS via /app/backend_test_bulk.py against public preview host. All cases verified: (1) admin+client login; (2) discover docs admin=9 client=6; (3) admin happy path 200 application/zip Content-Disposition attachment;filename=docvault-bundle-..., 2 entries, bytes match single-file endpoint; (4) client happy path same; (5) client→admin-only doc → 403; (6) admin2→admin1 doc → 403; (7) no Auth → 401; (8) Bearer foo → 401; (9) [] → 400 'doc_ids required'; (10) 201 ids → 400 'Maximum 200 documents per bulk download'; (11) [valid, missing] → 404 'Documents not found: 1' (transactional); (12) duplicate display_name → '<name> (2).pdf' produced without overwrite; (13) sha256 of 3 ZIP entries match sha256 of single-file responses (ZIP_STORED confirmed); (14) Content-Length == body length and CD has YYYYMMDD-HHMMSS timestamp. No flakiness. Test DB left clean."
 
 agent_communication:
     - agent: "main"

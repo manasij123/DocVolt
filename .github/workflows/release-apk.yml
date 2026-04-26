@@ -1,0 +1,62 @@
+name: Build & Release Android APK
+
+# This workflow builds a signed Android APK using EAS and attaches it to a
+# GitHub Release. After running it once, every release you create will have
+# a STABLE download URL of the form:
+#   https://github.com/<user>/<repo>/releases/latest/download/docvault.apk
+# (Use that URL in /app/website/.env > VITE_APK_URL — never expires.)
+
+on:
+  push:
+    tags:
+      - "v*"            # Trigger on tags like v1.0.0, v1.0.1, …
+  workflow_dispatch:    # Or trigger manually from the Actions tab
+
+jobs:
+  build-apk:
+    name: Build APK with EAS
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: ./frontend
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "yarn"
+          cache-dependency-path: frontend/yarn.lock
+
+      - name: Install Expo CLI + EAS CLI
+        run: npm install -g eas-cli@latest expo@latest
+
+      - name: Install project deps
+        run: yarn install --frozen-lockfile
+
+      - name: Authenticate EAS
+        env:
+          EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
+        run: eas whoami
+
+      - name: Build APK (production profile)
+        env:
+          EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
+        run: |
+          eas build \
+            --platform android \
+            --profile production \
+            --non-interactive \
+            --no-wait=false \
+            --output=docvault.apk
+
+      - name: Upload APK to the GitHub Release
+        uses: softprops/action-gh-release@v2
+        if: startsWith(github.ref, 'refs/tags/')
+        with:
+          files: frontend/docvault.apk
+          generate_release_notes: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

@@ -6,6 +6,8 @@ ROOT_DIR = Path(__file__).parent
 load_dotenv(ROOT_DIR / ".env")
 
 import re
+import io
+import zipfile
 import uuid
 import asyncio
 import json
@@ -622,6 +624,103 @@ async def get_document_file(doc_id: str, request: Request):
         headers={
             "Content-Disposition": f'inline; filename="{safe_name}"',
             "Content-Length": str(doc.get("size", grid_out.length)),
+        },
+    )
+
+
+# ============================================================
+# Bulk download — POST a list of doc_ids, get back a single .zip
+# ============================================================
+class BulkDownloadRequest(BaseModel):
+    doc_ids: List[str]
+
+
+def _safe_zip_filename(name: str) -> str:
+    """Strip path separators and dangerous chars; keep the filename short."""
+    cleaned = re.sub(r"[\\/\x00-\x1f]", "_", name).strip().lstrip(".")
+    if not cleaned:
+        cleaned = "document.pdf"
+    return cleaned[:200]
+
+
+@api_router.post("/documents/bulk-download")
+async def bulk_download_documents(payload: BulkDownloadRequest, request: Request):
+    """Stream a ZIP archive containing multiple documents.
+
+    Auth (mirrors single-file download):
+      - admin role: each doc.admin_id MUST equal the admin's id
+      - client role: each doc.client_id MUST equal the client's id
+    Any doc the caller cannot access fails the whole request with 403.
+    Up to 200 docs per request to keep memory usage bounded.
+    """
+    user = await _user_from_request(request)
+    if not user:
+        raise HTTPException(status_code=401, detail="Not authenticated")
+
+    ids = [i for i in (payload.doc_ids or []) if isinstance(i, str)]
+    if not ids:
+        raise HTTPException(status_code=400, detail="doc_ids required")
+    if len(ids) > 200:
+        raise HTTPException(status_code=400, detail="Maximum 200 documents per bulk download")
+
+    docs = await db.documents.find({"id": {"$in": ids}}, {"_id": 0}).to_list(len(ids))
+    found_ids = {d["id"] for d in docs}
+    missing = [i for i in ids if i not in found_ids]
+    if missing:
+        raise HTTPException(status_code=404, detail=f"Documents not found: {len(missing)}")
+
+    # Auth check per doc
+    for d in docs:
+        if user["role"] == "admin" and d.get("admin_id") != user["id"]:
+            raise HTTPException(status_code=403, detail="Forbidden")
+        if user["role"] == "client" and d.get("client_id") != user["id"]:
+            raise HTTPException(status_code=403, detail="Forbidden")
+
+    # Build the ZIP in memory and stream the bytes back. Using STORED (no
+    # compression) — PDFs compress very poorly, and skipping deflate saves CPU.
+    buffer = io.BytesIO()
+    used_names: set[str] = set()
+    with zipfile.ZipFile(buffer, mode="w", compression=zipfile.ZIP_STORED) as zf:
+        for d in docs:
+            display = d.get("display_name") or d.get("original_name") or f"{d['id']}.pdf"
+            if not display.lower().endswith(".pdf"):
+                display = f"{display}.pdf"
+            zip_name = _safe_zip_filename(display)
+            # De-duplicate names within the archive
+            base, ext = os.path.splitext(zip_name)
+            n = 2
+            while zip_name in used_names:
+                zip_name = f"{base} ({n}){ext}"
+                n += 1
+            used_names.add(zip_name)
+
+            gridfs_id = d.get("gridfs_id")
+            if not gridfs_id:
+                continue
+            try:
+                grid_out = await fs_bucket.open_download_stream(ObjectId(gridfs_id))
+            except Exception:
+                continue
+            chunks: list[bytes] = []
+            while True:
+                chunk = await grid_out.readchunk()
+                if not chunk:
+                    break
+                chunks.append(chunk)
+            zf.writestr(zip_name, b"".join(chunks))
+
+    zip_bytes = buffer.getvalue()
+    buffer.close()
+    if not zip_bytes:
+        raise HTTPException(status_code=500, detail="Could not assemble archive")
+
+    archive_name = f"docvault-bundle-{datetime.now(timezone.utc).strftime('%Y%m%d-%H%M%S')}.zip"
+    return StreamingResponse(
+        io.BytesIO(zip_bytes),
+        media_type="application/zip",
+        headers={
+            "Content-Disposition": f'attachment; filename="{archive_name}"',
+            "Content-Length": str(len(zip_bytes)),
         },
     )
 

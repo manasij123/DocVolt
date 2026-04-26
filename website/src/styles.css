@@ -380,6 +380,56 @@ main {
 }
 
 /* ============================================================
+ * Multi-select bulk-download UI for the document grid
+ * ============================================================ */
+.bulk-bar {
+  display: flex; align-items: center; gap: 10px;
+  padding: 10px 12px;
+  background: rgba(59, 130, 246, 0.06);
+  border: 1px solid rgba(59, 130, 246, 0.18);
+  border-radius: var(--radius-md);
+  flex-wrap: wrap;
+  animation: pageEnter 0.30s var(--ease-out) both;
+}
+.bulk-count {
+  font-size: 13px; font-weight: 800;
+  color: #1E40AF;
+  padding: 4px 10px;
+  background: #DBEAFE;
+  border-radius: 999px;
+}
+.doc-card { position: relative; }
+.doc-card.selecting {
+  cursor: pointer;
+  user-select: none;
+}
+.doc-card.selecting .doc-actions { display: none; }
+.doc-card.selected {
+  border-color: #3B82F6 !important;
+  background: rgba(59, 130, 246, 0.04);
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.18);
+}
+.doc-checkbox {
+  position: absolute;
+  top: 12px; right: 12px;
+  width: 26px; height: 26px;
+  border-radius: 8px;
+  border: 2px solid #94A3B8;
+  background: #fff;
+  display: inline-flex;
+  align-items: center; justify-content: center;
+  font-weight: 800; color: #fff;
+  font-size: 14px; line-height: 1;
+  transition: background-color 0.18s ease, border-color 0.18s ease, transform 0.12s ease;
+  z-index: 2;
+}
+.doc-checkbox.checked {
+  background: #3B82F6;
+  border-color: #3B82F6;
+  transform: scale(1.05);
+}
+
+/* ============================================================
  * Page transitions, card-tap, icon, and modal animations
  * Applied across all routes EXCEPT Landing (which has the
  * SecurityBackground hero treatment). Keeps interactions snappy

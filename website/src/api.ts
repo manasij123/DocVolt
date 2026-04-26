@@ -112,3 +112,24 @@ export function colorFromString(s: string): string {
   for (let i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) % 360;
   return `hsl(${h} 70% 50%)`;
 }
+
+/** Bulk download a list of documents as a single zip. Triggers a browser save. */
+export async function bulkDownloadDocs(docIds: string[]): Promise<void> {
+  if (!docIds.length) return;
+  const res = await api.post("/documents/bulk-download", { doc_ids: docIds }, {
+    responseType: "blob",
+    timeout: 120000,
+  });
+  const cd = (res.headers as any)["content-disposition"] || "";
+  let fname = "docvault-bundle.zip";
+  const m = cd.match(/filename="?([^"]+)"?/i);
+  if (m) fname = m[1];
+  const blobUrl = URL.createObjectURL(res.data);
+  const a = document.createElement("a");
+  a.href = blobUrl;
+  a.download = fname;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  setTimeout(() => URL.revokeObjectURL(blobUrl), 1500);
+}
