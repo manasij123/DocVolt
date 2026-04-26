@@ -124,6 +124,7 @@ export default function AdminClientWorkspace() {
 
 function UploadPanel({ clientId, onUploaded }: { clientId: string; onUploaded: () => void }) {
   const fileInputRef = useRef<HTMLInputElement | null>(null);
+  const bulkInputRef = useRef<HTMLInputElement | null>(null);
   const [picked, setPicked] = useState<File | null>(null);
   const [stage, setStage] = useState<"idle" | "scanned" | "manual">("idle");
   const [drag, setDrag] = useState(false);
@@ -136,6 +137,21 @@ function UploadPanel({ clientId, onUploaded }: { clientId: string; onUploaded: (
   const [uploading, setUploading] = useState(false);
   const [done, setDone] = useState<string | null>(null);
   const [err, setErr] = useState<string | null>(null);
+
+  // ---- Bulk-upload state ----
+  type BulkRow = {
+    id: string;
+    file: File;
+    category: string;
+    year: number;
+    month: number | null;
+    status: "pending" | "uploading" | "done" | "error";
+    progress: number;          // 0-100
+    errorMsg?: string;
+    resultName?: string;
+  };
+  const [bulkRows, setBulkRows] = useState<BulkRow[]>([]);
+  const [bulkBusy, setBulkBusy] = useState(false);
 
   const reset = () => {
     setPicked(null); setStage("idle"); setErr(null); setDone(null);
@@ -169,6 +185,68 @@ function UploadPanel({ clientId, onUploaded }: { clientId: string; onUploaded: (
 
   const looksGood = detCat !== "OTHERS" && detYear !== null && detMonth !== null;
   const yrs = [year - 2, year - 1, year, year + 1];
+
+  // ---- Bulk-upload helpers ----
+  const onBulkPick = (files: FileList | null) => {
+    if (!files || !files.length) return;
+    const next: BulkRow[] = [];
+    for (const f of Array.from(files)) {
+      if (!f.name.toLowerCase().endsWith(".pdf")) continue;
+      // Skip duplicates (same name + size already queued)
+      if (bulkRows.some((b) => b.file.name === f.name && b.file.size === f.size)) continue;
+      const c = detectCategory(f.name);
+      const my = detectMonthYear(f.name);
+      next.push({
+        id: Math.random().toString(36).slice(2),
+        file: f,
+        category: c,
+        year: my.year ?? new Date().getFullYear(),
+        month: my.month,
+        status: "pending",
+        progress: 0,
+      });
+    }
+    if (next.length === 0) return;
+    setBulkRows((prev) => [...prev, ...next]);
+    if (bulkInputRef.current) bulkInputRef.current.value = "";
+  };
+
+  const uploadAll = async () => {
+    setBulkBusy(true);
+    // Snapshot the indices we need to upload so progress updates don't race.
+    const queueIndices: number[] = [];
+    bulkRows.forEach((b, i) => { if (b.status === "pending" || b.status === "error") queueIndices.push(i); });
+    for (const i of queueIndices) {
+      // Read fresh row each iteration (in case state was updated)
+      let row: BulkRow | undefined;
+      setBulkRows((prev) => {
+        row = prev[i];
+        return prev.map((b, idx) => idx === i ? { ...b, status: "uploading", progress: 0, errorMsg: undefined } : b);
+      });
+      if (!row) continue;
+      try {
+        const fd = new FormData();
+        fd.append("file", row.file);
+        fd.append("client_id", clientId);
+        fd.append("category_override", row.category);
+        fd.append("year_override", String(row.year));
+        if (row.month !== null) fd.append("month_override", String(row.month));
+        const resp = await api.post("/documents/upload", fd, {
+          headers: { "Content-Type": "multipart/form-data" },
+          onUploadProgress: (e) => {
+            const pct = e.total ? Math.round((e.loaded / e.total) * 100) : 0;
+            setBulkRows((prev) => prev.map((b, idx) => idx === i ? { ...b, progress: pct } : b));
+          },
+        });
+        const display = resp.data?.display_name || row.file.name;
+        setBulkRows((prev) => prev.map((b, idx) => idx === i ? { ...b, status: "done", progress: 100, resultName: display } : b));
+      } catch (e: any) {
+        setBulkRows((prev) => prev.map((b, idx) => idx === i ? { ...b, status: "error", errorMsg: e?.response?.data?.detail || "Upload failed" } : b));
+      }
+    }
+    setBulkBusy(false);
+    onUploaded(); // refresh document list once everything is done
+  };
 
   return (
     <>
@@ -232,6 +310,106 @@ function UploadPanel({ clientId, onUploaded }: { clientId: string; onUploaded: (
           </div>
         </div>
       )}
+
+      {/* ============================================================
+       *  Bulk upload — pick several PDFs at once and queue them.
+       *  Each file shows its auto-detected category + month/year and a
+       *  per-file progress bar; uploads happen sequentially.
+       * ============================================================ */}
+      <div className="bulk-upload-section">
+        <div className="bulk-upload-head">
+          <div>
+            <h3 style={{ margin: 0, fontSize: 17, fontWeight: 800 }}>📦 Or upload multiple PDFs at once</h3>
+            <p className="muted" style={{ marginTop: 4, marginBottom: 0, fontSize: 13 }}>
+              Pick several files; each is auto-categorised by filename. Per-file progress shown below.
+            </p>
+          </div>
+          <button
+            className="btn btn-ghost btn-sm"
+            type="button"
+            onClick={() => bulkInputRef.current?.click()}
+            disabled={bulkBusy}
+          >
+            ＋ Add files
+          </button>
+        </div>
+        <input
+          ref={bulkInputRef}
+          type="file"
+          accept="application/pdf"
+          multiple
+          style={{ display: "none" }}
+          onChange={(e) => onBulkPick(e.target.files)}
+        />
+        {bulkRows.length === 0 ? (
+          <div className="bulk-empty">No files queued — tap "Add files" to pick multiple PDFs at once.</div>
+        ) : (
+          <>
+            <div className="bulk-list">
+              {bulkRows.map((b) => (
+                <div key={b.id} className={`bulk-row status-${b.status}`}>
+                  <div className="bulk-row-icon">📄</div>
+                  <div className="bulk-row-meta">
+                    <div className="bulk-row-name" title={b.file.name}>{b.file.name}</div>
+                    <div className="bulk-row-sub">
+                      <span className="badge">{CATEGORY_LABELS[b.category]}</span>
+                      {b.month && <span className="badge">{MONTHS[b.month - 1]}</span>}
+                      <span className="badge year">{b.year}</span>
+                      <span>{(b.file.size / 1024).toFixed(0)} KB</span>
+                    </div>
+                    {b.status === "uploading" && (
+                      <div className="bulk-row-bar">
+                        <div className="bulk-row-bar-fill" style={{ width: `${b.progress}%` }} />
+                      </div>
+                    )}
+                    {b.status === "error" && b.errorMsg && (
+                      <div className="bulk-row-err">⚠ {b.errorMsg}</div>
+                    )}
+                    {b.status === "done" && (
+                      <div className="bulk-row-done">✓ Uploaded {b.resultName ? `as "${b.resultName}"` : ""}</div>
+                    )}
+                  </div>
+                  <div className="bulk-row-status">
+                    {b.status === "pending" && <span className="bulk-pill pending">Pending</span>}
+                    {b.status === "uploading" && <span className="bulk-pill uploading">{b.progress}%</span>}
+                    {b.status === "done" && <span className="bulk-pill done">Done</span>}
+                    {b.status === "error" && <span className="bulk-pill error">Failed</span>}
+                  </div>
+                  {!bulkBusy && b.status !== "uploading" && (
+                    <button
+                      type="button"
+                      className="bulk-row-x"
+                      title="Remove from queue"
+                      onClick={() => setBulkRows((prev) => prev.filter((x) => x.id !== b.id))}
+                    >×</button>
+                  )}
+                </div>
+              ))}
+            </div>
+            <div className="bulk-upload-actions">
+              {!bulkBusy && bulkRows.some((b) => b.status === "done") && (
+                <button
+                  className="btn btn-ghost btn-sm"
+                  type="button"
+                  onClick={() => setBulkRows([])}
+                >Clear all</button>
+              )}
+              <span style={{ flex: 1 }} />
+              <span className="muted" style={{ fontSize: 13 }}>
+                {bulkRows.filter((b) => b.status === "done").length}/{bulkRows.length} uploaded
+              </span>
+              <button
+                className="btn btn-primary btn-sm"
+                type="button"
+                disabled={bulkBusy || !bulkRows.some((b) => b.status === "pending" || b.status === "error")}
+                onClick={uploadAll}
+              >
+                {bulkBusy ? "⏳ Uploading…" : `📤 Upload all (${bulkRows.filter((b) => b.status === "pending" || b.status === "error").length})`}
+              </button>
+            </div>
+          </>
+        )}
+      </div>
     </>
   );
 }

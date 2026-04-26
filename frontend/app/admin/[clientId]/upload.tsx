@@ -16,7 +16,7 @@ import { LinearGradient } from "expo-linear-gradient";
 import { colors, radius, shadow, categoryGradients } from "../../../src/theme";
 import { CATEGORY_LABELS } from "../../../src/api";
 import api, { getToken } from "../../../src/api";
-import { useLocalSearchParams } from "expo-router";
+import { useLocalSearchParams, useRouter } from "expo-router";
 import PressableScale from "../../../src/PressableScale";
 import GradientButton from "../../../src/GradientButton";
 
@@ -68,6 +68,7 @@ type Stage = "idle" | "scanned" | "manual";
 
 export default function UploadScreen() {
   const { clientId } = useLocalSearchParams<{ clientId: string }>();
+  const router = useRouter();
   const [picked, setPicked] = useState<PickedFile | null>(null);
   const [stage, setStage] = useState<Stage>("idle");
 
@@ -206,6 +207,24 @@ export default function UploadScreen() {
       <Text style={styles.subtitle}>
         Pick a PDF — the app will scan its name and tell you which tab/year/month it belongs to.
       </Text>
+
+      {/* Bulk upload entry point — sends user to /admin/[clientId]/bulk-upload */}
+      <PressableScale
+        onPress={() => router.push(`/admin/${clientId}/bulk-upload` as any)}
+        hapticStyle="light"
+        testID="btn-bulk-upload"
+      >
+        <View style={styles.bulkLinkCard}>
+          <View style={styles.bulkLinkIcon}>
+            <Ionicons name="documents" size={20} color="#1E40AF" />
+          </View>
+          <View style={{ flex: 1, minWidth: 0 }}>
+            <Text style={styles.bulkLinkTitle}>Multiple PDFs at once?</Text>
+            <Text style={styles.bulkLinkSub}>Open Bulk Upload — sequential, with progress</Text>
+          </View>
+          <Ionicons name="arrow-forward" size={18} color="#1E40AF" />
+        </View>
+      </PressableScale>
 
       {/* Step 1: file picker */}
       <PressableScale onPress={pick} haptic="medium" testID="btn-pick-file">
@@ -513,6 +532,23 @@ const styles = StyleSheet.create({
   },
   dropTitle: { fontSize: 15, fontWeight: "700", color: colors.textPrimary, textAlign: "center" },
   dropSub: { fontSize: 12, color: colors.textSecondary, marginTop: 6 },
+
+  // "Multiple PDFs at once?" entry point styles
+  bulkLinkCard: {
+    flexDirection: "row", alignItems: "center", gap: 12,
+    paddingHorizontal: 14, paddingVertical: 12,
+    backgroundColor: "rgba(30,64,175,0.06)",
+    borderWidth: 1, borderColor: "rgba(30,64,175,0.18)",
+    borderRadius: radius.md,
+    marginBottom: 14,
+  },
+  bulkLinkIcon: {
+    width: 36, height: 36, borderRadius: 10,
+    backgroundColor: "#fff",
+    alignItems: "center", justifyContent: "center",
+  },
+  bulkLinkTitle: { fontSize: 14, fontWeight: "800", color: "#1E40AF", letterSpacing: -0.2 },
+  bulkLinkSub:   { fontSize: 11, color: "#5F6368", marginTop: 2 },
 
   detectCard: {
     marginTop: 22,

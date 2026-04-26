@@ -430,6 +430,108 @@ main {
 }
 
 /* ============================================================
+ * Bulk-upload (multi-file) section in UploadPanel
+ * ============================================================ */
+.bulk-upload-section {
+  margin-top: 24px;
+  padding: 18px;
+  border-radius: var(--radius-lg);
+  border: 1px dashed rgba(59, 130, 246, 0.30);
+  background: rgba(59, 130, 246, 0.04);
+}
+.bulk-upload-head {
+  display: flex; align-items: center; justify-content: space-between;
+  gap: 12px; flex-wrap: wrap;
+  margin-bottom: 12px;
+}
+.bulk-empty {
+  margin-top: 4px;
+  padding: 14px 12px;
+  border-radius: var(--radius-md);
+  background: rgba(255, 255, 255, 0.55);
+  font-size: 13px; color: var(--text-muted);
+  text-align: center;
+}
+.bulk-list {
+  display: flex; flex-direction: column;
+  gap: 8px;
+  max-height: 360px;
+  overflow-y: auto;
+  padding-right: 2px;
+}
+.bulk-row {
+  display: grid;
+  grid-template-columns: 32px 1fr auto 24px;
+  gap: 10px;
+  align-items: center;
+  padding: 10px 12px;
+  background: #fff;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--border);
+  animation: pageEnter 0.22s var(--ease-out) both;
+  transition: border-color 0.18s ease, background-color 0.18s ease;
+}
+.bulk-row.status-uploading { border-color: #3B82F6; background: rgba(59,130,246,0.04); }
+.bulk-row.status-done      { border-color: #10B981; background: rgba(16,185,129,0.04); }
+.bulk-row.status-error     { border-color: #EF4444; background: rgba(239,68,68,0.04); }
+.bulk-row-icon { font-size: 22px; line-height: 1; }
+.bulk-row-meta { min-width: 0; }
+.bulk-row-name {
+  font-size: 14px; font-weight: 700;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  color: var(--text);
+}
+.bulk-row-sub {
+  display: flex; flex-wrap: wrap; gap: 6px; align-items: center;
+  margin-top: 4px; font-size: 11px; color: var(--text-muted);
+}
+.bulk-row-sub .badge { font-size: 10px; padding: 2px 6px; border-radius: 6px; background: #EEF2FF; color: #3730A3; font-weight: 700; }
+.bulk-row-sub .badge.year { background: #ECFEFF; color: #155E75; }
+.bulk-row-bar {
+  margin-top: 6px;
+  height: 4px;
+  background: rgba(59,130,246,0.15);
+  border-radius: 999px;
+  overflow: hidden;
+}
+.bulk-row-bar-fill {
+  height: 100%;
+  background: linear-gradient(90deg, #3B82F6, #8B5CF6);
+  transition: width 0.18s ease;
+}
+.bulk-row-err  { margin-top: 4px; font-size: 12px; color: #B91C1C; font-weight: 600; }
+.bulk-row-done { margin-top: 4px; font-size: 12px; color: #047857; font-weight: 600; }
+.bulk-pill {
+  font-size: 11px; font-weight: 800;
+  padding: 4px 10px;
+  border-radius: 999px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+.bulk-pill.pending   { background: #F1F5F9; color: #475569; }
+.bulk-pill.uploading { background: #DBEAFE; color: #1E40AF; }
+.bulk-pill.done      { background: #D1FAE5; color: #047857; }
+.bulk-pill.error     { background: #FEE2E2; color: #B91C1C; }
+.bulk-row-x {
+  width: 24px; height: 24px; padding: 0;
+  border-radius: 50%;
+  border: 1px solid var(--border);
+  background: #fff;
+  color: var(--text-muted);
+  font-size: 14px; line-height: 1;
+  cursor: pointer;
+  transition: background 0.15s ease, transform 0.12s ease, color 0.15s ease;
+}
+.bulk-row-x:hover { background: #FEE2E2; color: #B91C1C; transform: scale(1.08); }
+.bulk-upload-actions {
+  display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
+  margin-top: 12px;
+}
+@media (prefers-reduced-motion: reduce) {
+  .bulk-row { animation: none !important; }
+}
+
+/* ============================================================
  * Page transitions, card-tap, icon, and modal animations
  * Applied across all routes EXCEPT Landing (which has the
  * SecurityBackground hero treatment). Keeps interactions snappy

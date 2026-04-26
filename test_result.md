@@ -265,7 +265,17 @@ frontend:
           agent: "main"
           comment: "Replaced flat AdminDashboard/ClientView with seven dedicated screens: Landing (3 cards), AdminLogin, ClientLogin, ClientRegister, AdminHome (clients list with 'Under You' + 'Registered Clients' sections, search, NEW tag, real-time toast on new registration), AdminClientWorkspace (per-client breadcrumb header + Upload/Manage tabs scoped to client_id), ClientHome (admins list), ClientCategoryView (per-admin 4-tab category view). Token + role persisted in localStorage. WebSocket auto-reconnects with token; LIVE pill works; new client registration animates row into admin list with pulse-glow highlight. Verified visually with Playwright screenshots."
 
-  - task: "Phase-1 frontend: Mobile long-press connection-removal + global Toast system + Web × remove button"
+  - task: "Phase-2B: Bulk Upload UI on Web + Mobile"
+    implemented: true
+    working: "NA"
+    file: "/app/website/src/pages/AdminClientWorkspace.tsx, /app/website/src/styles.css, /app/frontend/app/admin/[clientId]/bulk-upload.tsx, /app/frontend/app/admin/[clientId]/upload.tsx"
+    stuck_count: 0
+    priority: "medium"
+    needs_retesting: true
+    status_history:
+        - working: "NA"
+          agent: "main"
+          comment: "Multi-file upload UI added on both platforms. Backend reuses the existing POST /api/documents/upload endpoint per file (no new endpoint needed). (a) Web: A 📦 'Or upload multiple PDFs at once' card was added to the existing UploadPanel below the single-file flow. Multi-file <input multiple> picks PDFs, each becomes a row with auto-detected category/year/month (using the same detectCategory + detectMonthYear helpers), per-row progress bar, status pill (Pending/Uploading%/Done/Failed), and a × remove button. 'Upload all (N)' runs uploads sequentially using axios onUploadProgress. After all done, onUploaded() refreshes the doc grid. (b) Mobile: A new screen at /app/admin/[clientId]/bulk-upload.tsx implements the same flow using DocumentPicker.getDocumentAsync({multiple:true}); uploads sequentially with onUploadProgress; emits a single Toast on completion. The existing single-file upload screen now has a 'Multiple PDFs at once?' link card at the top that navigates to the bulk screen. Build artifacts: /app/backend/website_dist/assets/index-Dy6hJ5nr.js, index-CiR23TMf.css. Bundle verified to contain BulkUploadScreen × 5, bulk-upload route × 6, 'Multiple PDFs at once' × 2 (one for the header, one for the link card). Expo + backend running healthy. Recommend backend testing to verify multi-file uploads with category_override/year_override/month_override still work correctly per request, and that the doc list reflects all uploads."
     implemented: true
     working: true
     file: "/app/frontend/src/Toast.tsx, /app/frontend/src/ToastSocketBridge.tsx, /app/frontend/app/_layout.tsx, /app/frontend/app/admin/index.tsx, /app/frontend/app/client/index.tsx, /app/website/src/pages/AdminHome.tsx, /app/website/src/pages/ClientHome.tsx, /app/website/src/styles.css"
