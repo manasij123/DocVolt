@@ -493,10 +493,13 @@ async def upload_document(
     if not file.filename.lower().endswith(".pdf"):
         raise HTTPException(status_code=400, detail="Only PDF files are allowed")
 
-    # Validate target client exists
+    # Validate target client exists AND is connected to this admin
     target = await db.users.find_one({"id": client_id, "role": "client"}, {"_id": 0, "password_hash": 0})
     if not target:
         raise HTTPException(status_code=400, detail="Target client not found")
+    conn = await db.connections.find_one({"admin_id": current["id"], "client_id": client_id})
+    if not conn:
+        raise HTTPException(status_code=403, detail="You are not connected with this client")
 
     file_id = str(uuid.uuid4())
     contents = await file.read()
