@@ -29,7 +29,7 @@ export default function AdminLogin() {
   return (
     <div className="login-page">
       <div className="login-card">
-        <Link to="/" style={{ color: "#fff", display: "inline-block", marginBottom: 18, opacity: 0.85, fontSize: 14 }}>← Back</Link>
+        <Link to="/" style={{ color: "#fff", display: "inline-block", marginBottom: 18, opacity: 0.85, fontSize: 14, fontWeight: 600 }}>← Back</Link>
         <div className="login-icon">🛡️</div>
         <h2 className="login-title">Welcome back</h2>
         <p className="login-sub">Sign in to manage your documents</p>
@@ -41,7 +41,7 @@ export default function AdminLogin() {
             <div className="field">
               <label>Email</label>
               <div className="input-with-icon">
-                <span>✉️</span>
+                <span className="field-prefix">✉️</span>
                 <input
                   className="input"
                   type="email"
@@ -57,7 +57,7 @@ export default function AdminLogin() {
             <div className="field">
               <label>Password</label>
               <div className="input-with-icon">
-                <span>🔒</span>
+                <span className="field-prefix">🔒</span>
                 <input
                   className="input"
                   type={showPwd ? "text" : "password"}
@@ -69,8 +69,9 @@ export default function AdminLogin() {
                 />
                 <button
                   type="button"
+                  className="eye-btn"
                   onClick={() => setShowPwd((s) => !s)}
-                  style={{ position: "absolute", right: 8, top: 8, background: "transparent", color: "#5F6368", padding: "8px" }}
+                  aria-label={showPwd ? "Hide password" : "Show password"}
                 >
                   {showPwd ? "🙈" : "👁️"}
                 </button>

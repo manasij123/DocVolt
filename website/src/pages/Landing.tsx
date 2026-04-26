@@ -20,18 +20,18 @@ export default function Landing() {
   return (
     <div className="landing">
       <div className="landing-inner container">
-        <div>
+        <div className="hero-block">
           <div className="hero-logo">DV</div>
           <h1 className="hero-title">DocVault</h1>
           <p className="hero-tagline">
             Organised PDF storage for your team — Monthly Returns,
             Forwarding Letters, IFA Reports.<br />
-            <strong>Same data on web, mobile and desktop.</strong>
+            <strong>Same data on web, mobile and desktop — instantly synced.</strong>
           </p>
           <div className="hero-pills">
             <span className="hero-pill">⚡ Auto-categorise</span>
             <span className="hero-pill">🔗 One-tap share</span>
-            <span className="hero-pill">🔒 Encrypted</span>
+            <span className="hero-pill">🔴 Real-time sync</span>
           </div>
         </div>
 

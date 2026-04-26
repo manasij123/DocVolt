@@ -20,6 +20,7 @@ import { colors, radius, shadow, categoryGradients } from "../../../src/theme";
 import { LinearGradient } from "expo-linear-gradient";
 import PressableScale from "../../../src/PressableScale";
 import GradientButton from "../../../src/GradientButton";
+import { useDocsSocket } from "../../../src/useDocsSocket";
 
 const MONTHS = [
   { v: 1, l: "Jan" }, { v: 2, l: "Feb" }, { v: 3, l: "Mar" }, { v: 4, l: "Apr" },
@@ -60,6 +61,18 @@ export default function ManageScreen() {
     setRefreshing(true);
     load();
   };
+
+  // 🔴 Real-time sync (WhatsApp-Web style) — keeps the manage list in sync
+  // with the website / other devices without needing pull-to-refresh.
+  useDocsSocket((e) => {
+    if (e.type === "doc:created") {
+      setDocs((prev) => (prev.some((d) => d.id === e.doc.id) ? prev : [e.doc, ...prev]));
+    } else if (e.type === "doc:updated") {
+      setDocs((prev) => prev.map((d) => (d.id === e.doc.id ? e.doc : d)));
+    } else if (e.type === "doc:deleted") {
+      setDocs((prev) => prev.filter((d) => d.id !== e.id));
+    }
+  });
 
   const onDelete = (doc: DocumentMeta) => {
     const proceed = async () => {

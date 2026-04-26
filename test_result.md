@@ -130,19 +130,44 @@ frontend:
           agent: "main"
           comment: "Built with `yarn build` (Vite). Configured base='/api/web/' and BrowserRouter basename='/api/web' so it can be served from FastAPI under the only ingress-routable backend prefix. Manual e2e via Playwright screenshot tool: Landing renders, Admin login works with admin@example.com / admin123, Admin Dashboard shows the 6 documents stored by the mobile app (proves shared MongoDB + same backend). Client view rendering and category tabs work."
 
+  - task: "Real-time WebSocket sync (WhatsApp-Web style)"
+    implemented: true
+    working: true
+    file: "/app/backend/server.py, /app/website/src/useDocsSocket.ts, /app/frontend/src/useDocsSocket.ts"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: false
+    status_history:
+        - working: true
+          agent: "main"
+          comment: "Added FastAPI WebSocket endpoint at /api/ws (ConnectionManager broadcasts doc:created / doc:updated / doc:deleted on each upload/edit/delete). Verified handshake locally: returns HTTP 101 Switching Protocols. Added matching React hook (useDocsSocket) for both the Vite website (web) and the Expo app (mobile) — auto-reconnect with exponential backoff. Wired into web AdminDashboard (toasts + list patches), ClientView (silent refresh on relevant category), mobile CategoryView and Admin Manage screens."
+
+  - task: "Web design fixes — dropzone, manage card layout, group headings, cancel button, modern animations"
+    implemented: true
+    working: true
+    file: "/app/website/src/styles.css, /app/website/src/pages/AdminDashboard.tsx, /app/website/src/pages/ClientView.tsx, /app/website/src/LiveBadge.tsx"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: false
+    status_history:
+        - working: true
+          agent: "main"
+          comment: "Rebuilt dropzone with a div + ref click (no more dashed-box rendering glitch); added drag-and-drop. Manage cards now lay out actions BELOW the title with text labels (View / Edit / Delete) and the title wraps cleanly. The 'All' filter renders sections per category with colored dot + heading + count. Upload preview now offers three buttons: Cancel · No, manual · Yes, upload. Added a global animation system (fade, slide, pop, shimmer skeletons) and a LIVE connection badge in the topbar. Verified visually with Playwright screenshots."
+
 metadata:
   created_by: "main_agent"
-  version: "1.1"
-  test_sequence: 1
+  version: "1.2"
+  test_sequence: 2
   run_ui: false
 
 test_plan:
   current_focus:
-    - "Static SPA hosting at /api/web/ for the standalone Vite website"
+    - "Real-time WebSocket sync (WhatsApp-Web style)"
+    - "Web design fixes — dropzone, manage card layout, group headings, cancel button, modern animations"
   stuck_tasks: []
   test_all: false
   test_priority: "high_first"
 
 agent_communication:
     - agent: "main"
-      message: "Standalone web portal is live at /api/web/ on the same backend host. Same MongoDB / same APIs as the mobile app. Public URL example: https://<preview-host>/api/web/. Admin (admin@example.com / admin123) and Client roles both work. Next planned step (per user): real-time WebSocket sync between mobile and web — to be picked up only after user confirms the website is good."
+      message: "Round 2 complete — all three reported design issues fixed (dropzone glitch, manage layout, cancel button) and WhatsApp-Web style real-time sync added. Both mobile and web now share a /api/ws WebSocket channel so any upload/edit/delete on one device shows up instantly on every other open device — confirmed by the new green 'LIVE' pill in the admin/client topbar plus toast notifications on the admin dashboard. Existing endpoints unchanged."

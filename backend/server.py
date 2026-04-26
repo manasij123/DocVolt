@@ -13,7 +13,10 @@ import jwt
 from datetime import datetime, timezone, timedelta
 from typing import List, Optional
 
-from fastapi import FastAPI, APIRouter, UploadFile, File, Form, HTTPException, Depends, Request
+import asyncio
+import json
+
+from fastapi import FastAPI, APIRouter, UploadFile, File, Form, HTTPException, Depends, Request, WebSocket, WebSocketDisconnect
 from fastapi.responses import StreamingResponse, FileResponse
 from fastapi.staticfiles import StaticFiles
 from starlette.exceptions import HTTPException as StarletteHTTPException
@@ -58,6 +61,39 @@ MONTH_MAP = {
 
 app = FastAPI()
 api_router = APIRouter(prefix="/api")
+
+
+# ============================================================
+# WebSocket connection manager (real-time sync, WhatsApp-Web style)
+# ============================================================
+class ConnectionManager:
+    def __init__(self):
+        self.active: list[WebSocket] = []
+        self._lock = asyncio.Lock()
+
+    async def connect(self, ws: WebSocket):
+        await ws.accept()
+        async with self._lock:
+            self.active.append(ws)
+
+    async def disconnect(self, ws: WebSocket):
+        async with self._lock:
+            if ws in self.active:
+                self.active.remove(ws)
+
+    async def broadcast(self, payload: dict):
+        msg = json.dumps(payload, default=str)
+        async with self._lock:
+            targets = list(self.active)
+        for ws in targets:
+            try:
+                await ws.send_text(msg)
+            except Exception:
+                # silently drop failed sockets — they will be cleaned on next disconnect
+                pass
+
+
+manager = ConnectionManager()
 
 
 # ============================================================
@@ -263,7 +299,9 @@ async def upload_document(
     }
     await db.documents.insert_one(doc)
     doc.pop("_id", None)
-    return doc_to_meta(doc)
+    meta = doc_to_meta(doc)
+    await manager.broadcast({"type": "doc:created", "doc": meta})
+    return meta
 
 
 @api_router.get("/documents")
@@ -350,7 +388,9 @@ async def update_document(doc_id: str, payload: DocumentUpdate, current=Depends(
     if update:
         await db.documents.update_one({"id": doc_id}, {"$set": update})
     new_doc = await db.documents.find_one({"id": doc_id}, {"_id": 0})
-    return doc_to_meta(new_doc)
+    meta = doc_to_meta(new_doc)
+    await manager.broadcast({"type": "doc:updated", "doc": meta})
+    return meta
 
 
 @api_router.delete("/documents/{doc_id}")
@@ -367,7 +407,29 @@ async def delete_document(doc_id: str, current=Depends(get_current_admin)):
             pass
 
     await db.documents.delete_one({"id": doc_id})
+    await manager.broadcast({"type": "doc:deleted", "id": doc_id})
     return {"ok": True}
+
+
+# ============================================================
+# WebSocket — clients connect here for live updates.
+# Path is under /api/* so the ingress routes it to the backend.
+# ============================================================
+@api_router.websocket("/ws")
+async def ws_endpoint(websocket: WebSocket):
+    await manager.connect(websocket)
+    try:
+        # Initial hello so the client knows the channel is live.
+        await websocket.send_text(json.dumps({"type": "hello"}))
+        while True:
+            # We don't need any client messages — just keep the socket alive.
+            # If the client sends anything, we ignore it but stay connected.
+            try:
+                await websocket.receive_text()
+            except WebSocketDisconnect:
+                break
+    finally:
+        await manager.disconnect(websocket)
 
 
 # ============================================================

@@ -14,6 +14,8 @@ import api, { CATEGORY_LABELS, DocumentMeta } from "./api";
 import { colors, radius, shadow, categoryGradients } from "./theme";
 import { shareDocument } from "./share";
 import PressableScale from "./PressableScale";
+import { useDocsSocket } from "./useDocsSocket";
+import { useResponsive } from "./useResponsive";
 
 type Props = {
   category: "MONTHLY_RETURN" | "FORWARDING_LETTER" | "IFA_REPORT" | "OTHERS";
@@ -159,6 +161,15 @@ export default function CategoryView({ category }: Props) {
     setRefreshing(true);
     load();
   };
+
+  // 🔴 Real-time sync: refresh on relevant doc events
+  useDocsSocket((e) => {
+    if (e.type === "doc:created" || e.type === "doc:updated") {
+      if (e.doc?.category === category) load();
+    } else if (e.type === "doc:deleted") {
+      if (documents.some((d) => d.id === e.id)) load();
+    }
+  });
 
   const filtered = activeYear ? documents.filter((d) => d.year === activeYear) : [];
   const grad = categoryGradients[category];

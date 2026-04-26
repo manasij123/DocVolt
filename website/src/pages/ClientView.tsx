@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import api, {
   CATEGORY_DESCRIPTIONS,
@@ -8,6 +8,8 @@ import api, {
   fileUrl,
   setRole,
 } from "../api";
+import { useDocsSocket } from "../useDocsSocket";
+import LiveBadge from "../LiveBadge";
 
 const TAB_ORDER = ["MONTHLY_RETURN", "FORWARDING_LETTER", "IFA_REPORT", "OTHERS"] as const;
 type Tab = (typeof TAB_ORDER)[number];
@@ -25,15 +27,25 @@ export default function ClientView() {
       const r = await api.get<DocumentMeta[]>("/documents", { params: { category: cat } });
       setDocs(r.data);
       const ys = Array.from(new Set(r.data.map((d) => d.year))).sort((a, b) => b - a);
-      setYear(ys[0] ?? null);
+      setYear((prev) => (prev && ys.includes(prev) ? prev : ys[0] ?? null));
     } finally {
       setLoading(false);
     }
   };
-  useEffect(() => { load(tab); }, [tab]);
+  useEffect(() => { load(tab); /* eslint-disable-line react-hooks/exhaustive-deps */ }, [tab]);
 
-  const years = Array.from(new Set(docs.map((d) => d.year))).sort((a, b) => b - a);
-  const filtered = year ? docs.filter((d) => d.year === year) : [];
+  // 🔴 Real-time sync — if any doc that matches our current tab changes, refresh quietly.
+  useDocsSocket((e) => {
+    if (e.type === "doc:created" || e.type === "doc:updated") {
+      if (e.doc?.category === tab) load(tab);
+    } else if (e.type === "doc:deleted") {
+      // we don't know the category of a deleted doc — just refresh if it was in our list
+      if (docs.some((d) => d.id === e.id)) load(tab);
+    }
+  });
+
+  const years = useMemo(() => Array.from(new Set(docs.map((d) => d.year))).sort((a, b) => b - a), [docs]);
+  const filtered = useMemo(() => (year ? docs.filter((d) => d.year === year) : []), [docs, year]);
 
   const onSwitch = () => {
     setRole(null);
@@ -60,13 +72,14 @@ export default function ClientView() {
         <div className="container topbar-inner">
           <div className="brand"><div className="brand-mark">DV</div> DocVault</div>
           <div className="topbar-actions">
+            <LiveBadge />
             <button className="icon-btn" title="Switch role" onClick={onSwitch}>⇄</button>
             <button className="icon-btn" title="Admin" onClick={() => nav("/admin/login")}>🔒</button>
           </div>
         </div>
       </header>
 
-      <main className="container" style={{ padding: "18px 24px 60px" }}>
+      <main className="container page-anim" style={{ padding: "18px 24px 60px" }} key={tab}>
         <div className="tab-row">
           {TAB_ORDER.map((c) => (
             <button key={c} className={`tab ${tab === c ? "active" : ""}`} onClick={() => setTab(c)}>
@@ -85,7 +98,11 @@ export default function ClientView() {
         </div>
 
         {loading ? (
-          <div className="center" style={{ padding: 60 }}><div className="spinner" /></div>
+          <div>
+            <div className="skeleton" />
+            <div className="skeleton" />
+            <div className="skeleton" />
+          </div>
         ) : years.length === 0 ? (
           <div className="empty">
             <div className="empty-icon">📂</div>
@@ -104,20 +121,22 @@ export default function ClientView() {
               <div className="empty"><p>No documents for {year}</p></div>
             ) : (
               <div className="doc-grid">
-                {filtered.map((d) => (
-                  <div key={d.id} className="doc-card">
-                    <div className={`doc-icon ${d.category}`}>📄</div>
-                    <div className="doc-meta">
-                      <div className="doc-title">{d.display_name}</div>
-                      <div className="doc-sub">
-                        {d.month_label && <span>{d.month_label}</span>}
-                        <span className="status-pill" style={{ color: "#1A73E8" }}>{d.year}</span>
-                        <span>{(d.size / 1024).toFixed(0)} KB</span>
+                {filtered.map((d, i) => (
+                  <div key={d.id} className="doc-card" style={{ animationDelay: `${Math.min(i, 8) * 40}ms` }}>
+                    <div className="doc-top">
+                      <div className={`doc-icon ${d.category}`}>📄</div>
+                      <div className="doc-meta">
+                        <div className="doc-title">{d.display_name}</div>
+                        <div className="doc-sub">
+                          {d.month_label && <span className="badge">{d.month_label}</span>}
+                          <span className="badge year">{d.year}</span>
+                          <span>{(d.size / 1024).toFixed(0)} KB</span>
+                        </div>
                       </div>
                     </div>
                     <div className="doc-actions">
-                      <button className="act-btn view" title="Open" onClick={() => window.open(fileUrl(d.id), "_blank")}>↗</button>
-                      <button className="act-btn share" title="Share" onClick={() => share(d)}>↗</button>
+                      <button className="act-btn view" onClick={() => window.open(fileUrl(d.id), "_blank")}>👁️ View</button>
+                      <button className="act-btn share" onClick={() => share(d)}>⇗ Share</button>
                     </div>
                   </div>
                 ))}
