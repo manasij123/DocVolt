@@ -10,6 +10,7 @@ import { Ionicons } from "@expo/vector-icons";
 import api, { ClientRow, initials, colorFromString } from "../../src/api";
 import { useAuth } from "../../src/auth";
 import { useDocsSocket } from "../../src/useDocsSocket";
+import { useToast } from "../../src/Toast";
 import ConnectModal from "../../src/ConnectModal";
 import { FadeInItem } from "../../src/AnimatedList";
 import { colors, gradients, radius, shadow } from "../../src/theme";
@@ -17,10 +18,37 @@ import { colors, gradients, radius, shadow } from "../../src/theme";
 export default function AdminHome() {
   const router = useRouter();
   const { user, loading: authLoading, logout } = useAuth();
+  const toast = useToast();
   const [clients, setClients] = useState<ClientRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [showConnect, setShowConnect] = useState(false);
+
+  const removeConnection = (c: ClientRow) => {
+    Alert.alert(
+      "Remove connection",
+      `Remove connection with ${c.name}?\n\nThe client will no longer appear in your workspace. Existing documents are not deleted.`,
+      [
+        { text: "Cancel", style: "cancel" },
+        {
+          text: "Remove",
+          style: "destructive",
+          onPress: async () => {
+            // Optimistic update
+            setClients((prev) => prev.filter((x) => x.id !== c.id));
+            try {
+              await api.delete(`/connections/${c.id}`);
+              toast.show(`Removed ${c.name}`, { kind: "success", icon: "checkmark-circle" });
+            } catch (e: any) {
+              // Roll back if API failed
+              await reload();
+              toast.show(e?.response?.data?.detail || "Failed to remove connection", { kind: "error" });
+            }
+          },
+        },
+      ],
+    );
+  };
 
   useEffect(() => {
     if (authLoading) return;
@@ -98,7 +126,7 @@ export default function AdminHome() {
         }
         renderItem={({ item: c, index }) => (
           <FadeInItem index={index}>
-            <TouchableOpacity onPress={() => router.push(`/admin/${c.id}`)} activeOpacity={0.85} style={st.row}>
+            <TouchableOpacity onPress={() => router.push(`/admin/${c.id}`)} onLongPress={() => removeConnection(c)} delayLongPress={400} activeOpacity={0.85} style={st.row}>
               <View style={[st.avatar, { backgroundColor: colorFromString(c.id) }]}>
                 <Text style={st.avatarText}>{initials(c.name)}</Text>
               </View>

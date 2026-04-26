@@ -105,6 +105,21 @@
 user_problem_statement: "Build a data storage app with admin/client sides; 4 tabs (MONTHLY RETURN, FORWARDING LETTER, IFA REPORT, OTHERS); auto-detect tab/month/year from PDF filename; admin uploads/edits/deletes; client views & shares via WhatsApp; WB Government colour scheme. Plus standalone Web version like 'WhatsApp Web' connected to same backend & DB."
 
 backend:
+  - task: "Phase-1: Connection-removal — DELETE /api/connections/{target_id} (re-verification)"
+    implemented: true
+    working: true
+    file: "/app/backend/server.py"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: false
+    status_history:
+        - working: "NA"
+          agent: "main"
+          comment: "Endpoint pre-existed and broadcasts `connection:removed` to both peers via WebSocket. Newly wired to Phase-1 UI: (mobile) long-press on client/admin row → Alert.alert destructive confirm → api.delete(`/connections/{id}`); (web) a small × button on each row in AdminHome / ClientHome with stopPropagation. Please verify end-to-end: (1) authenticated admin can DELETE connection with a client (200/204) and vice-versa from a client account, (2) the WebSocket `connection:removed` event is broadcast to BOTH the admin and the client, (3) DELETE on a non-existent or already-removed connection returns 404 cleanly, (4) removing a connection does NOT delete documents, (5) no-token / wrong-token returns 401."
+        - working: true
+          agent: "testing"
+          comment: "19/19 sub-tests PASS via /app/backend_test.py against the public preview host. (T1) login admin@example.com & client@example.com both 200. (T2) precondition POST /connections (client→admin) returned 'exists' and connection visible from both /clients (admin) and /admins/connected (client). (T3) admin DELETE /connections/{client_id} → 200 {ok:true}; client subsequently absent from /clients AND admin absent from /admins/connected; WS broadcast received on BOTH admin token channel and client token channel: {type:'connection:removed', peer_id:<the other side's id>}. (T4) re-created connection then client-initiated DELETE /connections/{admin_id} → 200 {ok:true}, both peers receive WS connection:removed events. (T5) DELETE /connections/non-existent-uuid with admin token → 404 {detail:'Connection not found'} (no 500). (T6a) no Authorization header → 401 {detail:'Not authenticated'}. (T6b) malformed Bearer token → 401 {detail:'Not authenticated'}. (T7) Uploaded a PDF as admin to client_id, deleted the connection, re-created it, and the document still appears in GET /api/documents?client_id=... → confirms connection removal does NOT cascade-delete documents. (T8) idempotency: second DELETE on same target → 404 (first call was 200). Cleanup: re-created the admin↔client connection at the end so the test DB is in the same state as before. WS handshake works on wss://...preview.emergentagent.com/api/ws?token=<jwt> and emits hello immediately."
+
   - task: "Static SPA hosting at /api/web/ for the standalone Vite website"
     implemented: true
     working: true
@@ -257,11 +272,14 @@ metadata:
   run_ui: false
 
 test_plan:
-  current_focus:
-    - "Mobile auth UX — strict role-gated login + helpful 'switch screen' redirect + keyboard-aware scrolling"
+  current_focus: []
   stuck_tasks: []
   test_all: false
   test_priority: "high_first"
+
+agent_communication:
+    - agent: "testing"
+      message: "DELETE /api/connections/{target_id} re-verification: 19/19 sub-tests PASS via /app/backend_test.py against the public preview host. All 8 review-request scenarios verified — admin-initiated and client-initiated removal both return 200 {ok:true} and broadcast `connection:removed` over WebSocket to BOTH peers (verified by opening wss connections with each side's JWT BEFORE the DELETE). 404 returned cleanly on non-existent target and on second-call idempotency. 401 returned for missing and malformed tokens. Critical T7: documents survive connection removal — uploaded a PDF, removed connection, re-created it, doc still listed. Test DB left in original state (admin↔client connection re-created at end). Test doc was deleted as cleanup. No issues found."
 
 agent_communication:
     - agent: "testing"

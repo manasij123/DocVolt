@@ -1,447 +1,338 @@
-"""Backend regression for the NEW connection flow.
-
-Covers admin↔client connections, lookup, upload guarding, deletion of
-connections, and a quick websocket smoke check.
-
-Public base URL is read from /app/frontend/.env (EXPO_PUBLIC_BACKEND_URL)
-and all routes are prefixed with /api per ingress rules.
 """
+Backend test for DELETE /api/connections/{target_id} endpoint.
+
+Verifies:
+  1. Auth login for both admin and client.
+  2. Connection setup (precondition).
+  3. Admin removes connection + WS broadcast.
+  4. Re-create then client removes connection + WS broadcast.
+  5. 404 for non-existent.
+  6. 401 for missing/invalid token.
+  7. Documents NOT deleted on connection removal.
+  8. Idempotency (already-removed -> 404).
+"""
+import asyncio
 import io
 import json
 import os
-import random
-import string
 import sys
-import time
-from pathlib import Path
+from urllib.parse import urlparse
 
 import requests
 import websockets
-import asyncio
 
+BACKEND_URL = os.environ.get(
+    "BACKEND_URL", "https://doc-organizer-app.preview.emergentagent.com"
+).rstrip("/")
+API = f"{BACKEND_URL}/api"
 
-def _read_backend_url() -> str:
-    env_path = Path("/app/frontend/.env")
-    for line in env_path.read_text().splitlines():
-        if line.startswith("EXPO_PUBLIC_BACKEND_URL"):
-            return line.split("=", 1)[1].strip().strip('"').strip("'")
-    raise SystemExit("EXPO_PUBLIC_BACKEND_URL missing")
-
-
-BASE = _read_backend_url().rstrip("/")
-API = f"{BASE}/api"
-WS_BASE = "wss://" + BASE.split("://", 1)[1] + "/api/ws"
+# Build WS URL from BACKEND_URL (https -> wss, http -> ws)
+parsed = urlparse(BACKEND_URL)
+WS_SCHEME = "wss" if parsed.scheme == "https" else "ws"
+WS_BASE = f"{WS_SCHEME}://{parsed.netloc}/api/ws"
 
 ADMIN_EMAIL = "admin@example.com"
 ADMIN_PASSWORD = "admin123"
-DEMO_CLIENT_EMAIL = "client@example.com"
-DEMO_CLIENT_PASSWORD = "client123"
+CLIENT_EMAIL = "client@example.com"
+CLIENT_PASSWORD = "client123"
+
+results = []
 
 
-# --- Tiny test runner -------------------------------------------------------
-results: list[tuple[str, bool, str]] = []
+def record(name, passed, detail=""):
+    results.append((name, passed, detail))
+    icon = "PASS" if passed else "FAIL"
+    print(f"[{icon}] {name} :: {detail}")
 
 
-def record(name: str, ok: bool, detail: str = "") -> bool:
-    results.append((name, ok, detail))
-    print(f"{'PASS' if ok else 'FAIL'} | {name} | {detail}")
-    return ok
-
-
-def rand_suffix(n: int = 8) -> str:
-    return "".join(random.choices(string.ascii_lowercase + string.digits, k=n))
-
-
-def auth_headers(token: str) -> dict:
-    return {"Authorization": f"Bearer {token}"}
-
-
-def login(email: str, password: str) -> tuple[int, dict]:
+def login(email, password):
     r = requests.post(f"{API}/auth/login", json={"email": email, "password": password}, timeout=20)
+    r.raise_for_status()
+    data = r.json()
+    return data["access_token"], data["user"]
+
+
+async def collect_ws_events(token, duration=4.0):
+    """Open WS, collect all messages received within `duration` seconds, then close."""
+    url = f"{WS_BASE}?token={token}"
+    received = []
     try:
-        body = r.json()
-    except Exception:
-        body = {"raw": r.text}
-    return r.status_code, body
+        async with websockets.connect(url, open_timeout=10, close_timeout=5) as ws:
+            try:
+                while True:
+                    msg = await asyncio.wait_for(ws.recv(), timeout=duration)
+                    try:
+                        received.append(json.loads(msg))
+                    except Exception:
+                        received.append({"raw": msg})
+            except asyncio.TimeoutError:
+                pass
+    except Exception as e:
+        return received, str(e)
+    return received, None
 
 
-def register(name: str, email: str, password: str, role: str = "client", admin_email: str | None = None) -> tuple[int, dict]:
-    body = {"name": name, "email": email, "password": password, "role": role}
-    if admin_email:
-        body["admin_email"] = admin_email
-    r = requests.post(f"{API}/auth/register", json=body, timeout=20)
+async def open_ws_listen(token, ready_event, stop_event, bag):
+    """Open WS, signal `ready_event` after hello received, then collect msgs until stop_event."""
+    url = f"{WS_BASE}?token={token}"
     try:
-        return r.status_code, r.json()
-    except Exception:
-        return r.status_code, {"raw": r.text}
+        async with websockets.connect(url, open_timeout=10, close_timeout=5) as ws:
+            # Wait for hello
+            try:
+                first = await asyncio.wait_for(ws.recv(), timeout=5)
+                bag.append(json.loads(first))
+            except Exception as e:
+                bag.append({"_error_hello": str(e)})
+            ready_event.set()
+            while not stop_event.is_set():
+                try:
+                    msg = await asyncio.wait_for(ws.recv(), timeout=0.5)
+                    try:
+                        bag.append(json.loads(msg))
+                    except Exception:
+                        bag.append({"raw": msg})
+                except asyncio.TimeoutError:
+                    continue
+                except websockets.ConnectionClosed:
+                    break
+    except Exception as e:
+        bag.append({"_ws_error": str(e)})
 
 
-# --- Tests ------------------------------------------------------------------
-
-def make_minimal_pdf(name: str = "doc.pdf") -> bytes:
-    # Real-ish minimal PDF
-    return (
-        b"%PDF-1.4\n1 0 obj<<>>endobj\ntrailer<<>>\n%%EOF\n"
+def ensure_connection(client_token, admin_user_id):
+    """Make sure connection exists between admin and client. Idempotent."""
+    r = requests.post(
+        f"{API}/connections",
+        json={"peer_email": ADMIN_EMAIL},
+        headers={"Authorization": f"Bearer {client_token}"},
+        timeout=20,
     )
+    return r.status_code in (200, 201), r.status_code, (r.json() if r.headers.get("content-type", "").startswith("application/json") else r.text)
 
 
-def main() -> int:
-    # 1. admin login
-    code, body = login(ADMIN_EMAIL, ADMIN_PASSWORD)
-    if not record(
-        "1. POST /auth/login admin", code == 200 and body.get("user", {}).get("role") == "admin",
-        f"status={code} body_keys={list(body.keys())}",
-    ):
-        return _summary()
-    admin_token = body["access_token"]
-    admin_id = body["user"]["id"]
+def admin_clients(admin_token):
+    r = requests.get(f"{API}/clients", headers={"Authorization": f"Bearer {admin_token}"}, timeout=20)
+    r.raise_for_status()
+    return r.json()
 
-    # 2. client login
-    code, body = login(DEMO_CLIENT_EMAIL, DEMO_CLIENT_PASSWORD)
-    if not record(
-        "2. POST /auth/login demo client",
-        code == 200 and body.get("user", {}).get("role") == "client",
-        f"status={code}",
-    ):
-        return _summary()
-    demo_client_token = body["access_token"]
-    demo_client_id = body["user"]["id"]
 
-    # 3. GET /clients admin → includes demo client (doc_count >= 1, expected 6)
-    r = requests.get(f"{API}/clients", headers=auth_headers(admin_token), timeout=20)
-    arr = r.json() if r.ok else []
-    demo_row = next((c for c in arr if c.get("email") == DEMO_CLIENT_EMAIL), None)
-    record(
-        "3. GET /clients (admin) includes demo client",
-        r.status_code == 200 and demo_row is not None,
-        f"status={r.status_code} found={bool(demo_row)} doc_count={(demo_row or {}).get('doc_count')}",
-    )
-    if demo_row is not None and demo_row.get("doc_count") != 6:
-        record(
-            "3b. demo client doc_count == 6 (legacy migration)",
-            False,
-            f"actual={demo_row.get('doc_count')} (expected 6 from legacy migration)",
+def client_admins(client_token):
+    r = requests.get(f"{API}/admins/connected", headers={"Authorization": f"Bearer {client_token}"}, timeout=20)
+    r.raise_for_status()
+    return r.json()
+
+
+async def perform_delete_with_ws(deleter_token, peer_id, listener_admin_token, listener_client_token):
+    """Open BOTH admin and client WS, then perform delete, capture events."""
+    admin_bag, client_bag = [], []
+    admin_ready, client_ready = asyncio.Event(), asyncio.Event()
+    stop_event = asyncio.Event()
+
+    admin_task = asyncio.create_task(open_ws_listen(listener_admin_token, admin_ready, stop_event, admin_bag))
+    client_task = asyncio.create_task(open_ws_listen(listener_client_token, client_ready, stop_event, client_bag))
+
+    # Wait until both WS have received hello
+    await asyncio.wait_for(admin_ready.wait(), timeout=10)
+    await asyncio.wait_for(client_ready.wait(), timeout=10)
+    # tiny buffer
+    await asyncio.sleep(0.3)
+
+    # Do the delete in a thread to not block the loop
+    loop = asyncio.get_event_loop()
+    def _do_delete():
+        return requests.delete(
+            f"{API}/connections/{peer_id}",
+            headers={"Authorization": f"Bearer {deleter_token}"},
+            timeout=20,
         )
+    resp = await loop.run_in_executor(None, _do_delete)
+
+    # Wait for events to propagate
+    await asyncio.sleep(2.0)
+    stop_event.set()
+    await asyncio.gather(admin_task, client_task, return_exceptions=True)
+    return resp, admin_bag, client_bag
+
+
+def upload_doc(admin_token, client_id, filename="test_connection_doc Apr'2026.pdf"):
+    # tiny valid-ish PDF bytes
+    pdf_bytes = (
+        b"%PDF-1.4\n%\xe2\xe3\xcf\xd3\n1 0 obj<<>>endobj\nxref\n0 1\n"
+        b"0000000000 65535 f \ntrailer<<>>startxref\n0\n%%EOF\n"
+    )
+    files = {"file": (filename, io.BytesIO(pdf_bytes), "application/pdf")}
+    data = {"client_id": client_id}
+    r = requests.post(
+        f"{API}/documents/upload",
+        headers={"Authorization": f"Bearer {admin_token}"},
+        files=files,
+        data=data,
+        timeout=30,
+    )
+    return r
+
+
+def doc_exists_in_listing(admin_token, client_id, doc_id):
+    r = requests.get(
+        f"{API}/documents",
+        params={"client_id": client_id},
+        headers={"Authorization": f"Bearer {admin_token}"},
+        timeout=20,
+    )
+    if r.status_code != 200:
+        return False, r.status_code, r.text
+    docs = r.json()
+    return any(d["id"] == doc_id for d in docs), 200, docs
+
+
+def main():
+    print(f"\n=== DELETE /api/connections/{{target_id}} regression ===")
+    print(f"API base: {API}")
+    print(f"WS base : {WS_BASE}\n")
+
+    # ---- Test 1: Login both ----
+    try:
+        admin_token, admin_user = login(ADMIN_EMAIL, ADMIN_PASSWORD)
+        client_token, client_user = login(CLIENT_EMAIL, CLIENT_PASSWORD)
+        record("T1 login admin+client",
+               admin_user["role"] == "admin" and client_user["role"] == "client",
+               f"admin id={admin_user['id'][:8]} client id={client_user['id'][:8]}")
+    except Exception as e:
+        record("T1 login", False, str(e))
+        return
+
+    admin_id = admin_user["id"]
+    client_id = client_user["id"]
+
+    # ---- Test 2: Setup connection precondition ----
+    ok, sc, body = ensure_connection(client_token, admin_id)
+    record("T2a precondition POST /connections (client->admin)", ok, f"status={sc} body={body}")
+    cs = admin_clients(admin_token)
+    in_clients = any(c["id"] == client_id for c in cs)
+    admins_list = client_admins(client_token)
+    in_admins = any(a["id"] == admin_id for a in admins_list)
+    record("T2b connection visible in /clients (admin) and /admins/connected (client)",
+           in_clients and in_admins,
+           f"in_clients={in_clients} in_admins={in_admins}")
+
+    # ---- Test 3: Admin removes connection + WS broadcast ----
+    async def step3():
+        return await perform_delete_with_ws(admin_token, client_id, admin_token, client_token)
+
+    resp, admin_bag, client_bag = asyncio.run(step3())
+    record("T3a DELETE /connections/{client_id} (admin)",
+           resp.status_code in (200, 204),
+           f"status={resp.status_code} body={resp.text[:200]}")
+    cs = admin_clients(admin_token)
+    in_clients = any(c["id"] == client_id for c in cs)
+    admins_list = client_admins(client_token)
+    in_admins = any(a["id"] == admin_id for a in admins_list)
+    record("T3b after admin DELETE: client gone from /clients AND admin gone from /admins/connected",
+           (not in_clients) and (not in_admins),
+           f"in_clients={in_clients} in_admins={in_admins}")
+    admin_removed_evt = [e for e in admin_bag if e.get("type") == "connection:removed"]
+    client_removed_evt = [e for e in client_bag if e.get("type") == "connection:removed"]
+    record("T3c WS broadcast 'connection:removed' to BOTH admin and client",
+           len(admin_removed_evt) >= 1 and len(client_removed_evt) >= 1,
+           f"admin_evts={admin_removed_evt} client_evts={client_removed_evt}")
+
+    # ---- Test 4: Re-create + client removes ----
+    ok, sc, body = ensure_connection(client_token, admin_id)
+    record("T4a re-create connection (client->admin)", ok, f"status={sc}")
+
+    async def step4():
+        return await perform_delete_with_ws(client_token, admin_id, admin_token, client_token)
+    resp, admin_bag, client_bag = asyncio.run(step4())
+    record("T4b DELETE /connections/{admin_id} (client)",
+           resp.status_code in (200, 204),
+           f"status={resp.status_code} body={resp.text[:200]}")
+    cs = admin_clients(admin_token)
+    in_clients = any(c["id"] == client_id for c in cs)
+    admins_list = client_admins(client_token)
+    in_admins = any(a["id"] == admin_id for a in admins_list)
+    record("T4c after client DELETE: client gone + admin gone",
+           (not in_clients) and (not in_admins),
+           f"in_clients={in_clients} in_admins={in_admins}")
+    admin_removed_evt = [e for e in admin_bag if e.get("type") == "connection:removed"]
+    client_removed_evt = [e for e in client_bag if e.get("type") == "connection:removed"]
+    record("T4d WS broadcast on client-initiated remove reaches BOTH peers",
+           len(admin_removed_evt) >= 1 and len(client_removed_evt) >= 1,
+           f"admin_evts={admin_removed_evt} client_evts={client_removed_evt}")
+
+    # ---- Test 5: 404 for non-existent ----
+    r = requests.delete(f"{API}/connections/non-existent-uuid",
+                        headers={"Authorization": f"Bearer {admin_token}"}, timeout=20)
+    record("T5 DELETE non-existent target -> 404",
+           r.status_code == 404, f"status={r.status_code} body={r.text[:200]}")
+
+    # ---- Test 6: 401 handling ----
+    r = requests.delete(f"{API}/connections/{client_id}", timeout=20)
+    record("T6a DELETE without Authorization header -> 401",
+           r.status_code in (401, 403), f"status={r.status_code} body={r.text[:200]}")
+    r = requests.delete(f"{API}/connections/{client_id}",
+                        headers={"Authorization": "Bearer invalid.token.here"}, timeout=20)
+    record("T6b DELETE with malformed token -> 401",
+           r.status_code in (401, 403), f"status={r.status_code} body={r.text[:200]}")
+
+    # ---- Test 7: Documents NOT deleted on connection removal ----
+    ok, sc, body = ensure_connection(client_token, admin_id)
+    if not ok:
+        record("T7 setup re-create connection", False, f"status={sc}")
     else:
-        record("3b. demo client doc_count == 6", demo_row is not None, "ok")
+        up = upload_doc(admin_token, client_id)
+        if up.status_code != 200:
+            record("T7a upload doc", False, f"status={up.status_code} body={up.text[:200]}")
+        else:
+            doc_meta = up.json()
+            doc_id = doc_meta["id"]
+            record("T7a upload doc as admin", True, f"doc_id={doc_id[:8]}")
 
-    # 4. GET /admins/connected client → includes admin
-    r = requests.get(f"{API}/admins/connected", headers=auth_headers(demo_client_token), timeout=20)
-    arr = r.json() if r.ok else []
-    has_admin = any(a.get("email") == ADMIN_EMAIL for a in arr)
-    record(
-        "4. GET /admins/connected (demo client) includes admin",
-        r.status_code == 200 and has_admin,
-        f"status={r.status_code} count={len(arr)} has_admin={has_admin}",
-    )
+            # Remove connection
+            r = requests.delete(f"{API}/connections/{client_id}",
+                                headers={"Authorization": f"Bearer {admin_token}"}, timeout=20)
+            record("T7b DELETE connection after upload",
+                   r.status_code in (200, 204), f"status={r.status_code}")
 
-    # 5. Solo client (no admin_email)
-    solo_email = f"solo_{rand_suffix()}@test.com"
-    code, body = register("Solo", solo_email, "test123", role="client")
-    record(
-        "5a. POST /auth/register Solo (no admin_email)",
-        code == 200 and body.get("user", {}).get("role") == "client",
-        f"status={code}",
-    )
-    if code != 200:
-        return _summary()
-    solo_token = body["access_token"]
-    solo_id = body["user"]["id"]
+            # Re-create connection so we can list docs again as scoped admin
+            ok2, sc2, _ = ensure_connection(client_token, admin_id)
+            record("T7c re-create connection to inspect docs", ok2, f"status={sc2}")
+            present, status, body = doc_exists_in_listing(admin_token, client_id, doc_id)
+            record("T7d uploaded doc still present after connection removal",
+                   present, f"status={status} found={present}")
 
-    r = requests.get(f"{API}/admins/connected", headers=auth_headers(solo_token), timeout=20)
-    arr = r.json() if r.ok else None
-    record(
-        "5b. Solo /admins/connected returns []",
-        r.status_code == 200 and arr == [],
-        f"status={r.status_code} body={arr}",
-    )
+            # Clean up the test doc so we don't litter the DB
+            requests.delete(f"{API}/documents/{doc_id}",
+                            headers={"Authorization": f"Bearer {admin_token}"}, timeout=20)
 
-    r = requests.get(f"{API}/clients", headers=auth_headers(admin_token), timeout=20)
-    arr = r.json() if r.ok else []
-    has_solo = any(c.get("id") == solo_id for c in arr)
-    record(
-        "5c. /clients (admin) does NOT include Solo (no connection)",
-        r.status_code == 200 and not has_solo,
-        f"has_solo={has_solo}",
-    )
+    # ---- Test 8: Idempotency ----
+    # Ensure connection exists, delete it, then delete again -> 404
+    ensure_connection(client_token, admin_id)
+    r1 = requests.delete(f"{API}/connections/{client_id}",
+                         headers={"Authorization": f"Bearer {admin_token}"}, timeout=20)
+    r2 = requests.delete(f"{API}/connections/{client_id}",
+                         headers={"Authorization": f"Bearer {admin_token}"}, timeout=20)
+    record("T8 idempotency: 2nd DELETE returns 404",
+           r1.status_code in (200, 204) and r2.status_code == 404,
+           f"first={r1.status_code} second={r2.status_code} body2={r2.text[:200]}")
 
-    # 6. Register brand new admin Boss
-    boss_email = f"boss_{rand_suffix()}@test.com"
-    code, body = register("Boss", boss_email, "test123", role="admin")
-    record(
-        "6. POST /auth/register Boss (role=admin)",
-        code == 200 and body.get("user", {}).get("role") == "admin",
-        f"status={code} role={body.get('user', {}).get('role')}",
-    )
-    if code != 200:
-        return _summary()
-    boss_token = body["access_token"]
-    boss_id = body["user"]["id"]
+    # ---- Restore: re-create connection so the test DB is left in original state ----
+    ok, sc, body = ensure_connection(client_token, admin_id)
+    record("CLEANUP re-create connection (leave DB stable)",
+           ok, f"status={sc}")
 
-    # 7. Auto-connect client with Boss
-    auto_email = f"auto_{rand_suffix()}@test.com"
-    code, body = register("Auto", auto_email, "test123", role="client", admin_email=boss_email)
-    record(
-        "7a. POST /auth/register Auto with admin_email=Boss",
-        code == 200 and body.get("user", {}).get("role") == "client",
-        f"status={code}",
-    )
-    if code != 200:
-        return _summary()
-    auto_token = body["access_token"]
-    auto_id = body["user"]["id"]
-
-    r = requests.get(f"{API}/admins/connected", headers=auth_headers(auto_token), timeout=20)
-    arr = r.json() if r.ok else []
-    has_boss = any(a.get("id") == boss_id for a in arr)
-    record(
-        "7b. Auto /admins/connected includes Boss",
-        r.status_code == 200 and has_boss,
-        f"status={r.status_code} has_boss={has_boss}",
-    )
-
-    r = requests.get(f"{API}/clients", headers=auth_headers(boss_token), timeout=20)
-    arr = r.json() if r.ok else []
-    has_auto = any(c.get("id") == auto_id for c in arr)
-    record(
-        "7c. Boss /clients includes Auto",
-        r.status_code == 200 and has_auto,
-        f"status={r.status_code} has_auto={has_auto}",
-    )
-
-    # 8. Lookup user
-    r = requests.get(
-        f"{API}/users/lookup",
-        params={"email": ADMIN_EMAIL},
-        headers=auth_headers(solo_token),
-        timeout=20,
-    )
-    record(
-        "8a. /users/lookup admin email (solo client)",
-        r.status_code == 200 and r.json().get("email") == ADMIN_EMAIL,
-        f"status={r.status_code}",
-    )
-
-    r = requests.get(
-        f"{API}/users/lookup",
-        params={"email": ADMIN_EMAIL, "role": "client"},
-        headers=auth_headers(solo_token),
-        timeout=20,
-    )
-    record(
-        "8b. /users/lookup admin email with role=client → 404",
-        r.status_code == 404,
-        f"status={r.status_code}",
-    )
-
-    r = requests.get(
-        f"{API}/users/lookup",
-        params={"email": f"nonexistent_{rand_suffix()}@test.com"},
-        headers=auth_headers(solo_token),
-        timeout=20,
-    )
-    record(
-        "8c. /users/lookup nonexistent → 404",
-        r.status_code == 404,
-        f"status={r.status_code}",
-    )
-
-    # 9. Solo client adds admin connection
-    r = requests.post(
-        f"{API}/connections",
-        json={"peer_email": ADMIN_EMAIL},
-        headers=auth_headers(solo_token),
-        timeout=20,
-    )
-    body = r.json() if r.ok else {}
-    record(
-        "9a. POST /connections (solo→admin) status=created",
-        r.status_code == 200 and body.get("status") == "created" and body.get("peer", {}).get("email") == ADMIN_EMAIL,
-        f"status={r.status_code} body={body}",
-    )
-
-    r = requests.post(
-        f"{API}/connections",
-        json={"peer_email": ADMIN_EMAIL},
-        headers=auth_headers(solo_token),
-        timeout=20,
-    )
-    body = r.json() if r.ok else {}
-    record(
-        "9b. POST /connections again → status=exists",
-        r.status_code == 200 and body.get("status") == "exists",
-        f"status={r.status_code} body_status={body.get('status')}",
-    )
-
-    r = requests.get(f"{API}/admins/connected", headers=auth_headers(solo_token), timeout=20)
-    arr = r.json() if r.ok else []
-    has_admin = any(a.get("email") == ADMIN_EMAIL for a in arr)
-    record(
-        "9c. Solo /admins/connected now includes admin",
-        r.status_code == 200 and has_admin,
-        f"has_admin={has_admin}",
-    )
-
-    r = requests.get(f"{API}/clients", headers=auth_headers(admin_token), timeout=20)
-    arr = r.json() if r.ok else []
-    has_solo = any(c.get("id") == solo_id for c in arr)
-    record(
-        "9d. /clients (admin) now includes Solo",
-        r.status_code == 200 and has_solo,
-        f"has_solo={has_solo}",
-    )
-
-    # 10. Admin adds Solo client → exists
-    r = requests.post(
-        f"{API}/connections",
-        json={"peer_email": solo_email},
-        headers=auth_headers(admin_token),
-        timeout=20,
-    )
-    body = r.json() if r.ok else {}
-    record(
-        "10. POST /connections (admin→solo) status=exists",
-        r.status_code == 200 and body.get("status") == "exists",
-        f"status={r.status_code} body_status={body.get('status')}",
-    )
-
-    # 11. Admin connecting to another admin → 400
-    r = requests.post(
-        f"{API}/connections",
-        json={"peer_email": boss_email},
-        headers=auth_headers(admin_token),
-        timeout=20,
-    )
-    try:
-        body = r.json()
-    except Exception:
-        body = {}
-    record(
-        "11. POST /connections admin→admin → 400",
-        r.status_code == 400 and "admin and a client" in (body.get("detail") or ""),
-        f"status={r.status_code} detail={body.get('detail')}",
-    )
-
-    # 12. Self-connect
-    r = requests.post(
-        f"{API}/connections",
-        json={"peer_email": ADMIN_EMAIL},
-        headers=auth_headers(admin_token),
-        timeout=20,
-    )
-    try:
-        body = r.json()
-    except Exception:
-        body = {}
-    record(
-        "12. POST /connections self → 400",
-        r.status_code == 400 and "yourself" in (body.get("detail") or "").lower(),
-        f"status={r.status_code} detail={body.get('detail')}",
-    )
-
-    # 13a. Upload to a non-client (boss admin id) → 400 Target client not found
-    pdf_bytes = make_minimal_pdf()
-    files = {"file": ("monthly return Mar'2026.pdf", pdf_bytes, "application/pdf")}
-    data = {"client_id": boss_id}
-    r = requests.post(
-        f"{API}/documents/upload", headers=auth_headers(admin_token), files=files, data=data, timeout=30,
-    )
-    body = r.json() if r.headers.get("content-type", "").startswith("application/json") else {}
-    record(
-        "13a. Upload with client_id=boss(admin) → 400 Target client not found",
-        r.status_code == 400 and "Target client not found" in body.get("detail", ""),
-        f"status={r.status_code} detail={body.get('detail')}",
-    )
-
-    # 13b. Upload to a client we are NOT connected to (Detached, no admin_email)
-    detached_email = f"detached_{rand_suffix()}@test.com"
-    code, body = register("Detached", detached_email, "test123", role="client")
-    record(
-        "13b-pre. register Detached client",
-        code == 200,
-        f"status={code}",
-    )
-    detached_id = body["user"]["id"]
-
-    files = {"file": ("ifa report Mar'2026.pdf", pdf_bytes, "application/pdf")}
-    data = {"client_id": detached_id}
-    r = requests.post(
-        f"{API}/documents/upload", headers=auth_headers(admin_token), files=files, data=data, timeout=30,
-    )
-    try:
-        body = r.json()
-    except Exception:
-        body = {}
-    record(
-        "13b. Upload to non-connected client → 403 not connected",
-        r.status_code == 403 and "not connected" in body.get("detail", "").lower(),
-        f"status={r.status_code} detail={body.get('detail')}",
-    )
-
-    # 14. DELETE /connections/{peer_id}
-    r = requests.delete(
-        f"{API}/connections/{admin_id}", headers=auth_headers(solo_token), timeout=20,
-    )
-    body = r.json() if r.ok else {}
-    record(
-        "14a. DELETE /connections/admin (solo) → ok",
-        r.status_code == 200 and body.get("ok") is True,
-        f"status={r.status_code} body={body}",
-    )
-
-    r = requests.get(f"{API}/admins/connected", headers=auth_headers(solo_token), timeout=20)
-    arr = r.json() if r.ok else []
-    record(
-        "14b. After delete, /admins/connected does NOT include admin",
-        r.status_code == 200 and not any(a.get("email") == ADMIN_EMAIL for a in arr),
-        f"count={len(arr)}",
-    )
-
-    r = requests.delete(
-        f"{API}/connections/{admin_id}", headers=auth_headers(solo_token), timeout=20,
-    )
-    body = r.json() if r.headers.get("content-type", "").startswith("application/json") else {}
-    record(
-        "14c. DELETE again → 404",
-        r.status_code == 404,
-        f"status={r.status_code} detail={body.get('detail')}",
-    )
-
-    # 15. WebSocket smoke
-    async def ws_check():
-        url = f"{WS_BASE}?token={admin_token}"
-        try:
-            async with websockets.connect(url, open_timeout=15, close_timeout=5) as ws:
-                # First message must be 'hello'
-                msg = await asyncio.wait_for(ws.recv(), timeout=10)
-                payload = json.loads(msg)
-                return payload.get("type") == "hello" and payload.get("user", {}).get("role") == "admin", payload
-        except Exception as e:
-            return False, str(e)
-
-    ok, payload = asyncio.run(ws_check())
-    record(
-        "15. WebSocket /api/ws connect with valid token → hello",
-        ok,
-        f"payload={payload}",
-    )
-
-    return _summary()
-
-
-def _summary() -> int:
-    print("\n" + "=" * 70)
-    print("SUMMARY")
-    print("=" * 70)
-    fails = [r for r in results if not r[1]]
-    for name, ok, detail in results:
-        flag = "✅" if ok else "❌"
-        print(f"{flag} {name}")
-        if not ok:
-            print(f"     -> {detail}")
-    print(f"\nTotal: {len(results)} | Passed: {len(results)-len(fails)} | Failed: {len(fails)}")
-    return 0 if not fails else 1
+    # ---- Summary ----
+    passed = sum(1 for _, p, _ in results if p)
+    total = len(results)
+    print(f"\n=== Results: {passed}/{total} ===")
+    for name, p, detail in results:
+        print(f"  [{'PASS' if p else 'FAIL'}] {name}")
+    if passed != total:
+        print("\nFAILED detail:")
+        for name, p, d in results:
+            if not p:
+                print(f"  - {name} -> {d}")
+        sys.exit(1)
 
 
 if __name__ == "__main__":
-    sys.exit(main())
+    main()

@@ -344,6 +344,41 @@ main {
 /* Hide the legacy emoji icon when AuthHeroIcon is present */
 .login-card .login-icon { display: none; }
 
+/* Row remove (×) button — appears at right side of admin/client rows
+ * Uses opacity hover-reveal on desktop, always visible on mobile.
+ */
+.row-remove-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px; height: 28px;
+  border: 1px solid rgba(180, 30, 30, 0.20);
+  background: rgba(180, 30, 30, 0.06);
+  color: #B91C1C;
+  border-radius: 999px;
+  font-size: 18px;
+  font-weight: 700;
+  line-height: 1;
+  cursor: pointer;
+  margin-right: 6px;
+  transition: opacity 0.18s ease, background-color 0.18s ease, transform 0.15s ease, border-color 0.18s ease;
+  opacity: 0.55;
+  padding: 0;
+}
+.client-row:hover .row-remove-btn { opacity: 1; }
+.row-remove-btn:hover {
+  background: #FEE2E2;
+  border-color: #FCA5A5;
+  color: #B91C1C;
+  transform: scale(1.06);
+}
+.row-remove-btn:active {
+  transform: scale(0.94);
+}
+@media (max-width: 720px) {
+  .row-remove-btn { opacity: 1; }
+}
+
 /* ============================================================
  * Page transitions, card-tap, icon, and modal animations
  * Applied across all routes EXCEPT Landing (which has the

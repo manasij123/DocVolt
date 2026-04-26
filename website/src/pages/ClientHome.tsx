@@ -36,6 +36,20 @@ export default function ClientHome() {
     }, 4000);
   };
 
+  const removeConnection = async (e: React.MouseEvent, a: ConnectedAdmin) => {
+    e.preventDefault();
+    e.stopPropagation();
+    if (!window.confirm(`Disconnect from ${a.name}?\n\nYou will no longer see their workspace.\nExisting documents are not deleted.`)) return;
+    setAdmins((prev) => prev.filter((x) => x.id !== a.id));
+    try {
+      await api.delete(`/connections/${a.id}`);
+      pushToast({ title: "👋 Disconnected", sub: `${a.name} · removed from your list` });
+    } catch (err: any) {
+      reload();
+      pushToast({ title: "⚠️ Could not disconnect", sub: err?.response?.data?.detail || "Try again later" });
+    }
+  };
+
   useDocsSocket((e) => {
     if (e.type === ("connection:created" as any)) {
       const peer = (e as any).peer;
@@ -102,6 +116,15 @@ export default function ClientHome() {
                   <div className="stat-num">{a.doc_count}</div>
                   <div className="stat-lbl">{a.doc_count === 1 ? "file" : "files"}</div>
                 </div>
+                <button
+                  type="button"
+                  className="row-remove-btn"
+                  onClick={(e) => removeConnection(e, a)}
+                  aria-label={`Disconnect from ${a.name}`}
+                  title="Disconnect"
+                >
+                  ×
+                </button>
                 <span className="client-arrow">→</span>
               </Link>
             ))}

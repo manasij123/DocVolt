@@ -37,6 +37,20 @@ export default function AdminHome() {
     }, 4200);
   };
 
+  const removeConnection = async (e: React.MouseEvent, c: ClientRow) => {
+    e.preventDefault();
+    e.stopPropagation();
+    if (!window.confirm(`Remove connection with ${c.name}?\n\nThe client will no longer appear in your workspace.\nExisting documents are not deleted.`)) return;
+    setClients((prev) => prev.filter((x) => x.id !== c.id));
+    try {
+      await api.delete(`/connections/${c.id}`);
+      pushToast({ title: "👋 Connection removed", sub: `${c.name} · removed from your workspace` });
+    } catch (err: any) {
+      reload();
+      pushToast({ title: "⚠️ Could not remove", sub: err?.response?.data?.detail || "Try again later" });
+    }
+  };
+
   // Real-time: notify on new client signup, auto-refresh on connection events
   useDocsSocket((e) => {
     if (e.type === "client:registered") {
@@ -120,6 +134,15 @@ export default function AdminHome() {
                   <div className="stat-num">{c.doc_count}</div>
                   <div className="stat-lbl">{c.doc_count === 1 ? "file" : "files"}</div>
                 </div>
+                <button
+                  type="button"
+                  className="row-remove-btn"
+                  onClick={(e) => removeConnection(e, c)}
+                  aria-label={`Remove connection with ${c.name}`}
+                  title="Remove connection"
+                >
+                  ×
+                </button>
                 <span className="client-arrow">→</span>
               </Link>
             ))}

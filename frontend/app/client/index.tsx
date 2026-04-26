@@ -9,6 +9,7 @@ import { Ionicons } from "@expo/vector-icons";
 import api, { ConnectedAdmin, initials, colorFromString } from "../../src/api";
 import { useAuth } from "../../src/auth";
 import { useDocsSocket } from "../../src/useDocsSocket";
+import { useToast } from "../../src/Toast";
 import ConnectModal from "../../src/ConnectModal";
 import { FadeInItem } from "../../src/AnimatedList";
 import { colors, gradients, radius, shadow } from "../../src/theme";
@@ -17,10 +18,35 @@ import { LinearGradient } from "expo-linear-gradient";
 export default function ClientHome() {
   const router = useRouter();
   const { user, loading: authLoading, logout } = useAuth();
+  const toast = useToast();
   const [admins, setAdmins] = useState<ConnectedAdmin[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [showConnect, setShowConnect] = useState(false);
+
+  const removeConnection = (a: ConnectedAdmin) => {
+    Alert.alert(
+      "Remove connection",
+      `Disconnect from ${a.name}?\n\nYou will no longer see their workspace. Existing documents are not deleted.`,
+      [
+        { text: "Cancel", style: "cancel" },
+        {
+          text: "Disconnect",
+          style: "destructive",
+          onPress: async () => {
+            setAdmins((prev) => prev.filter((x) => x.id !== a.id));
+            try {
+              await api.delete(`/connections/${a.id}`);
+              toast.show(`Disconnected from ${a.name}`, { kind: "success", icon: "checkmark-circle" });
+            } catch (e: any) {
+              await reload();
+              toast.show(e?.response?.data?.detail || "Failed to disconnect", { kind: "error" });
+            }
+          },
+        },
+      ],
+    );
+  };
 
   useEffect(() => {
     if (authLoading) return;
@@ -90,7 +116,7 @@ export default function ClientHome() {
         }
         renderItem={({ item: a, index }) => (
           <FadeInItem index={index}>
-            <TouchableOpacity onPress={() => router.push(`/client/${a.id}`)} activeOpacity={0.85} style={st.row}>
+            <TouchableOpacity onPress={() => router.push(`/client/${a.id}`)} onLongPress={() => removeConnection(a)} delayLongPress={400} activeOpacity={0.85} style={st.row}>
               <View style={[st.avatar, { backgroundColor: colorFromString(a.id) }]}>
                 <Text style={st.avatarText}>{initials(a.name)}</Text>
               </View>
