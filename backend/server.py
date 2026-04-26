@@ -835,8 +835,16 @@ app.add_middleware(
 
 # ============================================================
 # Static website (Vite build) — served at /api/web/*
+# We look for the built site in two locations so it works both in
+# local dev (where /app/website/dist is built by yarn) AND in the
+# deployed backend container (where only /app/backend/* ships, so we
+# keep a copy in /app/backend/website_dist that is NOT gitignored).
 # ============================================================
-WEBSITE_DIR = Path("/app/website/dist")
+WEBSITE_DIR_CANDIDATES = [
+    Path(__file__).parent / "website_dist",   # bundled with backend (deploy)
+    Path("/app/website/dist"),                 # local dev
+]
+WEBSITE_DIR = next((p for p in WEBSITE_DIR_CANDIDATES if p.exists()), None)
 
 
 class SPAStaticFiles(StaticFiles):
@@ -851,7 +859,7 @@ class SPAStaticFiles(StaticFiles):
             raise
 
 
-if WEBSITE_DIR.exists():
+if WEBSITE_DIR is not None:
     app.mount(
         "/api/web",
         SPAStaticFiles(directory=str(WEBSITE_DIR), html=True),
