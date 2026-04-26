@@ -10,6 +10,7 @@ import { Ionicons } from "@expo/vector-icons";
 import { colors, radius, gradients } from "../src/theme";
 import PressableScale from "../src/PressableScale";
 import { useAuth } from "../src/auth";
+import SecurityBackground from "../src/SecurityBackground";
 
 export default function Landing() {
   const router = useRouter();
@@ -72,6 +73,7 @@ export default function Landing() {
   return (
     <View style={styles.root}>
       <LinearGradient colors={gradients.hero} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={StyleSheet.absoluteFill} />
+      <SecurityBackground />
       <SafeAreaView style={{ flex: 1 }} edges={["top", "bottom"]}>
         <ScrollView contentContainerStyle={{ flexGrow: 1, padding: 24 }}>
           <Animated.View style={{ opacity: heroFade, transform: [{ translateY: heroSlide }], maxWidth: 640, alignSelf: "center", width: "100%" }}>

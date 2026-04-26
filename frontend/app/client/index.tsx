@@ -10,6 +10,7 @@ import api, { ConnectedAdmin, initials, colorFromString } from "../../src/api";
 import { useAuth } from "../../src/auth";
 import { useDocsSocket } from "../../src/useDocsSocket";
 import ConnectModal from "../../src/ConnectModal";
+import { FadeInItem } from "../../src/AnimatedList";
 import { colors, gradients, radius, shadow } from "../../src/theme";
 import { LinearGradient } from "expo-linear-gradient";
 
@@ -87,21 +88,23 @@ export default function ClientHome() {
             </View>
           </View>
         }
-        renderItem={({ item: a }) => (
-          <TouchableOpacity onPress={() => router.push(`/client/${a.id}`)} activeOpacity={0.85} style={st.row}>
-            <View style={[st.avatar, { backgroundColor: colorFromString(a.id) }]}>
-              <Text style={st.avatarText}>{initials(a.name)}</Text>
-            </View>
-            <View style={{ flex: 1, minWidth: 0 }}>
-              <Text style={st.name} numberOfLines={1}>{a.name}</Text>
-              <Text style={st.email} numberOfLines={1}>Admin · {a.email}</Text>
-            </View>
-            <View style={{ alignItems: "flex-end", marginRight: 8 }}>
-              <Text style={st.statNum}>{a.doc_count}</Text>
-              <Text style={st.statLbl}>{a.doc_count === 1 ? "FILE" : "FILES"}</Text>
-            </View>
-            <Ionicons name="chevron-forward" size={20} color="#80868B" />
-          </TouchableOpacity>
+        renderItem={({ item: a, index }) => (
+          <FadeInItem index={index}>
+            <TouchableOpacity onPress={() => router.push(`/client/${a.id}`)} activeOpacity={0.85} style={st.row}>
+              <View style={[st.avatar, { backgroundColor: colorFromString(a.id) }]}>
+                <Text style={st.avatarText}>{initials(a.name)}</Text>
+              </View>
+              <View style={{ flex: 1, minWidth: 0 }}>
+                <Text style={st.name} numberOfLines={1}>{a.name}</Text>
+                <Text style={st.email} numberOfLines={1}>Admin · {a.email}</Text>
+              </View>
+              <View style={{ alignItems: "flex-end", marginRight: 8 }}>
+                <Text style={st.statNum}>{a.doc_count}</Text>
+                <Text style={st.statLbl}>{a.doc_count === 1 ? "FILE" : "FILES"}</Text>
+              </View>
+              <Ionicons name="chevron-forward" size={20} color="#80868B" />
+            </TouchableOpacity>
+          </FadeInItem>
         )}
         ListEmptyComponent={loading ? (
           <View style={st.empty}><ActivityIndicator color={colors.primary} /></View>

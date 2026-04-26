@@ -315,6 +315,160 @@ main {
   .security-bg .sec-icon { opacity: 0.10; }
 }
 
+/* ============================================================
+ * Page transitions, card-tap, icon, and modal animations
+ * Applied across all routes EXCEPT Landing (which has the
+ * SecurityBackground hero treatment). Keeps interactions snappy
+ * and gives every screen a polished entry feel.
+ * ============================================================ */
+
+/* (1) Page enter — fade + slight slide-up for every page-shell mount. */
+@keyframes pageEnter {
+  0%   { opacity: 0; transform: translateY(14px); }
+  100% { opacity: 1; transform: translateY(0); }
+}
+.app-shell,
+.login-card,
+.modal-card {
+  animation: pageEnter 0.42s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+/* (2) Choose-card / doc-card / detect-card / generic card press flows. */
+.choose-card,
+.doc-card,
+.detect-card,
+.card.card-md {
+  transition:
+    transform 0.28s cubic-bezier(0.22, 1, 0.36, 1),
+    box-shadow 0.28s cubic-bezier(0.22, 1, 0.36, 1),
+    border-color 0.22s ease;
+  will-change: transform;
+}
+.choose-card:hover,
+.doc-card:hover,
+.detect-card:hover,
+.card.card-md:hover {
+  transform: translateY(-3px);
+  box-shadow: 0 14px 28px rgba(15, 23, 42, 0.10), 0 4px 10px rgba(15, 23, 42, 0.06);
+}
+.choose-card:active,
+.doc-card:active,
+.detect-card:active,
+.card.card-md:active {
+  transform: translateY(-1px) scale(0.985);
+  transition-duration: 0.10s;
+}
+
+/* (3) List rows — staggered fade-in on mount (admin client list, doc list). */
+@keyframes listRowEnter {
+  0%   { opacity: 0; transform: translateY(8px); }
+  100% { opacity: 1; transform: translateY(0); }
+}
+.client-row,
+.admin-row,
+.doc-card,
+.cat-tile,
+.chip-row > * {
+  animation: listRowEnter 0.4s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+.client-row:nth-child(2), .admin-row:nth-child(2), .doc-card:nth-child(2) { animation-delay: 0.04s; }
+.client-row:nth-child(3), .admin-row:nth-child(3), .doc-card:nth-child(3) { animation-delay: 0.08s; }
+.client-row:nth-child(4), .admin-row:nth-child(4), .doc-card:nth-child(4) { animation-delay: 0.12s; }
+.client-row:nth-child(5), .admin-row:nth-child(5), .doc-card:nth-child(5) { animation-delay: 0.16s; }
+.client-row:nth-child(6), .admin-row:nth-child(6), .doc-card:nth-child(6) { animation-delay: 0.20s; }
+.client-row:nth-child(n+7), .admin-row:nth-child(n+7), .doc-card:nth-child(n+7) { animation-delay: 0.24s; }
+
+/* (4) Modal pop-in — scale + fade with a soft spring feel. */
+@keyframes modalBackdrop {
+  0%   { opacity: 0; }
+  100% { opacity: 1; }
+}
+@keyframes modalCardIn {
+  0%   { opacity: 0; transform: translateY(16px) scale(0.94); }
+  60%  { opacity: 1; transform: translateY(-2px) scale(1.01); }
+  100% { opacity: 1; transform: translateY(0) scale(1); }
+}
+.modal-back {
+  animation: modalBackdrop 0.20s ease both;
+}
+.modal-card {
+  animation: modalCardIn 0.36s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+/* (5) Icon transitions — buttons, tabs, action icons. */
+.btn,
+.btn-primary,
+.btn-ghost,
+.btn-sm,
+.act-btn {
+  transition: transform 0.18s cubic-bezier(0.22, 1, 0.36, 1),
+              box-shadow 0.22s ease,
+              background-color 0.22s ease,
+              opacity 0.18s ease;
+}
+.btn:active,
+.act-btn:active {
+  transform: scale(0.96);
+  transition-duration: 0.08s;
+}
+.btn svg,
+.act-btn svg,
+.choose-arrow,
+.client-arrow {
+  transition: transform 0.30s cubic-bezier(0.22, 1, 0.36, 1);
+}
+.btn:hover svg,
+.act-btn:hover svg {
+  transform: translateX(2px);
+}
+.choose-card:hover .choose-arrow,
+.client-row:hover .client-arrow {
+  transform: translateX(4px);
+}
+
+/* (6) Live/sync/notification icon — gentle pulse ring. */
+@keyframes liveDotPulse {
+  0%   { box-shadow: 0 0 0 0 rgba(196, 30, 58, 0.55); }
+  70%  { box-shadow: 0 0 0 8px rgba(196, 30, 58, 0); }
+  100% { box-shadow: 0 0 0 0 rgba(196, 30, 58, 0); }
+}
+.live-dot,
+.live-pill .dot {
+  animation: liveDotPulse 1.8s ease-out infinite;
+}
+
+/* (7) Tab row — animated underline / fill transition */
+.tab-row .tab,
+.admin-tabs .tab {
+  position: relative;
+  transition: color 0.22s ease, background-color 0.22s ease, transform 0.18s ease;
+}
+.tab-row .tab:active,
+.admin-tabs .tab:active {
+  transform: scale(0.97);
+}
+
+/* (8) Honour reduced-motion for the new transitions too. */
+@media (prefers-reduced-motion: reduce) {
+  .app-shell,
+  .login-card,
+  .modal-card,
+  .modal-back,
+  .client-row,
+  .admin-row,
+  .doc-card,
+  .cat-tile,
+  .chip-row > *,
+  .live-dot,
+  .live-pill .dot { animation: none !important; }
+  .choose-card,
+  .doc-card,
+  .detect-card,
+  .card.card-md,
+  .btn,
+  .act-btn { transition: none !important; }
+}
+
 /* Download Android APK CTA */
 .apk-cta {
   display: flex; align-items: center; gap: 14px;

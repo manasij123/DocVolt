@@ -1,6 +1,7 @@
 import { useEffect } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { getToken, getUser } from "../api";
+import SecurityBackground from "../SecurityBackground";
 
 const APK_URL = (import.meta.env.VITE_APK_URL as string | undefined)
   || "https://expo.dev/artifacts/eas/e6jGMGCfQQ1arLMmiJHdaq.apk";
@@ -14,6 +15,7 @@ export default function Landing() {
 
   return (
     <div className="landing">
+      <SecurityBackground />
       <div className="landing-inner container">
         <div className="hero-block">
           <div className="hero-logo">DV</div>
