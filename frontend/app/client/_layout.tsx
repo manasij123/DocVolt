@@ -130,6 +130,9 @@ const styles = StyleSheet.create({
     backgroundColor: colors.surface,
     borderBottomWidth: 1,
     borderBottomColor: colors.border,
+    maxWidth: 1200,
+    width: "100%",
+    alignSelf: "center",
   },
   brandWrap: {
     flexDirection: "row",

@@ -132,6 +132,9 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "space-between",
     paddingHorizontal: 18,
+    maxWidth: 1200,
+    width: "100%",
+    alignSelf: "center",
   },
   brandRow: { flexDirection: "row", alignItems: "center", gap: 10 },
   brandIcon: {

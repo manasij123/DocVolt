@@ -198,7 +198,7 @@ export default function UploadScreen() {
   const detectGrad = formatLooksGood ? categoryGradients[detectedCategory] : (["#F59E0B", "#D97706"] as const);
 
   return (
-    <ScrollView style={styles.root} contentContainerStyle={{ paddingBottom: 60 }}>
+    <ScrollView style={styles.root} contentContainerStyle={[styles.inner, { paddingBottom: 60 }]}>
       <Text style={styles.title}>Upload PDF</Text>
       <Text style={styles.subtitle}>
         Pick a PDF — the app will scan its name and tell you which tab/year/month it belongs to.
@@ -475,7 +475,13 @@ export default function UploadScreen() {
 }
 
 const styles = StyleSheet.create({
-  root: { flex: 1, backgroundColor: colors.background, padding: 22 },
+  root: { flex: 1, backgroundColor: colors.background },
+  inner: {
+    padding: 22,
+    maxWidth: 900,
+    width: "100%",
+    alignSelf: "center",
+  },
   title: { fontSize: 26, fontWeight: "800", color: colors.textPrimary, letterSpacing: -0.6 },
   subtitle: { fontSize: 13, color: colors.textSecondary, marginTop: 4, marginBottom: 22, lineHeight: 18 },
 

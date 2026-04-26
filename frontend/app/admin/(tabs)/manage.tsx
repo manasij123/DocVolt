@@ -159,6 +159,7 @@ export default function ManageScreen() {
 
   return (
     <View style={styles.root}>
+    <View style={styles.inner}>
       <Text style={styles.title}>Manage Documents</Text>
       <Text style={styles.subtitle}>{docs.length} total</Text>
 
@@ -203,6 +204,7 @@ export default function ManageScreen() {
           </View>
         }
       />
+    </View>
 
       <Modal visible={!!editing} animationType="slide" transparent onRequestClose={closeEdit}>
         <KeyboardAvoidingView
@@ -288,6 +290,7 @@ export default function ManageScreen() {
 
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: colors.background },
+  inner: { flex: 1, maxWidth: 1100, width: "100%", alignSelf: "center" },
   title: { fontSize: 24, fontWeight: "700", color: colors.textPrimary, paddingHorizontal: 24, paddingTop: 16 },
   subtitle: { fontSize: 13, color: colors.textSecondary, paddingHorizontal: 24, marginTop: 4 },
   filterRow: { paddingHorizontal: 24, paddingVertical: 14, gap: 8 },

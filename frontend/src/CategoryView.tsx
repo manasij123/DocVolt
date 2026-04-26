@@ -118,6 +118,8 @@ export default function CategoryView({ category }: Props) {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
 
+  const { isDesktop, docColumns, listMaxWidth } = useResponsive();
+
   const headerFade = useRef(new Animated.Value(0)).current;
   const headerSlide = useRef(new Animated.Value(20)).current;
 
@@ -163,6 +165,7 @@ export default function CategoryView({ category }: Props) {
 
   return (
     <View style={styles.container}>
+      <View style={[styles.scroller, { maxWidth: listMaxWidth, alignSelf: "center", width: "100%" }]}>
       {/* Hero header card */}
       <Animated.View
         style={[
@@ -239,11 +242,18 @@ export default function CategoryView({ category }: Props) {
           </View>
 
           <FlatList
+            key={`grid-${docColumns}`}
             data={filtered}
             keyExtractor={(d) => d.id}
-            renderItem={({ item, index }) => <DocCard doc={item} index={index} />}
+            numColumns={docColumns}
+            columnWrapperStyle={docColumns > 1 ? { gap: 14 } : undefined}
+            renderItem={({ item, index }) => (
+              <View style={docColumns > 1 ? { flex: 1 } : undefined}>
+                <DocCard doc={item} index={index} />
+              </View>
+            )}
             contentContainerStyle={styles.docList}
-            ItemSeparatorComponent={() => <View style={{ height: 12 }} />}
+            ItemSeparatorComponent={() => <View style={{ height: 14 }} />}
             refreshControl={
               <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.accent} />
             }
@@ -255,13 +265,15 @@ export default function CategoryView({ category }: Props) {
           />
         </>
       )}
+      </View>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.background },
-  heroWrap: { paddingHorizontal: 18, paddingTop: 14, paddingBottom: 4 },
+  scroller: { flex: 1, paddingHorizontal: 6 },
+  heroWrap: { paddingHorizontal: 12, paddingTop: 14, paddingBottom: 4 },
   hero: {
     borderRadius: radius.xl,
     padding: 20,

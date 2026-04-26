@@ -15,12 +15,14 @@ import { Ionicons } from "@expo/vector-icons";
 import { colors, radius, gradients } from "../src/theme";
 import PressableScale from "../src/PressableScale";
 import { getLastRole, getToken, setLastRole } from "../src/api";
+import { useResponsive } from "../src/useResponsive";
 
 const { width } = Dimensions.get("window");
 
 export default function Landing() {
   const router = useRouter();
   const [bootstrapping, setBootstrapping] = useState(true);
+  const { isDesktop } = useResponsive();
 
   const heroFade = useRef(new Animated.Value(0)).current;
   const heroSlide = useRef(new Animated.Value(40)).current;
@@ -151,7 +153,7 @@ export default function Landing() {
 
       <SafeAreaView style={styles.safe} edges={["top", "bottom"]}>
         <Animated.View
-          style={[styles.header, { opacity: heroFade, transform: [{ translateY: heroSlide }] }]}
+          style={[styles.header, { opacity: heroFade, transform: [{ translateY: heroSlide }], maxWidth: 640, width: "100%", alignSelf: "center" }]}
         >
           <LinearGradient
             colors={gradients.primary}
@@ -179,7 +181,7 @@ export default function Landing() {
           </View>
         </Animated.View>
 
-        <View style={styles.bottom}>
+        <View style={[styles.bottom, { maxWidth: 640, width: "100%", alignSelf: "center" }]}>
           <Text style={styles.chooseText}>Continue as</Text>
 
           <Animated.View style={cardTransform(card1)}>
