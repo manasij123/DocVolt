@@ -1,21 +1,16 @@
 import { useEffect } from "react";
 import { Link, useNavigate } from "react-router-dom";
-import { getRole, getToken, setRole } from "../api";
+import { getToken, getUser } from "../api";
 
 export default function Landing() {
   const navigate = useNavigate();
 
-  // Persistent login (WhatsApp-style): if user has a saved role, send them straight in.
   useEffect(() => {
-    const role = getRole();
-    if (role === "client") navigate("/client", { replace: true });
-    else if (role === "admin" && getToken()) navigate("/admin", { replace: true });
+    const u = getUser();
+    if (u && getToken()) {
+      navigate(u.role === "admin" ? "/admin" : "/client", { replace: true });
+    }
   }, [navigate]);
-
-  const goClient = () => {
-    setRole("client");
-    navigate("/client");
-  };
 
   return (
     <div className="landing">
@@ -26,32 +21,42 @@ export default function Landing() {
           <p className="hero-tagline">
             Organised PDF storage for your team — Monthly Returns,
             Forwarding Letters, IFA Reports.<br />
-            <strong>Same data on web, mobile and desktop — instantly synced.</strong>
+            <strong>Per-client privacy. Real-time sync. Same data on web & mobile.</strong>
           </p>
           <div className="hero-pills">
             <span className="hero-pill">⚡ Auto-categorise</span>
             <span className="hero-pill">🔗 One-tap share</span>
             <span className="hero-pill">🔴 Real-time sync</span>
+            <span className="hero-pill">🔒 Per-client privacy</span>
           </div>
         </div>
 
         <div className="choose-stack">
           <span className="choose-label">Continue as</span>
 
-          <button className="choose-card choose-client" onClick={goClient}>
+          <Link to="/client/login" className="choose-card choose-client">
             <div className="choose-icon">👥</div>
             <div className="choose-text">
-              <h4>Client</h4>
-              <p>Browse and share documents</p>
+              <h4>Client — Login</h4>
+              <p>Browse documents shared with you</p>
             </div>
             <span className="choose-arrow">→</span>
-          </button>
+          </Link>
+
+          <Link to="/client/register" className="choose-card choose-client-alt">
+            <div className="choose-icon">✨</div>
+            <div className="choose-text">
+              <h4>Client — Register</h4>
+              <p>Create a new client account in 30 seconds</p>
+            </div>
+            <span className="choose-arrow">→</span>
+          </Link>
 
           <Link to="/admin/login" className="choose-card choose-admin">
             <div className="choose-icon">🛡️</div>
             <div className="choose-text">
               <h4>Admin</h4>
-              <p>Upload & manage documents</p>
+              <p>Upload & manage documents per client</p>
             </div>
             <span className="choose-arrow">→</span>
           </Link>

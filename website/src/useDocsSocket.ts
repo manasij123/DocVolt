@@ -1,15 +1,12 @@
 import { useEffect, useRef } from "react";
+import { getToken } from "./api";
 
-/**
- * useDocsSocket — connects to the backend's WebSocket channel under /api/ws
- * and runs the supplied handler whenever the server announces that any
- * document was created / updated / deleted. Auto-reconnects on disconnect.
- */
 export type DocsEvent =
-  | { type: "hello" }
+  | { type: "hello"; user?: any }
   | { type: "doc:created"; doc: any }
   | { type: "doc:updated"; doc: any }
-  | { type: "doc:deleted"; id: string };
+  | { type: "doc:deleted"; id: string; admin_id?: string; client_id?: string }
+  | { type: "client:registered"; client: any };
 
 export function useDocsSocket(onEvent: (e: DocsEvent) => void) {
   const handlerRef = useRef(onEvent);
@@ -22,32 +19,21 @@ export function useDocsSocket(onEvent: (e: DocsEvent) => void) {
 
     const wsUrl = () => {
       const proto = window.location.protocol === "https:" ? "wss:" : "ws:";
-      return `${proto}//${window.location.host}/api/ws`;
+      const token = getToken();
+      const q = token ? `?token=${encodeURIComponent(token)}` : "";
+      return `${proto}//${window.location.host}/api/ws${q}`;
     };
 
     const connect = () => {
       if (stopped) return;
-      try {
-        ws = new WebSocket(wsUrl());
-      } catch {
-        scheduleReconnect();
-        return;
-      }
-      ws.onopen = () => {
-        retry = 0;
-      };
+      if (!getToken()) { scheduleReconnect(); return; }
+      try { ws = new WebSocket(wsUrl()); } catch { scheduleReconnect(); return; }
+      ws.onopen = () => { retry = 0; };
       ws.onmessage = (m) => {
-        try {
-          const data = JSON.parse(m.data);
-          handlerRef.current(data);
-        } catch {
-          /* ignore malformed payloads */
-        }
+        try { handlerRef.current(JSON.parse(m.data)); } catch { /* ignore */ }
       };
       ws.onclose = () => scheduleReconnect();
-      ws.onerror = () => {
-        try { ws?.close(); } catch { /* noop */ }
-      };
+      ws.onerror = () => { try { ws?.close(); } catch { /* noop */ } };
     };
 
     const scheduleReconnect = () => {
@@ -58,9 +44,6 @@ export function useDocsSocket(onEvent: (e: DocsEvent) => void) {
     };
 
     connect();
-    return () => {
-      stopped = true;
-      try { ws?.close(); } catch { /* noop */ }
-    };
+    return () => { stopped = true; try { ws?.close(); } catch { /* noop */ } };
   }, []);
 }

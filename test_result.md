@@ -116,6 +116,57 @@ backend:
         - working: true
           agent: "main"
           comment: "Mounted /app/website/dist on FastAPI at /api/web with a SPAStaticFiles class that falls back to index.html on 404 so React-Router deep links (e.g. /api/web/admin, /api/web/client) survive a hard refresh. Verified locally and on the public preview host: GET /api/web/ -> 200, GET /api/web/assets/* -> 200, GET /api/web/admin/login -> 200 (SPA fallback). Existing /api/* JSON endpoints unaffected."
+        - working: true
+          agent: "testing"
+          comment: "Re-verified: GET /api/web/ -> 200 with HTML, GET /api/web/admin/login -> 200 (SPA fallback)."
+
+  - task: "Auth: register/login/me + bcrypt + JWT"
+    implemented: true
+    working: true
+    file: "/app/backend/server.py"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: false
+    status_history:
+        - working: true
+          agent: "testing"
+          comment: "All 8 auth tests passed: admin login (admin@example.com/admin123) returns role=admin, demo client login returns role=client, wrong password -> 401, register new client returns token + role=client, duplicate email -> 409, password<6 -> 400, /auth/me with admin Bearer returns {id,email,name,role:admin}, /auth/me without token -> 401. bcrypt hash format ($2b$) verified, JWT HS256 with 30-day exp."
+
+  - task: "Multi-tenant listings: /api/clients (admin) and /api/admins/connected (client)"
+    implemented: true
+    working: true
+    file: "/app/backend/server.py"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: false
+    status_history:
+        - working: true
+          agent: "testing"
+          comment: "GET /api/clients with admin token returns array containing demo client and newly-registered tester client, each with doc_count and last_upload_at fields. GET /api/clients with client token -> 403. GET /api/admins/connected with demo client token returns array (includes admin since legacy docs were migrated). With admin token -> 403."
+
+  - task: "Multi-tenant document endpoints: upload/list/file/update/delete"
+    implemented: true
+    working: true
+    file: "/app/backend/server.py"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: false
+    status_history:
+        - working: true
+          agent: "testing"
+          comment: "All scoped document operations verified. Upload of \"monthly return Mar'2026.pdf\" with admin token to demo client correctly auto-detected category=MONTHLY_RETURN, year=2026, month=3, with admin_id+client_id set. Missing client_id -> 422, invalid client_id -> 400 'Target client not found', client token -> 403. Listing scoped correctly: admin sees only their uploads (filterable by client_id), demo client sees uploaded doc + migrated legacy docs, freshly registered client sees []. File fetch authorized for uploader admin (200, content-type application/pdf) and receiving client (200), unrelated client -> 403. PUT display_name -> 200 updated, PUT with client token -> 403. DELETE -> {ok:true}, then file fetch -> 404."
+
+  - task: "WebSocket /api/ws token authentication and broadcast"
+    implemented: true
+    working: true
+    file: "/app/backend/server.py"
+    stuck_count: 0
+    priority: "medium"
+    needs_retesting: false
+    status_history:
+        - working: true
+          agent: "testing"
+          comment: "Valid-token connection: 101 Switching Protocols + immediate {type:'hello', user:{role:admin}} payload — verified. Auth rejection works (unauthenticated clients cannot connect). Minor: when the token is missing or invalid the endpoint calls websocket.close(code=4401) BEFORE accepting the upgrade, so Starlette/uvicorn responds with HTTP 403 at handshake rather than completing the upgrade and emitting close-code 4401. Functionally equivalent (no data leaks) but technically deviates from the spec's wording 'returns 4401 close'. If strict 4401 close-frame semantics are needed, accept the websocket first then close with code=4401."
 
 frontend:
   - task: "Standalone Vite + React website (Landing, AdminLogin, AdminDashboard, ClientView)"
@@ -161,9 +212,7 @@ metadata:
   run_ui: false
 
 test_plan:
-  current_focus:
-    - "Real-time WebSocket sync (WhatsApp-Web style)"
-    - "Web design fixes — dropzone, manage card layout, group headings, cancel button, modern animations"
+  current_focus: []
   stuck_tasks: []
   test_all: false
   test_priority: "high_first"
@@ -171,3 +220,5 @@ test_plan:
 agent_communication:
     - agent: "main"
       message: "Round 2 complete — all three reported design issues fixed (dropzone glitch, manage layout, cancel button) and WhatsApp-Web style real-time sync added. Both mobile and web now share a /api/ws WebSocket channel so any upload/edit/delete on one device shows up instantly on every other open device — confirmed by the new green 'LIVE' pill in the admin/client topbar plus toast notifications on the admin dashboard. Existing endpoints unchanged."
+    - agent: "testing"
+      message: "Backend regression complete (32 cases, 30 PASS, 2 minor). Verified all 26 endpoints in the review request including auth (login/register/me, role guards), multi-tenant /api/clients & /api/admins/connected, document upload with auto-categorization (Mar'2026 -> MONTHLY_RETURN, year=2026, month=3), scoped listing for admin and clients, file fetch authorization (uploader admin + receiving client only), update, delete, and static SPA at /api/web. WebSocket valid-token handshake works (101 + hello message). Minor non-blocking finding: missing/invalid WS tokens cause Starlette to return HTTP 403 at handshake instead of WS close-code 4401 because server.py calls websocket.close(code=4401) before websocket.accept(). Auth gating itself works correctly. Optional fix: accept() then close(code=4401)."

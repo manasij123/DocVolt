@@ -7,14 +7,13 @@ load_dotenv(ROOT_DIR / ".env")
 
 import re
 import uuid
+import asyncio
+import json
 import logging
 import bcrypt
 import jwt
 from datetime import datetime, timezone, timedelta
 from typing import List, Optional
-
-import asyncio
-import json
 
 from fastapi import FastAPI, APIRouter, UploadFile, File, Form, HTTPException, Depends, Request, WebSocket, WebSocketDisconnect
 from fastapi.responses import StreamingResponse, FileResponse
@@ -23,7 +22,7 @@ from starlette.exceptions import HTTPException as StarletteHTTPException
 from starlette.middleware.cors import CORSMiddleware
 from motor.motor_asyncio import AsyncIOMotorClient, AsyncIOMotorGridFSBucket
 from bson import ObjectId
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, EmailStr
 
 
 # ============================================================
@@ -64,33 +63,49 @@ api_router = APIRouter(prefix="/api")
 
 
 # ============================================================
-# WebSocket connection manager (real-time sync, WhatsApp-Web style)
+# WebSocket connection manager (per-user broadcast)
 # ============================================================
 class ConnectionManager:
+    """Tracks active sockets and lets us broadcast either to everyone
+    or only to a particular role / user — enabling per-client privacy."""
+
     def __init__(self):
-        self.active: list[WebSocket] = []
+        # entry: (websocket, user_id, role)
+        self.active: list[tuple[WebSocket, str, str]] = []
         self._lock = asyncio.Lock()
 
-    async def connect(self, ws: WebSocket):
+    async def connect(self, ws: WebSocket, user_id: str, role: str):
         await ws.accept()
         async with self._lock:
-            self.active.append(ws)
+            self.active.append((ws, user_id, role))
 
     async def disconnect(self, ws: WebSocket):
         async with self._lock:
-            if ws in self.active:
-                self.active.remove(ws)
+            self.active = [t for t in self.active if t[0] is not ws]
+
+    async def _send(self, ws: WebSocket, payload: dict):
+        try:
+            await ws.send_text(json.dumps(payload, default=str))
+        except Exception:
+            pass
+
+    async def send_to_user(self, user_id: str, payload: dict):
+        async with self._lock:
+            targets = [t[0] for t in self.active if t[1] == user_id]
+        for ws in targets:
+            await self._send(ws, payload)
+
+    async def send_to_role(self, role: str, payload: dict):
+        async with self._lock:
+            targets = [t[0] for t in self.active if t[2] == role]
+        for ws in targets:
+            await self._send(ws, payload)
 
     async def broadcast(self, payload: dict):
-        msg = json.dumps(payload, default=str)
         async with self._lock:
-            targets = list(self.active)
+            targets = [t[0] for t in self.active]
         for ws in targets:
-            try:
-                await ws.send_text(msg)
-            except Exception:
-                # silently drop failed sockets — they will be cleaned on next disconnect
-                pass
+            await self._send(ws, payload)
 
 
 manager = ConnectionManager()
@@ -104,22 +119,17 @@ class LoginRequest(BaseModel):
     password: str
 
 
+class RegisterRequest(BaseModel):
+    email: EmailStr
+    password: str
+    name: str
+    role: Optional[str] = "client"  # "client" or "admin"
+
+
 class TokenResponse(BaseModel):
     access_token: str
     token_type: str = "bearer"
     user: dict
-
-
-class DocumentMeta(BaseModel):
-    id: str
-    original_name: str
-    display_name: str
-    category: str
-    year: int
-    month: Optional[int]
-    month_label: Optional[str]
-    size: int
-    uploaded_at: str
 
 
 class DocumentUpdate(BaseModel):
@@ -140,33 +150,65 @@ def verify_password(plain: str, hashed: str) -> bool:
     return bcrypt.checkpw(plain.encode("utf-8"), hashed.encode("utf-8"))
 
 
-def create_access_token(user_id: str, email: str) -> str:
+def create_access_token(user_id: str, email: str, role: str) -> str:
     payload = {
         "sub": user_id,
         "email": email,
-        "exp": datetime.now(timezone.utc) + timedelta(days=7),
+        "role": role,
+        "exp": datetime.now(timezone.utc) + timedelta(days=30),
         "type": "access",
     }
     return jwt.encode(payload, JWT_SECRET, algorithm=JWT_ALGORITHM)
 
 
-async def get_current_admin(request: Request) -> dict:
+def safe_user(user: dict) -> dict:
+    return {
+        "id": user["id"],
+        "email": user["email"],
+        "name": user.get("name") or user["email"].split("@")[0],
+        "role": user["role"],
+    }
+
+
+def _decode_token_or_none(token: Optional[str]) -> Optional[dict]:
+    if not token:
+        return None
+    try:
+        return jwt.decode(token, JWT_SECRET, algorithms=[JWT_ALGORITHM])
+    except jwt.PyJWTError:
+        return None
+
+
+async def _user_from_request(request: Request) -> Optional[dict]:
     auth_header = request.headers.get("Authorization", "")
     if not auth_header.startswith("Bearer "):
+        return None
+    payload = _decode_token_or_none(auth_header[7:])
+    if not payload or payload.get("type") != "access":
+        return None
+    user = await db.users.find_one({"id": payload["sub"]}, {"_id": 0, "password_hash": 0})
+    return user
+
+
+async def get_current_user(request: Request) -> dict:
+    user = await _user_from_request(request)
+    if not user:
         raise HTTPException(status_code=401, detail="Not authenticated")
-    token = auth_header[7:]
-    try:
-        payload = jwt.decode(token, JWT_SECRET, algorithms=[JWT_ALGORITHM])
-        if payload.get("type") != "access":
-            raise HTTPException(status_code=401, detail="Invalid token type")
-        user = await db.users.find_one({"id": payload["sub"]}, {"_id": 0, "password_hash": 0})
-        if not user or user.get("role") != "admin":
-            raise HTTPException(status_code=401, detail="Not authorized")
-        return user
-    except jwt.ExpiredSignatureError:
-        raise HTTPException(status_code=401, detail="Token expired")
-    except jwt.InvalidTokenError:
-        raise HTTPException(status_code=401, detail="Invalid token")
+    return user
+
+
+async def get_current_admin(request: Request) -> dict:
+    user = await get_current_user(request)
+    if user.get("role") != "admin":
+        raise HTTPException(status_code=403, detail="Admin access required")
+    return user
+
+
+async def get_current_client(request: Request) -> dict:
+    user = await get_current_user(request)
+    if user.get("role") != "client":
+        raise HTTPException(status_code=403, detail="Client access required")
+    return user
 
 
 # ============================================================
@@ -184,12 +226,8 @@ def categorize_filename(name: str) -> str:
 
 
 def extract_month_year(name: str):
-    """Extract month (int) and year (int) from filename like Feb'2026, Feb'26."""
     n = name.replace("_", " ").replace("-", " ")
-    # patterns like: Feb'2026, Feb'26, Feb 2026, Feb 26, February 2026
-    pattern = re.compile(
-        r"\b([A-Za-z]{3,9})\s*['\u2019]?\s*(\d{2,4})(?!\d)"
-    )
+    pattern = re.compile(r"\b([A-Za-z]{3,9})\s*['\u2019]?\s*(\d{2,4})(?!\d)")
     for match in pattern.finditer(n):
         mon_str = match.group(1).lower()
         year_str = match.group(2)
@@ -200,7 +238,6 @@ def extract_month_year(name: str):
                 year += 2000
             if 1900 < year < 2200:
                 return month, year
-    # fallback: standalone year
     year_match = re.search(r"\b(20\d{2})\b", n)
     if year_match:
         return None, int(year_match.group(1))
@@ -227,15 +264,55 @@ def doc_to_meta(doc: dict) -> dict:
         "month_label": month_label(doc.get("month")),
         "size": doc.get("size", 0),
         "uploaded_at": doc.get("uploaded_at"),
+        "admin_id": doc.get("admin_id"),
+        "client_id": doc.get("client_id"),
     }
 
 
 # ============================================================
-# Routes
+# Auth routes
 # ============================================================
 @api_router.get("/")
 async def root():
-    return {"message": "PDF Storage API"}
+    return {"message": "DocVault API"}
+
+
+@api_router.post("/auth/register", response_model=TokenResponse)
+async def register(payload: RegisterRequest):
+    """Anyone can self-register as a client. Admin role is also permitted
+    to support multi-admin tenancy (per user request)."""
+    role = (payload.role or "client").lower()
+    if role not in ("client", "admin"):
+        raise HTTPException(status_code=400, detail="Invalid role")
+
+    email = payload.email.strip().lower()
+    if await db.users.find_one({"email": email}):
+        raise HTTPException(status_code=409, detail="Email already registered")
+
+    if len(payload.password) < 6:
+        raise HTTPException(status_code=400, detail="Password must be at least 6 characters")
+    if not payload.name.strip():
+        raise HTTPException(status_code=400, detail="Name is required")
+
+    user = {
+        "id": str(uuid.uuid4()),
+        "email": email,
+        "password_hash": hash_password(payload.password),
+        "name": payload.name.strip(),
+        "role": role,
+        "created_at": datetime.now(timezone.utc).isoformat(),
+    }
+    await db.users.insert_one(user)
+    token = create_access_token(user["id"], user["email"], user["role"])
+
+    # Notify all admins of a new client registration
+    if role == "client":
+        await manager.send_to_role("admin", {
+            "type": "client:registered",
+            "client": safe_user(user),
+        })
+
+    return TokenResponse(access_token=token, user=safe_user(user))
 
 
 @api_router.post("/auth/login", response_model=TokenResponse)
@@ -244,19 +321,86 @@ async def login(payload: LoginRequest):
     user = await db.users.find_one({"email": email})
     if not user or not verify_password(payload.password, user["password_hash"]):
         raise HTTPException(status_code=401, detail="Invalid email or password")
-    token = create_access_token(user["id"], user["email"])
-    safe_user = {"id": user["id"], "email": user["email"], "name": user.get("name"), "role": user["role"]}
-    return TokenResponse(access_token=token, user=safe_user)
+    token = create_access_token(user["id"], user["email"], user["role"])
+    return TokenResponse(access_token=token, user=safe_user(user))
 
 
 @api_router.get("/auth/me")
-async def me(current=Depends(get_current_admin)):
-    return current
+async def me(current=Depends(get_current_user)):
+    return safe_user(current)
 
 
+# ============================================================
+# Clients & Admins listing
+# ============================================================
+@api_router.get("/clients")
+async def list_clients(current=Depends(get_current_admin)):
+    """All registered clients. For each, include how many documents the
+    *current admin* has uploaded for them — so the admin can see who is
+    actually 'under' them."""
+    clients = await db.users.find(
+        {"role": "client"}, {"_id": 0, "password_hash": 0}
+    ).sort("created_at", -1).to_list(2000)
+
+    if not clients:
+        return []
+
+    pipeline = [
+        {"$match": {"admin_id": current["id"]}},
+        {"$group": {"_id": "$client_id", "count": {"$sum": 1}, "last": {"$max": "$uploaded_at"}}},
+    ]
+    counts = {c["_id"]: c async for c in db.documents.aggregate(pipeline)}
+
+    out = []
+    for c in clients:
+        info = counts.get(c["id"], None)
+        out.append({
+            **safe_user(c),
+            "created_at": c.get("created_at"),
+            "doc_count": (info or {}).get("count", 0),
+            "last_upload_at": (info or {}).get("last"),
+        })
+    return out
+
+
+@api_router.get("/admins/connected")
+async def connected_admins(current=Depends(get_current_client)):
+    """Admins who have uploaded at least one document for the current client."""
+    pipeline = [
+        {"$match": {"client_id": current["id"]}},
+        {"$group": {"_id": "$admin_id", "count": {"$sum": 1}, "last": {"$max": "$uploaded_at"}}},
+    ]
+    rows = []
+    async for r in db.documents.aggregate(pipeline):
+        rows.append(r)
+    if not rows:
+        return []
+    admin_ids = [r["_id"] for r in rows]
+    admins = await db.users.find(
+        {"id": {"$in": admin_ids}, "role": "admin"}, {"_id": 0, "password_hash": 0}
+    ).to_list(1000)
+    by_id = {a["id"]: a for a in admins}
+    out = []
+    for r in rows:
+        a = by_id.get(r["_id"])
+        if not a:
+            continue
+        out.append({
+            **safe_user(a),
+            "doc_count": r["count"],
+            "last_upload_at": r["last"],
+        })
+    out.sort(key=lambda x: x.get("last_upload_at") or "", reverse=True)
+    return out
+
+
+# ============================================================
+# Documents
+# ============================================================
 @api_router.post("/documents/upload")
 async def upload_document(
     file: UploadFile = File(...),
+    client_id: str = Form(...),
     category_override: Optional[str] = Form(None),
     year_override: Optional[int] = Form(None),
     month_override: Optional[int] = Form(None),
@@ -265,10 +409,14 @@ async def upload_document(
     if not file.filename.lower().endswith(".pdf"):
         raise HTTPException(status_code=400, detail="Only PDF files are allowed")
 
+    # Validate target client exists
+    target = await db.users.find_one({"id": client_id, "role": "client"}, {"_id": 0, "password_hash": 0})
+    if not target:
+        raise HTTPException(status_code=400, detail="Target client not found")
+
     file_id = str(uuid.uuid4())
     contents = await file.read()
 
-    # Store in GridFS (persistent across restarts)
     gridfs_id = await fs_bucket.upload_from_stream(
         file.filename,
         contents,
@@ -287,6 +435,8 @@ async def upload_document(
 
     doc = {
         "id": file_id,
+        "admin_id": current["id"],
+        "client_id": client_id,
         "original_name": file.filename,
         "display_name": file.filename.rsplit(".", 1)[0],
         "category": category,
@@ -295,49 +445,72 @@ async def upload_document(
         "size": len(contents),
         "gridfs_id": str(gridfs_id),
         "uploaded_at": datetime.now(timezone.utc).isoformat(),
-        "uploaded_by": current["id"],
     }
     await db.documents.insert_one(doc)
     doc.pop("_id", None)
     meta = doc_to_meta(doc)
-    await manager.broadcast({"type": "doc:created", "doc": meta})
+
+    # Live updates: send to the admin (any of their open consoles) and the receiving client
+    payload = {"type": "doc:created", "doc": meta}
+    await manager.send_to_user(current["id"], payload)
+    await manager.send_to_user(client_id, payload)
     return meta
 
 
 @api_router.get("/documents")
-async def list_documents(category: Optional[str] = None, year: Optional[int] = None):
-    q = {}
+async def list_documents(
+    request: Request,
+    category: Optional[str] = None,
+    year: Optional[int] = None,
+    client_id: Optional[str] = None,
+    admin_id: Optional[str] = None,
+):
+    """Scoped listing.
+    - Admin: must pass client_id (or omit to see all of their own uploads).
+    - Client: must pass admin_id (or omit to see everything sent to them).
+    """
+    user = await _user_from_request(request)
+    if not user:
+        raise HTTPException(status_code=401, detail="Not authenticated")
+
+    q: dict = {}
+    if user["role"] == "admin":
+        q["admin_id"] = user["id"]
+        if client_id:
+            q["client_id"] = client_id
+    elif user["role"] == "client":
+        q["client_id"] = user["id"]
+        if admin_id:
+            q["admin_id"] = admin_id
+    else:
+        raise HTTPException(status_code=403, detail="Forbidden")
+
     if category:
         q["category"] = category.upper()
     if year:
         q["year"] = year
-    docs = await db.documents.find(q, {"_id": 0}).sort([("year", -1), ("month", -1), ("uploaded_at", -1)]).to_list(1000)
+
+    docs = await db.documents.find(q, {"_id": 0}).sort([
+        ("year", -1), ("month", -1), ("uploaded_at", -1)
+    ]).to_list(2000)
     return [doc_to_meta(d) for d in docs]
 
 
-@api_router.get("/documents/years")
-async def list_years(category: Optional[str] = None):
-    """Return distinct years grouped by category, with counts."""
-    match = {}
-    if category:
-        match["category"] = category.upper()
-    pipeline = [
-        {"$match": match} if match else {"$match": {}},
-        {"$group": {"_id": {"category": "$category", "year": "$year"}, "count": {"$sum": 1}}},
-        {"$sort": {"_id.year": -1}},
-    ]
-    out = await db.documents.aggregate(pipeline).to_list(1000)
-    return [
-        {"category": item["_id"]["category"], "year": item["_id"]["year"], "count": item["count"]}
-        for item in out
-    ]
-
-
 @api_router.get("/documents/{doc_id}/file")
-async def get_document_file(doc_id: str):
+async def get_document_file(doc_id: str, request: Request):
+    user = await _user_from_request(request)
+
     doc = await db.documents.find_one({"id": doc_id}, {"_id": 0})
     if not doc:
         raise HTTPException(status_code=404, detail="Document not found")
+
+    # Auth: the uploader admin OR the receiving client may fetch the file
+    if user is None or (
+        user["role"] == "admin" and doc.get("admin_id") != user["id"]
+    ) or (
+        user["role"] == "client" and doc.get("client_id") != user["id"]
+    ):
+        raise HTTPException(status_code=403, detail="Forbidden")
 
     gridfs_id = doc.get("gridfs_id")
     if not gridfs_id:
@@ -368,7 +541,7 @@ async def get_document_file(doc_id: str):
 
 @api_router.put("/documents/{doc_id}")
 async def update_document(doc_id: str, payload: DocumentUpdate, current=Depends(get_current_admin)):
-    doc = await db.documents.find_one({"id": doc_id}, {"_id": 0})
+    doc = await db.documents.find_one({"id": doc_id, "admin_id": current["id"]}, {"_id": 0})
     if not doc:
         raise HTTPException(status_code=404, detail="Document not found")
     update = {}
@@ -389,13 +562,15 @@ async def update_document(doc_id: str, payload: DocumentUpdate, current=Depends(
         await db.documents.update_one({"id": doc_id}, {"$set": update})
     new_doc = await db.documents.find_one({"id": doc_id}, {"_id": 0})
     meta = doc_to_meta(new_doc)
-    await manager.broadcast({"type": "doc:updated", "doc": meta})
+    payload2 = {"type": "doc:updated", "doc": meta}
+    await manager.send_to_user(meta["admin_id"], payload2)
+    await manager.send_to_user(meta["client_id"], payload2)
     return meta
 
 
 @api_router.delete("/documents/{doc_id}")
 async def delete_document(doc_id: str, current=Depends(get_current_admin)):
-    doc = await db.documents.find_one({"id": doc_id}, {"_id": 0})
+    doc = await db.documents.find_one({"id": doc_id, "admin_id": current["id"]}, {"_id": 0})
     if not doc:
         raise HTTPException(status_code=404, detail="Document not found")
 
@@ -407,23 +582,30 @@ async def delete_document(doc_id: str, current=Depends(get_current_admin)):
             pass
 
     await db.documents.delete_one({"id": doc_id})
-    await manager.broadcast({"type": "doc:deleted", "id": doc_id})
+    payload = {"type": "doc:deleted", "id": doc_id, "admin_id": doc.get("admin_id"), "client_id": doc.get("client_id")}
+    await manager.send_to_user(doc.get("admin_id"), payload)
+    await manager.send_to_user(doc.get("client_id"), payload)
     return {"ok": True}
 
 
 # ============================================================
-# WebSocket — clients connect here for live updates.
-# Path is under /api/* so the ingress routes it to the backend.
+# WebSocket — token-authenticated so events can be scoped per user
 # ============================================================
 @api_router.websocket("/ws")
-async def ws_endpoint(websocket: WebSocket):
-    await manager.connect(websocket)
+async def ws_endpoint(websocket: WebSocket, token: Optional[str] = None):
+    payload = _decode_token_or_none(token)
+    if not payload or payload.get("type") != "access":
+        await websocket.close(code=4401)
+        return
+    user = await db.users.find_one({"id": payload["sub"]}, {"_id": 0, "password_hash": 0})
+    if not user:
+        await websocket.close(code=4401)
+        return
+
+    await manager.connect(websocket, user["id"], user["role"])
     try:
-        # Initial hello so the client knows the channel is live.
-        await websocket.send_text(json.dumps({"type": "hello"}))
+        await websocket.send_text(json.dumps({"type": "hello", "user": safe_user(user)}))
         while True:
-            # We don't need any client messages — just keep the socket alive.
-            # If the client sends anything, we ignore it but stay connected.
             try:
                 await websocket.receive_text()
             except WebSocketDisconnect:
@@ -433,31 +615,68 @@ async def ws_endpoint(websocket: WebSocket):
 
 
 # ============================================================
-# Startup
+# Startup — seed admin + demo client + migrate legacy docs
 # ============================================================
 @app.on_event("startup")
 async def on_startup():
     await db.users.create_index("email", unique=True)
-    await db.documents.create_index([("category", 1), ("year", -1)])
+    await db.documents.create_index([("admin_id", 1), ("client_id", 1), ("year", -1)])
+    await db.documents.create_index([("client_id", 1), ("admin_id", 1)])
 
-    existing = await db.users.find_one({"email": ADMIN_EMAIL})
-    if not existing:
-        await db.users.insert_one({
+    # Seed primary admin
+    admin = await db.users.find_one({"email": ADMIN_EMAIL})
+    if not admin:
+        admin = {
             "id": str(uuid.uuid4()),
             "email": ADMIN_EMAIL,
             "password_hash": hash_password(ADMIN_PASSWORD),
             "name": "Admin",
             "role": "admin",
             "created_at": datetime.now(timezone.utc).isoformat(),
-        })
-    elif not verify_password(ADMIN_PASSWORD, existing["password_hash"]):
+        }
+        await db.users.insert_one(admin)
+    elif not verify_password(ADMIN_PASSWORD, admin["password_hash"]):
         await db.users.update_one(
             {"email": ADMIN_EMAIL},
             {"$set": {"password_hash": hash_password(ADMIN_PASSWORD)}},
         )
 
-    # Migrate any legacy disk-based files to GridFS
-    legacy_dir = ROOT_DIR / "uploads"
+    # Seed demo client (so the multi-tenant UI has at least one row to start with)
+    DEMO_CLIENT_EMAIL = "client@example.com"
+    DEMO_CLIENT_PASSWORD = "client123"
+    demo_client = await db.users.find_one({"email": DEMO_CLIENT_EMAIL})
+    if not demo_client:
+        demo_client = {
+            "id": str(uuid.uuid4()),
+            "email": DEMO_CLIENT_EMAIL,
+            "password_hash": hash_password(DEMO_CLIENT_PASSWORD),
+            "name": "Demo Client",
+            "role": "client",
+            "created_at": datetime.now(timezone.utc).isoformat(),
+        }
+        await db.users.insert_one(demo_client)
+    elif not verify_password(DEMO_CLIENT_PASSWORD, demo_client["password_hash"]):
+        await db.users.update_one(
+            {"email": DEMO_CLIENT_EMAIL},
+            {"$set": {"password_hash": hash_password(DEMO_CLIENT_PASSWORD)}},
+        )
+
+    # Re-fetch in case of inserts above
+    admin = await db.users.find_one({"email": ADMIN_EMAIL})
+    demo_client = await db.users.find_one({"email": DEMO_CLIENT_EMAIL})
+
+    # Migrate legacy docs (no admin_id / client_id) to (primary admin, demo client)
+    if admin and demo_client:
+        await db.documents.update_many(
+            {"$or": [{"admin_id": {"$exists": False}}, {"admin_id": None}]},
+            {"$set": {"admin_id": admin["id"]}},
+        )
+        await db.documents.update_many(
+            {"$or": [{"client_id": {"$exists": False}}, {"client_id": None}]},
+            {"$set": {"client_id": demo_client["id"]}},
+        )
+
+    # Migrate any legacy disk-based files to GridFS (kept from previous version)
     async for doc in db.documents.find({"gridfs_id": {"$in": [None, ""]}}):
         legacy_path = doc.get("file_path")
         if not legacy_path:
@@ -500,18 +719,14 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+
 # ============================================================
 # Static website (Vite build) — served at /api/web/*
-# Only /api/* is routed to backend by the ingress, so the
-# standalone "WhatsApp Web" style portal lives under /api/web/.
 # ============================================================
 WEBSITE_DIR = Path("/app/website/dist")
 
 
 class SPAStaticFiles(StaticFiles):
-    """StaticFiles that falls back to index.html for unknown paths
-    (so client-side react-router routes resolve correctly on refresh)."""
-
     async def get_response(self, path: str, scope):
         try:
             return await super().get_response(path, scope)
@@ -529,6 +744,7 @@ if WEBSITE_DIR.exists():
         SPAStaticFiles(directory=str(WEBSITE_DIR), html=True),
         name="website",
     )
+
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s")
 logger = logging.getLogger(__name__)

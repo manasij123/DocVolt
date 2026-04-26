@@ -1,12 +1,8 @@
 import { useEffect, useMemo, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { Link, useNavigate, useParams } from "react-router-dom";
 import api, {
-  CATEGORY_DESCRIPTIONS,
-  CATEGORY_ICONS,
-  CATEGORY_LABELS,
-  DocumentMeta,
-  fileUrl,
-  setRole,
+  CATEGORY_DESCRIPTIONS, CATEGORY_ICONS, CATEGORY_LABELS,
+  DocumentMeta, fileUrl, getToken, getUser, logout, UserInfo, initials, colorFromString,
 } from "../api";
 import { useDocsSocket } from "../useDocsSocket";
 import LiveBadge from "../LiveBadge";
@@ -14,56 +10,57 @@ import LiveBadge from "../LiveBadge";
 const TAB_ORDER = ["MONTHLY_RETURN", "FORWARDING_LETTER", "IFA_REPORT", "OTHERS"] as const;
 type Tab = (typeof TAB_ORDER)[number];
 
-export default function ClientView() {
+export default function ClientCategoryView() {
   const nav = useNavigate();
+  const { adminId } = useParams<{ adminId: string }>();
+  const me = getUser();
+  const [admin, setAdmin] = useState<UserInfo | null>(null);
   const [tab, setTab] = useState<Tab>("MONTHLY_RETURN");
   const [docs, setDocs] = useState<DocumentMeta[]>([]);
   const [year, setYear] = useState<number | null>(null);
   const [loading, setLoading] = useState(true);
 
+  useEffect(() => {
+    if (!getToken() || me?.role !== "client") { nav("/client/login", { replace: true }); return; }
+  }, []);
+
+  useEffect(() => {
+    if (!adminId) return;
+    api.get<any[]>("/admins/connected").then((r) => {
+      const a = r.data.find((x) => x.id === adminId); if (a) setAdmin(a);
+    });
+  }, [adminId]);
+
   const load = async (cat: Tab) => {
+    if (!adminId) return;
     setLoading(true);
     try {
-      const r = await api.get<DocumentMeta[]>("/documents", { params: { category: cat } });
+      const r = await api.get<DocumentMeta[]>("/documents", { params: { category: cat, admin_id: adminId } });
       setDocs(r.data);
       const ys = Array.from(new Set(r.data.map((d) => d.year))).sort((a, b) => b - a);
-      setYear((prev) => (prev && ys.includes(prev) ? prev : ys[0] ?? null));
-    } finally {
-      setLoading(false);
-    }
+      setYear((prev) => prev && ys.includes(prev) ? prev : (ys[0] ?? null));
+    } finally { setLoading(false); }
   };
-  useEffect(() => { load(tab); /* eslint-disable-line react-hooks/exhaustive-deps */ }, [tab]);
+  useEffect(() => { load(tab); /* eslint-disable-line */ }, [tab, adminId]);
 
-  // 🔴 Real-time sync — if any doc that matches our current tab changes, refresh quietly.
   useDocsSocket((e) => {
     if (e.type === "doc:created" || e.type === "doc:updated") {
-      if (e.doc?.category === tab) load(tab);
+      if (e.doc?.admin_id === adminId && e.doc?.category === tab) load(tab);
     } else if (e.type === "doc:deleted") {
-      // we don't know the category of a deleted doc — just refresh if it was in our list
-      if (docs.some((d) => d.id === e.id)) load(tab);
+      if (e.admin_id === adminId && docs.some((d) => d.id === e.id)) load(tab);
     }
   });
 
   const years = useMemo(() => Array.from(new Set(docs.map((d) => d.year))).sort((a, b) => b - a), [docs]);
   const filtered = useMemo(() => (year ? docs.filter((d) => d.year === year) : []), [docs, year]);
 
-  const onSwitch = () => {
-    setRole(null);
-    nav("/", { replace: true });
-  };
-
+  const onLogout = () => { logout(); nav("/", { replace: true }); };
   const share = async (d: DocumentMeta) => {
     const url = window.location.origin + fileUrl(d.id);
     try {
-      if ((navigator as any).share) {
-        await (navigator as any).share({ title: d.display_name, text: d.display_name, url });
-      } else {
-        await navigator.clipboard.writeText(url);
-        alert("Link copied to clipboard:\n" + url);
-      }
-    } catch {
-      // user cancelled
-    }
+      if ((navigator as any).share) await (navigator as any).share({ title: d.display_name, text: d.display_name, url });
+      else { await navigator.clipboard.writeText(url); alert("Link copied:\n" + url); }
+    } catch { /* cancelled */ }
   };
 
   return (
@@ -73,11 +70,22 @@ export default function ClientView() {
           <div className="brand"><div className="brand-mark">DV</div> DocVault</div>
           <div className="topbar-actions">
             <LiveBadge />
-            <button className="icon-btn" title="Switch role" onClick={onSwitch}>⇄</button>
-            <button className="icon-btn" title="Admin" onClick={() => nav("/admin/login")}>🔒</button>
+            <span className="who-pill light">{me?.name}</span>
+            <button className="icon-btn" title="Logout" onClick={onLogout}>↪</button>
           </div>
         </div>
       </header>
+
+      <div className="container" style={{ paddingTop: 18 }}>
+        <Link to="/client" className="crumb-link">← All admins</Link>
+        <div className="client-banner">
+          <div className="avatar lg admin" style={{ background: admin ? colorFromString(admin.id) : "#1A73E8" }}>{admin ? initials(admin.name) : "?"}</div>
+          <div>
+            <div className="client-banner-name">{admin?.name || "Loading…"}</div>
+            <div className="client-banner-email">Admin · {admin?.email}</div>
+          </div>
+        </div>
+      </div>
 
       <main className="container page-anim" style={{ padding: "18px 24px 60px" }} key={tab}>
         <div className="tab-row">
@@ -87,7 +95,6 @@ export default function ClientView() {
             </button>
           ))}
         </div>
-
         <div className={`cat-hero ${tab}`}>
           <div className="cat-hero-top">
             <div className="cat-hero-icon">{CATEGORY_ICONS[tab]}</div>
@@ -98,25 +105,14 @@ export default function ClientView() {
         </div>
 
         {loading ? (
-          <div>
-            <div className="skeleton" />
-            <div className="skeleton" />
-            <div className="skeleton" />
-          </div>
+          <div><div className="skeleton" /><div className="skeleton" /><div className="skeleton" /></div>
         ) : years.length === 0 ? (
-          <div className="empty">
-            <div className="empty-icon">📂</div>
-            <h3>No documents yet</h3>
-            <p>The admin will upload them shortly.</p>
-          </div>
+          <div className="empty"><div className="empty-icon">📂</div><h3>No documents yet</h3><p>The admin will upload them shortly.</p></div>
         ) : (
           <>
             <div className="chip-row">
-              {years.map((y) => (
-                <button key={y} className={`chip ${year === y ? "active" : ""}`} onClick={() => setYear(y)}>{y}</button>
-              ))}
+              {years.map((y) => <button key={y} className={`chip ${year === y ? "active" : ""}`} onClick={() => setYear(y)}>{y}</button>)}
             </div>
-
             {filtered.length === 0 ? (
               <div className="empty"><p>No documents for {year}</p></div>
             ) : (
