@@ -19,6 +19,7 @@ import { useResponsive } from "./useResponsive";
 
 type Props = {
   category: "MONTHLY_RETURN" | "FORWARDING_LETTER" | "IFA_REPORT" | "OTHERS";
+  adminId?: string;
 };
 
 const CATEGORY_DESCRIPTIONS: Record<string, string> = {
@@ -113,7 +114,7 @@ function DocCard({ doc, index }: { doc: DocumentMeta; index: number }) {
   );
 }
 
-export default function CategoryView({ category }: Props) {
+export default function CategoryView({ category, adminId }: Props) {
   const [documents, setDocuments] = useState<DocumentMeta[]>([]);
   const [years, setYears] = useState<number[]>([]);
   const [activeYear, setActiveYear] = useState<number | null>(null);
@@ -127,7 +128,9 @@ export default function CategoryView({ category }: Props) {
 
   const load = useCallback(async () => {
     try {
-      const res = await api.get<DocumentMeta[]>("/documents", { params: { category } });
+      const params: any = { category };
+      if (adminId) params.admin_id = adminId;
+      const res = await api.get<DocumentMeta[]>("/documents", { params });
       setDocuments(res.data);
       const yset = Array.from(new Set(res.data.map((d) => d.year))).sort((a, b) => b - a);
       setYears(yset);

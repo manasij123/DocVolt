@@ -1,52 +1,87 @@
 import React, { createContext, useContext, useEffect, useState, ReactNode } from "react";
-import api, { setToken, getToken } from "./api";
-
-type User = { id: string; email: string; name?: string; role: string };
+import api, { setToken, setStoredUser, getStoredUser, getToken, UserInfo, logoutLocal, setLastRole } from "./api";
 
 type AuthContextValue = {
-  user: User | null;
+  user: UserInfo | null;
   loading: boolean;
-  login: (email: string, password: string) => Promise<void>;
+  login: (email: string, password: string) => Promise<UserInfo>;
+  register: (
+    email: string,
+    password: string,
+    name: string,
+    role: "admin" | "client",
+    adminEmail?: string,
+  ) => Promise<UserInfo>;
   logout: () => Promise<void>;
+  refresh: () => Promise<void>;
 };
 
 const AuthContext = createContext<AuthContextValue | undefined>(undefined);
 
 export function AuthProvider({ children }: { children: ReactNode }) {
-  const [user, setUser] = useState<User | null>(null);
+  const [user, setUser] = useState<UserInfo | null>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     (async () => {
       const token = await getToken();
-      if (!token) {
-        setLoading(false);
-        return;
-      }
+      if (!token) { setLoading(false); return; }
+      const cached = await getStoredUser();
+      if (cached) setUser(cached);
       try {
         const res = await api.get("/auth/me");
         setUser(res.data);
+        await setStoredUser(res.data);
       } catch {
-        await setToken(null);
-      } finally {
-        setLoading(false);
-      }
+        await logoutLocal();
+        setUser(null);
+      } finally { setLoading(false); }
     })();
   }, []);
 
   const login = async (email: string, password: string) => {
     const res = await api.post("/auth/login", { email, password });
     await setToken(res.data.access_token);
+    await setStoredUser(res.data.user);
+    await setLastRole(res.data.user.role);
     setUser(res.data.user);
+    return res.data.user as UserInfo;
+  };
+
+  const register = async (
+    email: string,
+    password: string,
+    name: string,
+    role: "admin" | "client",
+    adminEmail?: string,
+  ) => {
+    const body: any = { email, password, name, role };
+    if (role === "client" && adminEmail) body.admin_email = adminEmail;
+    const res = await api.post("/auth/register", body);
+    await setToken(res.data.access_token);
+    await setStoredUser(res.data.user);
+    await setLastRole(res.data.user.role);
+    setUser(res.data.user);
+    return res.data.user as UserInfo;
   };
 
   const logout = async () => {
-    await setToken(null);
+    await logoutLocal();
     setUser(null);
   };
 
+  const refresh = async () => {
+    try {
+      const res = await api.get("/auth/me");
+      setUser(res.data);
+      await setStoredUser(res.data);
+    } catch {
+      // ignore
+    }
+  };
+
   return (
-    <AuthContext.Provider value={{ user, loading, login, logout }}>
+    <AuthContext.Provider value={{ user, loading, login, register, logout, refresh }}>
       {children}
     </AuthContext.Provider>
   );
