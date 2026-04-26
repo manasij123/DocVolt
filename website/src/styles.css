@@ -218,6 +218,103 @@ input { font-family: inherit; }
 .hero-pill:nth-child(2) { animation-delay: 0.10s; }
 .hero-pill:nth-child(3) { animation-delay: 0.18s; }
 
+/* ============================================================
+ * Global SecurityBackground — Aurora blobs + floating vault icons
+ * Mounted in main.tsx, sits in fixed position behind all routes.
+ * Palette: #c1121f (red) · #fdf0d5 (cream) · #669bbc (blue)
+ * ============================================================ */
+.security-bg {
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  overflow: hidden;
+}
+.security-bg .sec-blob {
+  position: absolute;
+  border-radius: 50%;
+  filter: blur(80px);
+  opacity: 0.22;
+  will-change: transform;
+}
+.security-bg .sec-blob-red {
+  width: 520px; height: 520px;
+  background: #c1121f;
+  top: -120px; left: -160px;
+  animation: secAuroraA 22s ease-in-out infinite alternate;
+}
+.security-bg .sec-blob-blue {
+  width: 600px; height: 600px;
+  background: #669bbc;
+  top: 30%; right: -200px;
+  animation: secAuroraB 27s ease-in-out infinite alternate;
+}
+.security-bg .sec-blob-cream {
+  width: 480px; height: 480px;
+  background: #fdf0d5;
+  bottom: -160px; left: 30%;
+  opacity: 0.30;
+  animation: secAuroraC 24s ease-in-out infinite alternate;
+}
+@keyframes secAuroraA {
+  0%   { transform: translate(0, 0) scale(1); }
+  100% { transform: translate(60px, 80px) scale(1.12); }
+}
+@keyframes secAuroraB {
+  0%   { transform: translate(0, 0) scale(1.05); }
+  100% { transform: translate(-90px, -70px) scale(0.92); }
+}
+@keyframes secAuroraC {
+  0%   { transform: translate(0, 0) scale(0.95); }
+  100% { transform: translate(40px, -80px) scale(1.10); }
+}
+.security-bg .sec-icon {
+  position: absolute;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  opacity: 0;
+  will-change: transform, opacity;
+  animation-name: secIconDrift, secIconFade;
+  animation-iteration-count: infinite, infinite;
+  animation-direction: alternate, alternate;
+  animation-timing-function: ease-in-out, ease-in-out;
+}
+.security-bg .sec-icon svg {
+  width: 100%;
+  height: 100%;
+  display: block;
+}
+@keyframes secIconDrift {
+  0%   { transform: translate(0, 0)        rotate(-2deg); }
+  100% { transform: translate(8px, -180px) rotate(3deg); }
+}
+@keyframes secIconFade {
+  0%   { opacity: 0;   }
+  35%  { opacity: 0.18; }
+  65%  { opacity: 0.18; }
+  100% { opacity: 0;   }
+}
+
+/* Make sure hero/page content sits above the decorative layer. */
+.landing,
+.page-shell,
+.app-shell,
+.container,
+.hero-block,
+header,
+main {
+  position: relative;
+  z-index: 1;
+}
+
+/* Honour reduced-motion preferences — drop all animations to a static state. */
+@media (prefers-reduced-motion: reduce) {
+  .security-bg .sec-blob,
+  .security-bg .sec-icon { animation: none !important; }
+  .security-bg .sec-icon { opacity: 0.10; }
+}
+
 /* Download Android APK CTA */
 .apk-cta {
   display: flex; align-items: center; gap: 14px;

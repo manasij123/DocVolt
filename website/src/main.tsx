@@ -2,6 +2,7 @@ import React from "react";
 import ReactDOM from "react-dom/client";
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import "./styles.css";
+import SecurityBackground from "./SecurityBackground";
 import Landing from "./pages/Landing";
 import AdminLogin from "./pages/AdminLogin";
 import AdminRegister from "./pages/AdminRegister";
@@ -14,6 +15,8 @@ import ClientCategoryView from "./pages/ClientCategoryView";
 
 ReactDOM.createRoot(document.getElementById("root")!).render(
   <React.StrictMode>
+    {/* Decorative, non-interactive — sits behind every route via fixed-position. */}
+    <SecurityBackground />
     <BrowserRouter basename="/api/web">
       <Routes>
         <Route path="/" element={<Landing />} />
