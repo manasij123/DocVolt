@@ -16,7 +16,7 @@ from datetime import datetime, timezone, timedelta
 from typing import List, Optional
 
 from fastapi import FastAPI, APIRouter, UploadFile, File, Form, HTTPException, Depends, Request, WebSocket, WebSocketDisconnect
-from fastapi.responses import StreamingResponse, FileResponse
+from fastapi.responses import StreamingResponse, FileResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from starlette.exceptions import HTTPException as StarletteHTTPException
 from starlette.middleware.cors import CORSMiddleware
@@ -865,6 +865,25 @@ if WEBSITE_DIR is not None:
         SPAStaticFiles(directory=str(WEBSITE_DIR), html=True),
         name="website",
     )
+
+    # Friendly root: redirect bare-domain requests (e.g. https://doc-organizer-app.emergent.host/)
+    # to the actual SPA at /api/web/. This is what users get when the production domain is
+    # opened directly in a browser. Add common SPA-route prefixes so deep links survive.
+    @app.get("/", include_in_schema=False)
+    async def _root_redirect():
+        return RedirectResponse(url="/api/web/", status_code=307)
+
+    @app.get("/admin", include_in_schema=False)
+    @app.get("/admin/{path:path}", include_in_schema=False)
+    async def _admin_redirect(path: str = ""):
+        suffix = f"/{path}" if path else ""
+        return RedirectResponse(url=f"/api/web/admin{suffix}", status_code=307)
+
+    @app.get("/client", include_in_schema=False)
+    @app.get("/client/{path:path}", include_in_schema=False)
+    async def _client_redirect(path: str = ""):
+        suffix = f"/{path}" if path else ""
+        return RedirectResponse(url=f"/api/web/client{suffix}", status_code=307)
 
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s")
