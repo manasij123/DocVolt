@@ -235,6 +235,21 @@ frontend:
           agent: "main"
           comment: "Replaced flat AdminDashboard/ClientView with seven dedicated screens: Landing (3 cards), AdminLogin, ClientLogin, ClientRegister, AdminHome (clients list with 'Under You' + 'Registered Clients' sections, search, NEW tag, real-time toast on new registration), AdminClientWorkspace (per-client breadcrumb header + Upload/Manage tabs scoped to client_id), ClientHome (admins list), ClientCategoryView (per-admin 4-tab category view). Token + role persisted in localStorage. WebSocket auto-reconnects with token; LIVE pill works; new client registration animates row into admin list with pulse-glow highlight. Verified visually with Playwright screenshots."
 
+  - task: "Mobile auth UX — strict role-gated login + helpful 'switch screen' redirect + keyboard-aware scrolling"
+    implemented: true
+    working: true
+    file: "/app/frontend/src/AuthForm.tsx, /app/frontend/src/auth.tsx"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: false
+    status_history:
+        - working: true
+          agent: "testing"
+          comment: "All 8 review-request cases PASS on mobile viewports (390x844 + 360x800). FIX 1 strict role-gating: (1) /admin/login + client@example.com/client123 -> stays at /admin/login, red error 'This is a Client account. Please use the Client login screen.' renders with pill-button 'Go to Client Login →' (people icon); tapping it routes to /client/login. (2) /client/login + admin@example.com/admin123 -> stays at /client/login, error 'This is an Admin account. Please use the Admin login screen.' with 'Go to Admin Login →' pill (shield-checkmark icon); tap routes to /admin/login. (3) /admin/login + admin@example.com/admin123 -> navigates to /admin (admin dashboard with clients list shown). (4) /client/login + client@example.com/client123 -> navigates to /client (admins list shown). (5) Wrong password on /admin/login shows generic error and does NOT show role-switch UI (verified). FIX 2 keyboard-aware scrolling: (6) /client/register last input 'Admin email' visible after focus on both 390x844 (y=610.5, h=17 -> within 844) and 360x800 (y=566.5 -> within 800). (7) /admin/register Confirm password visible after focus (y=537.5/844). (8) /admin/login Password visible after focus (y=362.5/844). No console errors except an expected 401 from the wrong-password test."
+        - working: "NA"
+          agent: "main"
+          comment: "Two fixes for the user-reported regressions on mobile: (1) STRICT ROLE LOGIN — login() in src/auth.tsx now accepts an expectedRole; if the backend returns a user whose role doesn't match the screen's role, it throws AUTH_WRONG_ROLE WITHOUT persisting the token / setting user. AuthForm catches AUTH_WRONG_ROLE, shows a friendly 'This is a Client account. Please use the Client login screen.' message AND a tap-target 'Go to Client Login →' button that does router.replace to the correct screen. So Admin login screen will refuse client credentials (and vice-versa) but offer one-tap recovery. (2) KEYBOARD HANDLING — KeyboardAvoidingView now uses behavior='padding' on both iOS and Android (the previous Android default of `undefined` was leaving bottom inputs hidden under the keyboard, especially with edgeToEdgeEnabled:true). ScrollView gained automaticallyAdjustKeyboardInsets (iOS), keyboardDismissMode='on-drag', a larger paddingBottom (80 + safe-area), and a manual scroll-on-focus: each Field reports its y-offset via onLayout and TextInput onFocus scrolls the ScrollView so the focused input sits 60px from the top of the visible area (with a 50ms delay on iOS / 280ms on Android to wait for the keyboard animation). Needs frontend testing on iPhone (390x844) and Android (360x800) viewports: (a) Admin Login screen with client@example.com/client123 must NOT navigate to /admin and must show the 'Go to Client Login' switcher (tapping it must land on /client/login). (b) Client Login screen with admin@example.com/admin123 must NOT navigate to /client and must show the 'Go to Admin Login' switcher. (c) Correct credentials on the matching screen must navigate to /admin or /client. (d) On both login + register screens, focusing the bottom-most input (Password on login, Confirm password / Admin email on register) must auto-scroll so the input is visible above the keyboard."
+
 metadata:
   created_by: "main_agent"
   version: "1.3"
@@ -243,7 +258,7 @@ metadata:
 
 test_plan:
   current_focus:
-    - "Multi-tenant document endpoints: upload/list/file/update/delete"
+    - "Mobile auth UX — strict role-gated login + helpful 'switch screen' redirect + keyboard-aware scrolling"
   stuck_tasks: []
   test_all: false
   test_priority: "high_first"
