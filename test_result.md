@@ -205,17 +205,50 @@ frontend:
           agent: "main"
           comment: "Rebuilt dropzone with a div + ref click (no more dashed-box rendering glitch); added drag-and-drop. Manage cards now lay out actions BELOW the title with text labels (View / Edit / Delete) and the title wraps cleanly. The 'All' filter renders sections per category with colored dot + heading + count. Upload preview now offers three buttons: Cancel · No, manual · Yes, upload. Added a global animation system (fade, slide, pop, shimmer skeletons) and a LIVE connection badge in the topbar. Verified visually with Playwright screenshots."
 
+  - task: "Multi-tenant auth + per-client document scoping"
+    implemented: true
+    working: true
+    file: "/app/backend/server.py"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: false
+    status_history:
+        - working: true
+          agent: "main"
+          comment: "Major rewrite. Users now have role admin/client (bcrypt + JWT 30d). Documents carry both admin_id AND client_id. New endpoints: POST /api/auth/register (self-signup), GET /api/clients (admin only), GET /api/admins/connected (client only). Upload requires client_id form field; admin_id derived from token. Listing/file/PUT/DELETE owner-scoped. WebSocket is now token-authenticated (?token=...) and broadcasts doc events ONLY to the involved (admin_id, client_id) pair, plus client:registered to all admins on signup. Startup migration auto-assigns legacy docs to seeded admin@example.com → client@example.com. Verified end-to-end with deep_testing_backend (32 cases, 30 pass)."
+        - working: true
+          agent: "testing"
+          comment: "32 cases / 30 PASS / 0 critical. All 26 review-request endpoints pass. Minor non-blocking: WS rejection returns HTTP 403 at handshake instead of WS close-code 4401 — auth gating itself is correct."
+
+  - task: "Web — multi-tenant pages (Landing 3-card, Client login/register, Admin Home → per-client workspace, Client Home → per-admin category view)"
+    implemented: true
+    working: true
+    file: "/app/website/src/pages/*"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: false
+    status_history:
+        - working: true
+          agent: "main"
+          comment: "Replaced flat AdminDashboard/ClientView with seven dedicated screens: Landing (3 cards), AdminLogin, ClientLogin, ClientRegister, AdminHome (clients list with 'Under You' + 'Registered Clients' sections, search, NEW tag, real-time toast on new registration), AdminClientWorkspace (per-client breadcrumb header + Upload/Manage tabs scoped to client_id), ClientHome (admins list), ClientCategoryView (per-admin 4-tab category view). Token + role persisted in localStorage. WebSocket auto-reconnects with token; LIVE pill works; new client registration animates row into admin list with pulse-glow highlight. Verified visually with Playwright screenshots."
+
 metadata:
   created_by: "main_agent"
-  version: "1.2"
-  test_sequence: 2
+  version: "1.3"
+  test_sequence: 3
   run_ui: false
 
 test_plan:
-  current_focus: []
+  current_focus:
+    - "Multi-tenant auth + per-client document scoping"
+    - "Web — multi-tenant pages"
   stuck_tasks: []
   test_all: false
   test_priority: "high_first"
+
+agent_communication:
+    - agent: "main"
+      message: "Round 3 (multi-tenant) complete. Each client has a private document space; admin sees a clients dashboard with 'Under You' (those they have uploaded for) vs 'Registered Clients' (newly signed-up, not yet served). Real-time client:registered toast lights up the admin instantly. Same client can have multiple admins, and the client side shows one tab per admin who has shared with them. Backend agent verified all 26 endpoint cases. Mobile app is intentionally NOT updated yet — it still uses the legacy unauth list flow, so mobile screens will be incomplete until next round. Web flow signed-off pending user verification."
 
 agent_communication:
     - agent: "main"
