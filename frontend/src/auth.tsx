@@ -1,10 +1,12 @@
 import React, { createContext, useContext, useEffect, useState, ReactNode } from "react";
 import api, { setToken, setStoredUser, getStoredUser, getToken, UserInfo, logoutLocal, setLastRole } from "./api";
 
+export const AUTH_WRONG_ROLE = "AUTH_WRONG_ROLE";
+
 type AuthContextValue = {
   user: UserInfo | null;
   loading: boolean;
-  login: (email: string, password: string) => Promise<UserInfo>;
+  login: (email: string, password: string, expectedRole?: "admin" | "client") => Promise<UserInfo>;
   register: (
     email: string,
     password: string,
@@ -39,13 +41,21 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     })();
   }, []);
 
-  const login = async (email: string, password: string) => {
+  const login = async (email: string, password: string, expectedRole?: "admin" | "client") => {
     const res = await api.post("/auth/login", { email, password });
+    const u = res.data.user as UserInfo;
+    if (expectedRole && u.role !== expectedRole) {
+      // Do NOT persist token / set user — refuse the wrong-role login.
+      const err: any = new Error(AUTH_WRONG_ROLE);
+      err.code = AUTH_WRONG_ROLE;
+      err.actualRole = u.role;
+      throw err;
+    }
     await setToken(res.data.access_token);
-    await setStoredUser(res.data.user);
-    await setLastRole(res.data.user.role);
-    setUser(res.data.user);
-    return res.data.user as UserInfo;
+    await setStoredUser(u);
+    await setLastRole(u.role);
+    setUser(u);
+    return u;
   };
 
   const register = async (
