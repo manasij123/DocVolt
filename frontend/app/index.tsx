@@ -1,7 +1,7 @@
 import React, { useEffect, useRef, useState } from "react";
 import {
   View, Text, StyleSheet, Animated, Easing, ActivityIndicator,
-  ScrollView,
+  ScrollView, TouchableOpacity, Linking, Alert,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { LinearGradient } from "expo-linear-gradient";
@@ -84,6 +84,33 @@ export default function Landing() {
 
           <View style={{ height: 28 }} />
 
+          <View style={{ height: 18 }} />
+
+          <TouchableOpacity
+            onPress={async () => {
+              const url = "https://doc-organizer-app.emergent.host/";
+              try {
+                const ok = await Linking.canOpenURL(url);
+                if (ok) await Linking.openURL(url);
+                else Alert.alert("Web version", url);
+              } catch {
+                Alert.alert("Web version", url);
+              }
+            }}
+            activeOpacity={0.85}
+            style={styles.webRow}
+            testID="btn-open-web-version"
+          >
+            <View style={styles.webIcon}><Ionicons name="globe-outline" size={18} color="#fff" /></View>
+            <View style={{ flex: 1, minWidth: 0 }}>
+              <Text style={styles.webTitle} numberOfLines={1}>Open Web Version</Text>
+              <Text style={styles.webSub} numberOfLines={1}>doc-organizer-app.emergent.host</Text>
+            </View>
+            <Ionicons name="open-outline" size={18} color="#CBD5E1" />
+          </TouchableOpacity>
+
+          <View style={{ height: 10 }} />
+
           <View style={{ maxWidth: 640, alignSelf: "center", width: "100%", gap: 12 }}>
             <Text style={styles.section}>I'm a Client</Text>
             <Card icon="people" gradient={["#3B82F6", "#8B5CF6"]} title="Client — Login" sub="Browse documents shared with you"
@@ -125,4 +152,19 @@ const styles = StyleSheet.create({
   chevGhost: { width: 32, height: 32, borderRadius: 9, backgroundColor: "rgba(255,255,255,0.06)", alignItems: "center", justifyContent: "center" },
   footer: { marginTop: 24, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 6, opacity: 0.7 },
   footerText: { color: "#94A3B8", fontSize: 11 },
+  webRow: {
+    flexDirection: "row", alignItems: "center", gap: 12,
+    paddingHorizontal: 14, paddingVertical: 12,
+    backgroundColor: "rgba(255,255,255,0.07)",
+    borderWidth: 1, borderColor: "rgba(255,255,255,0.18)",
+    borderRadius: radius.lg,
+    maxWidth: 640, alignSelf: "center", width: "100%",
+  },
+  webIcon: {
+    width: 36, height: 36, borderRadius: 10,
+    backgroundColor: "rgba(59,130,246,0.85)",
+    alignItems: "center", justifyContent: "center",
+  },
+  webTitle: { color: "#fff", fontSize: 14, fontWeight: "700", letterSpacing: -0.2 },
+  webSub: { color: "#94A3B8", fontSize: 11, marginTop: 2 },
 });

@@ -2,6 +2,9 @@ import { useEffect } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { getToken, getUser } from "../api";
 
+const APK_URL = (import.meta.env.VITE_APK_URL as string | undefined)
+  || "https://expo.dev/artifacts/eas/e6jGMGCfQQ1arLMmiJHdaq.apk";
+
 export default function Landing() {
   const navigate = useNavigate();
   useEffect(() => {
@@ -26,6 +29,21 @@ export default function Landing() {
             <span className="hero-pill">🔴 Real-time sync</span>
             <span className="hero-pill">🔒 Per-client privacy</span>
           </div>
+
+          <a
+            href={APK_URL}
+            target="_blank"
+            rel="noreferrer"
+            className="apk-cta"
+            aria-label="Download Android APK"
+          >
+            <span className="apk-cta-icon" aria-hidden>📱</span>
+            <span className="apk-cta-body">
+              <span className="apk-cta-title">Download Android App (.apk)</span>
+              <span className="apk-cta-sub">Install DocVault on your phone — same data, real-time sync</span>
+            </span>
+            <span className="apk-cta-chev" aria-hidden>↓</span>
+          </a>
         </div>
 
         <div className="choose-stack">
