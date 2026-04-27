@@ -72,8 +72,8 @@ export default function Landing() {
             <Ionicons name={headerIcon} size={22} color={dark ? "#fff" : "#3B82F6"} />
           </View>
           <View style={{ flex: 1, minWidth: 0 }}>
-            <Text style={styles.roleHeaderTitle} numberOfLines={1}>{title}</Text>
-            <Text style={[styles.roleHeaderSub, dark && styles.roleHeaderSubDark]} numberOfLines={1}>{sub}</Text>
+            <Text style={styles.roleHeaderTitle} numberOfLines={2}>{title}</Text>
+            <Text style={[styles.roleHeaderSub, dark && styles.roleHeaderSubDark]} numberOfLines={2}>{sub}</Text>
           </View>
         </Container>
         <View style={styles.roleActions}>
@@ -139,8 +139,8 @@ export default function Landing() {
           >
             <View style={styles.webIcon}><Ionicons name="globe-outline" size={18} color="#fff" /></View>
             <View style={{ flex: 1, minWidth: 0 }}>
-              <Text style={styles.webTitle} numberOfLines={1}>Open Web Version</Text>
-              <Text style={styles.webSub} numberOfLines={1}>doc-organizer-app.emergent.host</Text>
+              <Text style={styles.webTitle} numberOfLines={2}>Open Web Version</Text>
+              <Text style={styles.webSub} numberOfLines={2}>doc-organizer-app.emergent.host</Text>
             </View>
             <Ionicons name="open-outline" size={18} color="#CBD5E1" />
           </TouchableOpacity>

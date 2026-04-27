@@ -31,7 +31,7 @@ function Header() {
           </View>
           <View style={{ flex: 1, minWidth: 0 }}>
             <Text style={st.name} numberOfLines={1}>{client?.name || "Loading…"}</Text>
-            <Text style={st.email} numberOfLines={1}>{client?.email}</Text>
+            <Text style={st.email} numberOfLines={2}>{client?.email}</Text>
           </View>
           {!client && <ActivityIndicator color="#fff" />}
         </View>
