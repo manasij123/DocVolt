@@ -10,12 +10,13 @@ import {
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
-import api, { CATEGORY_LABELS, DocumentMeta } from "./api";
+import api, { CATEGORY_LABELS, DocumentMeta, getToken } from "./api";
 import { colors, radius, shadow, categoryGradients } from "./theme";
-import { shareDocument } from "./share";
+import { shareDocument, shareDocumentsBulk } from "./share";
 import PressableScale from "./PressableScale";
 import { useDocsSocket } from "./useDocsSocket";
 import { useResponsive } from "./useResponsive";
+import { useToast } from "./Toast";
 
 type Props = {
   category: "MONTHLY_RETURN" | "FORWARDING_LETTER" | "IFA_REPORT" | "OTHERS";
@@ -36,7 +37,16 @@ const CATEGORY_ICONS: Record<string, keyof typeof import("@expo/vector-icons/bui
   OTHERS: "folder",
 };
 
-function DocCard({ doc, index }: { doc: DocumentMeta; index: number }) {
+function DocCard({
+  doc, index, selecting, selected, onToggle, onLongPress,
+}: {
+  doc: DocumentMeta;
+  index: number;
+  selecting: boolean;
+  selected: boolean;
+  onToggle: () => void;
+  onLongPress: () => void;
+}) {
   const fade = useRef(new Animated.Value(0)).current;
   const slide = useRef(new Animated.Value(20)).current;
 
@@ -67,49 +77,65 @@ function DocCard({ doc, index }: { doc: DocumentMeta; index: number }) {
         transform: [{ translateY: slide }],
       }}
     >
-      <View style={styles.docCard} testID={`doc-card-${doc.id}`}>
-        <LinearGradient
-          colors={grad}
-          start={{ x: 0, y: 0 }}
-          end={{ x: 1, y: 1 }}
-          style={styles.docIconWrap}
-        >
-          <Ionicons name="document-text" size={20} color="#fff" />
-        </LinearGradient>
-
-        <View style={styles.docMeta}>
-          <Text style={styles.docTitle} numberOfLines={2}>
-            {doc.display_name}
-          </Text>
-          <View style={styles.docTagRow}>
-            {doc.month_label && (
-              <View style={styles.tag}>
-                <Ionicons name="calendar" size={10} color={colors.textSecondary} />
-                <Text style={styles.tagText}>{doc.month_label}</Text>
-              </View>
-            )}
-            <View style={styles.tag}>
-              <Text style={[styles.tagText, { color: colors.accent }]}>{doc.year}</Text>
-            </View>
-            <Text style={styles.sizeText}>{(doc.size / 1024).toFixed(0)} KB</Text>
-          </View>
-        </View>
-
-        <PressableScale
-          haptic="medium"
-          onPress={() => shareDocument(doc)}
-          testID={`btn-share-${doc.id}`}
+      <PressableScale
+        haptic={selecting ? "light" : "light"}
+        onPress={selecting ? onToggle : undefined}
+        onLongPress={onLongPress}
+        delayLongPress={350}
+      >
+        <View
+          style={[styles.docCard, selected && styles.docCardSelected]}
+          testID={`doc-card-${doc.id}`}
         >
           <LinearGradient
-            colors={["#3B82F6", "#8B5CF6"]}
+            colors={grad}
             start={{ x: 0, y: 0 }}
             end={{ x: 1, y: 1 }}
-            style={styles.shareBtn}
+            style={styles.docIconWrap}
           >
-            <Ionicons name="share-social" size={20} color="#fff" />
+            <Ionicons name="document-text" size={20} color="#fff" />
           </LinearGradient>
-        </PressableScale>
-      </View>
+
+          <View style={styles.docMeta}>
+            <Text style={styles.docTitle} numberOfLines={2}>
+              {doc.display_name}
+            </Text>
+            <View style={styles.docTagRow}>
+              {doc.month_label && (
+                <View style={styles.tag}>
+                  <Ionicons name="calendar" size={10} color={colors.textSecondary} />
+                  <Text style={styles.tagText}>{doc.month_label}</Text>
+                </View>
+              )}
+              <View style={styles.tag}>
+                <Text style={[styles.tagText, { color: colors.accent }]}>{doc.year}</Text>
+              </View>
+              <Text style={styles.sizeText}>{(doc.size / 1024).toFixed(0)} KB</Text>
+            </View>
+          </View>
+
+          {selecting ? (
+            <View style={[styles.checkbox, selected && styles.checkboxOn]}>
+              {selected && <Ionicons name="checkmark" size={18} color="#fff" />}
+            </View>
+          ) : (
+            <PressableScale
+              haptic="medium"
+              onPress={() => shareDocument(doc)}
+              testID={`btn-share-${doc.id}`}
+            >
+              <LinearGradient
+                colors={["#3B82F6", "#8B5CF6"]}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 1 }}
+                style={styles.shareBtn}
+              >
+                <Ionicons name="share-social" size={20} color="#fff" />
+              </LinearGradient>
+            </PressableScale>
+          )}
+        </View>
+      </PressableScale>
     </Animated.View>
   );
 }
@@ -120,6 +146,15 @@ export default function CategoryView({ category, adminId }: Props) {
   const [activeYear, setActiveYear] = useState<number | null>(null);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  // Multi-select state for "Select multiple → Share as ZIP"
+  const [selecting, setSelecting] = useState(false);
+  const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [sharing, setSharing] = useState(false);
+  const toast = useToast();
+  const exitSelection = () => { setSelecting(false); setSelected(new Set()); };
+  const toggleId = (id: string) => {
+    setSelected((p) => { const n = new Set(p); n.has(id) ? n.delete(id) : n.add(id); return n; });
+  };
 
   const { isDesktop, docColumns, listMaxWidth } = useResponsive();
 
@@ -263,11 +298,95 @@ export default function CategoryView({ category, adminId }: Props) {
             columnWrapperStyle={docColumns > 1 ? { gap: 14 } : undefined}
             renderItem={({ item, index }) => (
               <View style={docColumns > 1 ? { flex: 1 } : undefined}>
-                <DocCard doc={item} index={index} />
+                <DocCard
+                  doc={item}
+                  index={index}
+                  selecting={selecting}
+                  selected={selected.has(item.id)}
+                  onToggle={() => toggleId(item.id)}
+                  onLongPress={() => {
+                    if (!selecting) setSelecting(true);
+                    setSelected((p) => new Set(p).add(item.id));
+                  }}
+                />
               </View>
             )}
             contentContainerStyle={styles.docList}
             ItemSeparatorComponent={() => <View style={{ height: 14 }} />}
+            ListHeaderComponent={
+              <View style={styles.bulkBar}>
+                {!selecting ? (
+                  <PressableScale
+                    haptic="light"
+                    onPress={() => setSelecting(true)}
+                    testID="btn-select-multi"
+                  >
+                    <View style={styles.selectBtn}>
+                      <Ionicons name="checkbox-outline" size={16} color="#1E40AF" />
+                      <Text style={styles.selectBtnText}>Select</Text>
+                    </View>
+                  </PressableScale>
+                ) : (
+                  <>
+                    <PressableScale
+                      haptic="light"
+                      onPress={() => {
+                        const allSel = filtered.length > 0 && filtered.every((d) => selected.has(d.id));
+                        setSelected((p) => {
+                          const n = new Set(p);
+                          for (const d of filtered) allSel ? n.delete(d.id) : n.add(d.id);
+                          return n;
+                        });
+                      }}
+                    >
+                      <View style={styles.selectBtn}>
+                        <Text style={styles.selectBtnText}>
+                          {filtered.length > 0 && filtered.every((d) => selected.has(d.id)) ? "Deselect all" : "Select all"}
+                        </Text>
+                      </View>
+                    </PressableScale>
+                    <Text style={styles.selCount}>{selected.size} selected</Text>
+                    <View style={{ flex: 1 }} />
+                    <PressableScale
+                      haptic="medium"
+                      onPress={async () => {
+                        if (selected.size === 0 || sharing) return;
+                        setSharing(true);
+                        try {
+                          const tk = await getToken();
+                          await shareDocumentsBulk(Array.from(selected), tk);
+                          toast.show(`Shared ${selected.size} document${selected.size !== 1 ? "s" : ""}`, { kind: "success", icon: "share-social" });
+                          exitSelection();
+                        } catch (e: any) {
+                          toast.show(e?.message || "Share failed", { kind: "error" });
+                        } finally {
+                          setSharing(false);
+                        }
+                      }}
+                      disabled={selected.size === 0 || sharing}
+                      testID="btn-share-multi"
+                    >
+                      <LinearGradient
+                        colors={selected.size === 0 ? ["#94A3B8", "#94A3B8"] : ["#3B82F6", "#8B5CF6"]}
+                        start={{ x: 0, y: 0 }}
+                        end={{ x: 1, y: 1 }}
+                        style={styles.shareMultiBtn}
+                      >
+                        <Ionicons name={sharing ? "hourglass" : "share-social"} size={16} color="#fff" />
+                        <Text style={styles.shareMultiText}>
+                          {sharing ? "Preparing…" : `Share (${selected.size})`}
+                        </Text>
+                      </LinearGradient>
+                    </PressableScale>
+                    <PressableScale haptic="light" onPress={exitSelection} disabled={sharing}>
+                      <View style={styles.cancelBtn}>
+                        <Ionicons name="close" size={16} color="#5F6368" />
+                      </View>
+                    </PressableScale>
+                  </>
+                )}
+              </View>
+            }
             refreshControl={
               <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.accent} />
             }
@@ -381,6 +500,55 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: colors.border,
     ...shadow.sm,
+  },
+  docCardSelected: {
+    borderColor: "#3B82F6",
+    backgroundColor: "rgba(59,130,246,0.05)",
+  },
+  checkbox: {
+    width: 28, height: 28, borderRadius: 8,
+    borderWidth: 2, borderColor: "#94A3B8",
+    backgroundColor: "#fff",
+    alignItems: "center", justifyContent: "center",
+    marginLeft: 8,
+  },
+  checkboxOn: {
+    borderColor: "#3B82F6",
+    backgroundColor: "#3B82F6",
+  },
+
+  // Multi-select toolbar shown above the doc list
+  bulkBar: {
+    flexDirection: "row", alignItems: "center", gap: 8,
+    flexWrap: "wrap",
+    marginBottom: 12,
+  },
+  selectBtn: {
+    flexDirection: "row", alignItems: "center", gap: 6,
+    paddingHorizontal: 14, paddingVertical: 9,
+    borderRadius: 999,
+    backgroundColor: "#fff",
+    borderWidth: 1, borderColor: "rgba(30,64,175,0.20)",
+  },
+  selectBtnText: { color: "#1E40AF", fontSize: 13, fontWeight: "800", letterSpacing: -0.2 },
+  selCount: {
+    fontSize: 12, fontWeight: "800",
+    color: "#1E40AF",
+    backgroundColor: "#DBEAFE",
+    paddingHorizontal: 10, paddingVertical: 5,
+    borderRadius: 999,
+  },
+  shareMultiBtn: {
+    flexDirection: "row", alignItems: "center", gap: 6,
+    paddingHorizontal: 14, paddingVertical: 9,
+    borderRadius: 999,
+  },
+  shareMultiText: { color: "#fff", fontSize: 13, fontWeight: "800", letterSpacing: -0.2 },
+  cancelBtn: {
+    width: 34, height: 34, borderRadius: 17,
+    backgroundColor: "#F1F5F9",
+    alignItems: "center", justifyContent: "center",
+    borderWidth: 1, borderColor: colors.border,
   },
   docIconWrap: {
     width: 46,
