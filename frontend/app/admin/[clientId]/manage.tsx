@@ -178,7 +178,7 @@ export default function ManageScreen() {
       <Text style={styles.title}>Manage Documents</Text>
       <Text style={styles.subtitle}>{docs.length} total</Text>
 
-      <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.filterRow}>
+      <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.filterRow} style={styles.filterScroll}>
         {["ALL", "MONTHLY_RETURN", "FORWARDING_LETTER", "IFA_REPORT", "OTHERS"].map((k) => {
           const active = k === filterCat;
           const label = k === "ALL" ? "All" : CATEGORY_LABELS[k];
@@ -308,7 +308,8 @@ const styles = StyleSheet.create({
   inner: { flex: 1, maxWidth: 1100, width: "100%", alignSelf: "center" },
   title: { fontSize: 24, fontWeight: "700", color: colors.textPrimary, paddingHorizontal: 24, paddingTop: 16 },
   subtitle: { fontSize: 13, color: colors.textSecondary, paddingHorizontal: 24, marginTop: 4 },
-  filterRow: { paddingHorizontal: 24, paddingVertical: 14, gap: 8 },
+  filterRow: { paddingHorizontal: 24, paddingVertical: 14, gap: 8, alignItems: "center" },
+  filterScroll: { flexGrow: 0, flexShrink: 0, maxHeight: 70 },
   filterChip: {
     minHeight: 38,
     paddingHorizontal: 16,

@@ -213,17 +213,14 @@ function UploadPanel({ clientId, onUploaded }: { clientId: string; onUploaded: (
 
   const uploadAll = async () => {
     setBulkBusy(true);
-    // Snapshot the indices we need to upload so progress updates don't race.
-    const queueIndices: number[] = [];
-    bulkRows.forEach((b, i) => { if (b.status === "pending" || b.status === "error") queueIndices.push(i); });
-    for (const i of queueIndices) {
-      // Read fresh row each iteration (in case state was updated)
-      let row: BulkRow | undefined;
-      setBulkRows((prev) => {
-        row = prev[i];
-        return prev.map((b, idx) => idx === i ? { ...b, status: "uploading", progress: 0, errorMsg: undefined } : b);
-      });
-      if (!row) continue;
+    // Snapshot rows + indices BEFORE the loop. Reading via setState callback
+    // is async in React, so the closure variable was undefined for every row,
+    // causing the function to skip every upload silently.
+    const queue = bulkRows
+      .map((b, i) => ({ row: b, index: i }))
+      .filter(({ row }) => row.status === "pending" || row.status === "error");
+    for (const { row, index } of queue) {
+      setBulkRows((prev) => prev.map((b, idx) => idx === index ? { ...b, status: "uploading", progress: 0, errorMsg: undefined } : b));
       try {
         const fd = new FormData();
         fd.append("file", row.file);
@@ -235,13 +232,13 @@ function UploadPanel({ clientId, onUploaded }: { clientId: string; onUploaded: (
           headers: { "Content-Type": "multipart/form-data" },
           onUploadProgress: (e) => {
             const pct = e.total ? Math.round((e.loaded / e.total) * 100) : 0;
-            setBulkRows((prev) => prev.map((b, idx) => idx === i ? { ...b, progress: pct } : b));
+            setBulkRows((prev) => prev.map((b, idx) => idx === index ? { ...b, progress: pct } : b));
           },
         });
         const display = resp.data?.display_name || row.file.name;
-        setBulkRows((prev) => prev.map((b, idx) => idx === i ? { ...b, status: "done", progress: 100, resultName: display } : b));
+        setBulkRows((prev) => prev.map((b, idx) => idx === index ? { ...b, status: "done", progress: 100, resultName: display } : b));
       } catch (e: any) {
-        setBulkRows((prev) => prev.map((b, idx) => idx === i ? { ...b, status: "error", errorMsg: e?.response?.data?.detail || "Upload failed" } : b));
+        setBulkRows((prev) => prev.map((b, idx) => idx === index ? { ...b, status: "error", errorMsg: e?.response?.data?.detail || "Upload failed" } : b));
       }
     }
     setBulkBusy(false);
