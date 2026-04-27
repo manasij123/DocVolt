@@ -27,14 +27,12 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: "20"
-          cache: "yarn"
-          cache-dependency-path: frontend/yarn.lock
 
       - name: Install Expo CLI + EAS CLI
         run: npm install -g eas-cli@latest expo@latest
 
       - name: Install project deps
-        run: yarn install --frozen-lockfile
+        run: yarn install
 
       - name: Authenticate EAS
         env:
