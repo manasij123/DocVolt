@@ -12,6 +12,9 @@ on:
       - "v*"            # Trigger on tags like v1.0.0, v1.0.1, …
   workflow_dispatch:    # Or trigger manually from the Actions tab
 
+permissions:
+  contents: write       # Required for creating/uploading to GitHub Releases
+
 jobs:
   build-apk:
     name: Build APK with EAS
