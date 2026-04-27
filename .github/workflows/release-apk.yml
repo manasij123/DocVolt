@@ -47,8 +47,13 @@ jobs:
             --platform android \
             --profile production \
             --non-interactive \
-            --no-wait=false \
-            --output=docvault.apk
+            --wait \
+            --json > build-result.json
+          cat build-result.json
+          APK_URL=$(node -e "const b=JSON.parse(require('fs').readFileSync('build-result.json','utf8')); console.log(Array.isArray(b)?b[0].artifacts.buildUrl:b.artifacts.buildUrl)")
+          echo "APK URL: $APK_URL"
+          curl -L -o docvault.apk "$APK_URL"
+          ls -lh docvault.apk
 
       - name: Upload APK to the GitHub Release
         uses: softprops/action-gh-release@v2

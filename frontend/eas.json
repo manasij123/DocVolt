@@ -22,10 +22,10 @@
     },
     "production": {
       "android": {
-        "buildType": "app-bundle"
+        "buildType": "apk"
       },
       "env": {
-        "EXPO_PUBLIC_BACKEND_URL": "https://REPLACE_WITH_YOUR_DEPLOYED_BACKEND_URL"
+        "EXPO_PUBLIC_BACKEND_URL": "https://doc-organizer-app.emergent.host"
       },
       "autoIncrement": true
     }
