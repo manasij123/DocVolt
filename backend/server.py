@@ -45,6 +45,16 @@ ADMIN_PASSWORD = os.environ.get("ADMIN_PASSWORD", "admin123")
 
 CATEGORIES = ["MONTHLY_RETURN", "FORWARDING_LETTER", "IFA_REPORT", "OTHERS"]
 
+# Seed defaults for every (admin, client) pair. Admins can rename / add more
+# later — but these four are always created so legacy data keeps working.
+# `key` is the uppercase slug that maps to the legacy `documents.category` enum.
+DEFAULT_CATEGORIES: list[dict] = [
+    {"key": "MONTHLY_RETURN",    "name": "Monthly Return",   "color": "#3B82F6", "icon": "stats-chart",  "keywords": ["monthly return", "monthly_return"]},
+    {"key": "FORWARDING_LETTER", "name": "Forwarding Letter","color": "#8B5CF6", "icon": "paper-plane",   "keywords": ["forwarding letter", "forwarding_letter", "forwarding-letter"]},
+    {"key": "IFA_REPORT",        "name": "IFA Report",       "color": "#10B981", "icon": "podium",        "keywords": ["ifa report", "ifa_report", "ifa-report"]},
+    {"key": "OTHERS",            "name": "Others",           "color": "#6B7280", "icon": "folder-open",   "keywords": []},
+]
+
 MONTH_MAP = {
     "jan": 1, "january": 1,
     "feb": 2, "february": 2,
@@ -143,8 +153,25 @@ class TokenResponse(BaseModel):
 class DocumentUpdate(BaseModel):
     display_name: Optional[str] = None
     category: Optional[str] = None
+    category_id: Optional[str] = None
     year: Optional[int] = None
     month: Optional[int] = None
+
+
+class CategoryCreate(BaseModel):
+    client_id: str
+    name: str
+    color: Optional[str] = "#3B82F6"
+    icon: Optional[str] = "folder"
+    keywords: Optional[list[str]] = None
+
+
+class CategoryUpdate(BaseModel):
+    name: Optional[str] = None
+    color: Optional[str] = None
+    icon: Optional[str] = None
+    keywords: Optional[list[str]] = None
+    sort_order: Optional[int] = None
 
 
 # ============================================================
@@ -266,7 +293,8 @@ def doc_to_meta(doc: dict) -> dict:
         "id": doc["id"],
         "original_name": doc["original_name"],
         "display_name": doc.get("display_name") or doc["original_name"],
-        "category": doc["category"],
+        "category": doc["category"],                    # legacy enum key (MONTHLY_RETURN, …)
+        "category_id": doc.get("category_id"),          # new per-client FK
         "year": doc["year"],
         "month": doc.get("month"),
         "month_label": month_label(doc.get("month")),
@@ -275,6 +303,105 @@ def doc_to_meta(doc: dict) -> dict:
         "admin_id": doc.get("admin_id"),
         "client_id": doc.get("client_id"),
     }
+
+
+def cat_to_meta(c: dict) -> dict:
+    return {
+        "id": c["id"],
+        "admin_id": c["admin_id"],
+        "client_id": c["client_id"],
+        "key": c.get("key"),
+        "name": c["name"],
+        "color": c.get("color", "#3B82F6"),
+        "icon": c.get("icon", "folder"),
+        "keywords": c.get("keywords", []),
+        "sort_order": c.get("sort_order", 999),
+        "is_default": bool(c.get("is_default", False)),
+        "created_at": c.get("created_at"),
+    }
+
+
+def _slugify_cat(name: str) -> str:
+    """Generate an uppercase slug usable as legacy `category` enum."""
+    s = re.sub(r"[^A-Za-z0-9]+", "_", name.strip()).strip("_").upper()
+    return s or "CATEGORY"
+
+
+async def _ensure_default_categories(admin_id: str, client_id: str) -> list[dict]:
+    """Make sure the 4 default categories exist for this (admin, client).
+    Returns the full list of categories (existing + newly inserted) for the pair.
+    """
+    existing = await db.categories.find(
+        {"admin_id": admin_id, "client_id": client_id},
+        {"_id": 0},
+    ).to_list(500)
+    existing_keys = {c.get("key") for c in existing}
+    to_insert: list[dict] = []
+    for idx, d in enumerate(DEFAULT_CATEGORIES):
+        if d["key"] in existing_keys:
+            continue
+        to_insert.append({
+            "id": str(uuid.uuid4()),
+            "admin_id": admin_id,
+            "client_id": client_id,
+            "key": d["key"],
+            "name": d["name"],
+            "color": d["color"],
+            "icon": d["icon"],
+            "keywords": d["keywords"],
+            "sort_order": idx,
+            "is_default": True,
+            "created_at": datetime.now(timezone.utc).isoformat(),
+        })
+    if to_insert:
+        await db.categories.insert_many(to_insert)
+        existing.extend(to_insert)
+    existing.sort(key=lambda x: (x.get("sort_order", 999), x.get("created_at", "")))
+    return existing
+
+
+async def _resolve_category_for_upload(
+    admin_id: str,
+    client_id: str,
+    filename: str,
+    override_id: Optional[str],
+    override_key: Optional[str],
+) -> dict:
+    """Pick the right category for an uploaded document.
+    Priority:
+      1. explicit category_id (validated belongs to the admin+client pair)
+      2. explicit category_override legacy key (MONTHLY_RETURN, ...)
+      3. keyword match against the pair's categories
+      4. fallback to OTHERS category (seeded if missing)
+    Returns the category dict.
+    """
+    cats = await _ensure_default_categories(admin_id, client_id)
+    if override_id:
+        for c in cats:
+            if c["id"] == override_id:
+                return c
+    if override_key:
+        k = override_key.upper().strip()
+        for c in cats:
+            if (c.get("key") or "").upper() == k:
+                return c
+    # keyword-based auto detect
+    lower = (filename or "").lower()
+    best: Optional[dict] = None
+    for c in cats:
+        for kw in (c.get("keywords") or []):
+            if kw and kw.lower() in lower:
+                best = c
+                break
+        if best:
+            break
+    if best:
+        return best
+    # fallback OTHERS
+    for c in cats:
+        if c.get("key") == "OTHERS":
+            return c
+    return cats[-1] if cats else {"id": "", "key": "OTHERS", "name": "Others"}
 
 
 # ============================================================
@@ -488,6 +615,7 @@ async def upload_document(
     file: UploadFile = File(...),
     client_id: str = Form(...),
     category_override: Optional[str] = Form(None),
+    category_id: Optional[str] = Form(None),
     year_override: Optional[int] = Form(None),
     month_override: Optional[int] = Form(None),
     current=Depends(get_current_admin),
@@ -512,12 +640,17 @@ async def upload_document(
         metadata={"content_type": "application/pdf", "doc_id": file_id},
     )
 
-    detected_category = categorize_filename(file.filename)
+    # Resolve category via the new per-client categories system (falls back to
+    # legacy keyword auto-detect + OTHERS). Also keeps the legacy `category`
+    # string populated for backward compatibility.
+    resolved_cat = await _resolve_category_for_upload(
+        admin_id=current["id"],
+        client_id=client_id,
+        filename=file.filename,
+        override_id=category_id,
+        override_key=category_override,
+    )
     detected_month, detected_year = extract_month_year(file.filename)
-
-    category = (category_override or detected_category).upper()
-    if category not in CATEGORIES:
-        category = "OTHERS"
 
     year = year_override or detected_year or datetime.now().year
     month = month_override if month_override is not None else detected_month
@@ -528,7 +661,8 @@ async def upload_document(
         "client_id": client_id,
         "original_name": file.filename,
         "display_name": file.filename.rsplit(".", 1)[0],
-        "category": category,
+        "category": resolved_cat.get("key") or _slugify_cat(resolved_cat.get("name", "OTHERS")),
+        "category_id": resolved_cat.get("id"),
         "year": int(year),
         "month": int(month) if month else None,
         "size": len(contents),
@@ -550,6 +684,7 @@ async def upload_document(
 async def list_documents(
     request: Request,
     category: Optional[str] = None,
+    category_id: Optional[str] = None,
     year: Optional[int] = None,
     client_id: Optional[str] = None,
     admin_id: Optional[str] = None,
@@ -574,7 +709,9 @@ async def list_documents(
     else:
         raise HTTPException(status_code=403, detail="Forbidden")
 
-    if category:
+    if category_id:
+        q["category_id"] = category_id
+    elif category:
         q["category"] = category.upper()
     if year:
         q["year"] = year
@@ -733,11 +870,24 @@ async def update_document(doc_id: str, payload: DocumentUpdate, current=Depends(
     update = {}
     if payload.display_name is not None:
         update["display_name"] = payload.display_name
-    if payload.category is not None:
-        cat = payload.category.upper()
-        if cat not in CATEGORIES:
+    if payload.category_id is not None:
+        cat = await db.categories.find_one(
+            {"id": payload.category_id, "admin_id": current["id"], "client_id": doc.get("client_id")},
+            {"_id": 0},
+        )
+        if not cat:
+            raise HTTPException(status_code=400, detail="Category not found for this client")
+        update["category_id"] = cat["id"]
+        update["category"] = cat.get("key") or _slugify_cat(cat.get("name", "OTHERS"))
+    elif payload.category is not None:
+        # Legacy path: accept a category key, map to a category_id on this pair.
+        cats = await _ensure_default_categories(current["id"], doc.get("client_id"))
+        k = payload.category.upper().strip()
+        matched = next((c for c in cats if (c.get("key") or "").upper() == k), None)
+        if not matched:
             raise HTTPException(status_code=400, detail="Invalid category")
-        update["category"] = cat
+        update["category_id"] = matched["id"]
+        update["category"] = matched.get("key") or k
     if payload.year is not None:
         update["year"] = int(payload.year)
     if payload.month is not None:
@@ -752,6 +902,155 @@ async def update_document(doc_id: str, payload: DocumentUpdate, current=Depends(
     await manager.send_to_user(meta["admin_id"], payload2)
     await manager.send_to_user(meta["client_id"], payload2)
     return meta
+
+
+# ============================================================
+# Per-client categories — CRUD
+# ============================================================
+@api_router.get("/categories")
+async def list_categories(
+    request: Request,
+    client_id: Optional[str] = None,
+    admin_id: Optional[str] = None,
+):
+    """Return categories scoped to the (admin, client) pair.
+    - Admin role: pass client_id (required). Admin owns the categories.
+    - Client role: pass admin_id (required). Client reads the admin's set.
+    Seeds the 4 defaults on first access so the UI always has something to show.
+    """
+    user = await _user_from_request(request)
+    if not user:
+        raise HTTPException(status_code=401, detail="Not authenticated")
+    if user["role"] == "admin":
+        if not client_id:
+            raise HTTPException(status_code=400, detail="client_id is required")
+        # Ensure connection exists — admins can only manage categories
+        # for clients they are connected to.
+        conn = await db.connections.find_one({"admin_id": user["id"], "client_id": client_id})
+        if not conn:
+            raise HTTPException(status_code=403, detail="Not connected with this client")
+        cats = await _ensure_default_categories(user["id"], client_id)
+    elif user["role"] == "client":
+        if not admin_id:
+            raise HTTPException(status_code=400, detail="admin_id is required")
+        conn = await db.connections.find_one({"admin_id": admin_id, "client_id": user["id"]})
+        if not conn:
+            raise HTTPException(status_code=403, detail="Not connected with this admin")
+        cats = await _ensure_default_categories(admin_id, user["id"])
+    else:
+        raise HTTPException(status_code=403, detail="Forbidden")
+    return [cat_to_meta(c) for c in cats]
+
+
+@api_router.post("/categories")
+async def create_category(payload: CategoryCreate, current=Depends(get_current_admin)):
+    if not payload.name or not payload.name.strip():
+        raise HTTPException(status_code=400, detail="Name is required")
+    conn = await db.connections.find_one({"admin_id": current["id"], "client_id": payload.client_id})
+    if not conn:
+        raise HTTPException(status_code=403, detail="Not connected with this client")
+    # Seed defaults first so the slot count is correct.
+    existing = await _ensure_default_categories(current["id"], payload.client_id)
+    name = payload.name.strip()
+    key = _slugify_cat(name)
+    # Make the key unique within the pair
+    taken_keys = {c.get("key") for c in existing}
+    if key in taken_keys:
+        base = key
+        i = 2
+        while f"{base}_{i}" in taken_keys:
+            i += 1
+        key = f"{base}_{i}"
+    sort_order = max([c.get("sort_order", 0) for c in existing], default=0) + 1
+    cat = {
+        "id": str(uuid.uuid4()),
+        "admin_id": current["id"],
+        "client_id": payload.client_id,
+        "key": key,
+        "name": name,
+        "color": payload.color or "#3B82F6",
+        "icon": payload.icon or "folder",
+        "keywords": [k.strip().lower() for k in (payload.keywords or []) if k and k.strip()],
+        "sort_order": sort_order,
+        "is_default": False,
+        "created_at": datetime.now(timezone.utc).isoformat(),
+    }
+    await db.categories.insert_one(cat)
+    cat.pop("_id", None)
+    meta = cat_to_meta(cat)
+    evt = {"type": "category:created", "category": meta}
+    await manager.send_to_user(current["id"], evt)
+    await manager.send_to_user(payload.client_id, evt)
+    return meta
+
+
+@api_router.put("/categories/{cat_id}")
+async def update_category(cat_id: str, payload: CategoryUpdate, current=Depends(get_current_admin)):
+    cat = await db.categories.find_one({"id": cat_id, "admin_id": current["id"]}, {"_id": 0})
+    if not cat:
+        raise HTTPException(status_code=404, detail="Category not found")
+    update: dict = {}
+    if payload.name is not None:
+        name = payload.name.strip()
+        if not name:
+            raise HTTPException(status_code=400, detail="Name cannot be empty")
+        update["name"] = name
+    if payload.color is not None:
+        update["color"] = payload.color
+    if payload.icon is not None:
+        update["icon"] = payload.icon
+    if payload.keywords is not None:
+        update["keywords"] = [k.strip().lower() for k in payload.keywords if k and k.strip()]
+    if payload.sort_order is not None:
+        update["sort_order"] = int(payload.sort_order)
+    if update:
+        await db.categories.update_one({"id": cat_id}, {"$set": update})
+    new_cat = await db.categories.find_one({"id": cat_id}, {"_id": 0})
+    meta = cat_to_meta(new_cat)
+    evt = {"type": "category:updated", "category": meta}
+    await manager.send_to_user(current["id"], evt)
+    await manager.send_to_user(cat.get("client_id"), evt)
+    return meta
+
+
+@api_router.delete("/categories/{cat_id}")
+async def delete_category(cat_id: str, current=Depends(get_current_admin)):
+    cat = await db.categories.find_one({"id": cat_id, "admin_id": current["id"]}, {"_id": 0})
+    if not cat:
+        raise HTTPException(status_code=404, detail="Category not found")
+    if cat.get("key") == "OTHERS":
+        raise HTTPException(status_code=400, detail="'Others' is the fallback category and cannot be deleted")
+    # Move every doc currently in this category to the OTHERS fallback for the
+    # same (admin, client) pair, then drop the row.
+    others = await db.categories.find_one(
+        {"admin_id": cat["admin_id"], "client_id": cat["client_id"], "key": "OTHERS"},
+        {"_id": 0},
+    )
+    if not others:
+        # Safety net — re-seed if somehow missing
+        await _ensure_default_categories(cat["admin_id"], cat["client_id"])
+        others = await db.categories.find_one(
+            {"admin_id": cat["admin_id"], "client_id": cat["client_id"], "key": "OTHERS"},
+            {"_id": 0},
+        )
+    moved = 0
+    if others:
+        res = await db.documents.update_many(
+            {"category_id": cat_id},
+            {"$set": {"category_id": others["id"], "category": others.get("key", "OTHERS")}},
+        )
+        moved = res.modified_count if res else 0
+    await db.categories.delete_one({"id": cat_id})
+    evt = {
+        "type": "category:deleted",
+        "id": cat_id,
+        "admin_id": cat.get("admin_id"),
+        "client_id": cat.get("client_id"),
+        "moved_to_others": moved,
+    }
+    await manager.send_to_user(cat.get("admin_id"), evt)
+    await manager.send_to_user(cat.get("client_id"), evt)
+    return {"ok": True, "moved_to_others": moved}
 
 
 @api_router.delete("/documents/{doc_id}")
@@ -913,6 +1212,43 @@ async def on_startup():
                     pass
             except Exception as e:
                 logging.error(f"Migration failed for doc {doc.get('id')}: {e}")
+
+    # -------- Categories migration (one-time, idempotent) --------
+    # 1) Unique index per (admin_id, client_id, key) so default seeding can't duplicate
+    try:
+        await db.categories.create_index(
+            [("admin_id", 1), ("client_id", 1), ("key", 1)], unique=True
+        )
+    except Exception:
+        pass
+    # 2) For every existing connection, seed the default 4 categories if missing
+    async for conn in db.connections.find({}, {"_id": 0, "admin_id": 1, "client_id": 1}):
+        a_id = conn.get("admin_id")
+        c_id = conn.get("client_id")
+        if a_id and c_id:
+            try:
+                await _ensure_default_categories(a_id, c_id)
+            except Exception as e:
+                logging.error(f"Seeding categories failed for {a_id}/{c_id}: {e}")
+    # 3) Back-fill `category_id` on any documents that don't have it yet
+    async for doc in db.documents.find(
+        {"$or": [{"category_id": {"$exists": False}}, {"category_id": None}, {"category_id": ""}]},
+        {"_id": 0, "id": 1, "admin_id": 1, "client_id": 1, "category": 1},
+    ):
+        a_id = doc.get("admin_id")
+        c_id = doc.get("client_id")
+        key = (doc.get("category") or "OTHERS").upper()
+        if not (a_id and c_id):
+            continue
+        cats = await _ensure_default_categories(a_id, c_id)
+        matched = next((c for c in cats if (c.get("key") or "").upper() == key), None)
+        if not matched:
+            matched = next((c for c in cats if c.get("key") == "OTHERS"), None)
+        if matched:
+            await db.documents.update_one(
+                {"id": doc["id"]},
+                {"$set": {"category_id": matched["id"], "category": matched.get("key") or "OTHERS"}},
+            )
 
 
 @app.on_event("shutdown")
