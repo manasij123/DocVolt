@@ -130,14 +130,16 @@ export default function BulkUploadScreen() {
     if (rows.length === 0) return;
     setBusy(true);
     const token = await getToken();
-    const indices = rows.map((r, i) => (r.status === "pending" || r.status === "error" ? i : -1)).filter((i) => i >= 0);
-    for (const i of indices) {
-      let row: Row | undefined;
-      setRows((prev) => {
-        row = prev[i];
-        return prev.map((r, idx) => idx === i ? { ...r, status: "uploading", progress: 0, errorMsg: undefined } : r);
-      });
-      if (!row) continue;
+    // Snapshot rows + indices BEFORE the loop. setState callback runs async
+    // in React so reading `row` there was undefined and the function skipped
+    // every upload silently (same bug the web bulk-upload had).
+    const queue = rows
+      .map((row, index) => ({ row, index }))
+      .filter(({ row }) => row.status === "pending" || row.status === "error");
+    let okCount = 0;
+    let failCount = 0;
+    for (const { row, index } of queue) {
+      setRows((prev) => prev.map((r, idx) => idx === index ? { ...r, status: "uploading", progress: 0, errorMsg: undefined } : r));
       try {
         const form = new FormData();
         if (Platform.OS === "web") {
@@ -154,20 +156,26 @@ export default function BulkUploadScreen() {
           headers: { "Content-Type": "multipart/form-data", Authorization: `Bearer ${token}` },
           onUploadProgress: (e) => {
             const pct = e.total ? Math.round((e.loaded / e.total) * 100) : 0;
-            setRows((prev) => prev.map((r, idx) => idx === i ? { ...r, progress: pct } : r));
+            setRows((prev) => prev.map((r, idx) => idx === index ? { ...r, progress: pct } : r));
           },
         });
         const display = resp.data?.display_name || row.name;
-        setRows((prev) => prev.map((r, idx) => idx === i ? { ...r, status: "done", progress: 100, resultName: display } : r));
+        setRows((prev) => prev.map((r, idx) => idx === index ? { ...r, status: "done", progress: 100, resultName: display } : r));
+        okCount += 1;
       } catch (e: any) {
         const msg = e?.response?.data?.detail || e?.message || "Upload failed";
-        setRows((prev) => prev.map((r, idx) => idx === i ? { ...r, status: "error", errorMsg: msg } : r));
+        setRows((prev) => prev.map((r, idx) => idx === index ? { ...r, status: "error", errorMsg: msg } : r));
+        failCount += 1;
       }
     }
     setBusy(false);
-    const finalDone = rows.filter((r) => r.status === "done").length + (indices.length);
-    toast.show(`Uploaded ${indices.length} document${indices.length !== 1 ? "s" : ""}`, { kind: "success", icon: "checkmark-circle" });
-    void finalDone;
+    if (okCount > 0 && failCount === 0) {
+      toast.show(`Uploaded ${okCount} document${okCount !== 1 ? "s" : ""}`, { kind: "success", icon: "checkmark-circle" });
+    } else if (okCount > 0 && failCount > 0) {
+      toast.show(`Uploaded ${okCount}, ${failCount} failed`, { kind: "error", icon: "alert-circle" });
+    } else if (failCount > 0) {
+      toast.show(`All ${failCount} upload${failCount !== 1 ? "s" : ""} failed`, { kind: "error", icon: "alert-circle" });
+    }
   };
 
   return (
