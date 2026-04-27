@@ -84,8 +84,7 @@ export default function Landing() {
           >
             <View style={styles.roleAction}>
               <Ionicons name={lockIcon} size={18} color="#1E293B" />
-              <Text style={styles.roleActionText}>Login</Text>
-              <Ionicons name="chevron-forward" size={14} color="#475569" />
+              <Text style={styles.roleActionText} numberOfLines={1}>Login</Text>
             </View>
           </PressableScale>
           <PressableScale
@@ -95,8 +94,7 @@ export default function Landing() {
           >
             <View style={[styles.roleAction, styles.roleActionAlt]}>
               <Ionicons name={clipboardIcon} size={18} color="#fff" />
-              <Text style={[styles.roleActionText, { color: "#fff" }]}>Register</Text>
-              <Ionicons name="chevron-forward" size={14} color="rgba(255,255,255,0.85)" />
+              <Text style={[styles.roleActionText, { color: "#fff" }]} numberOfLines={1}>Register</Text>
             </View>
           </PressableScale>
         </View>
