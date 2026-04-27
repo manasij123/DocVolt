@@ -58,8 +58,9 @@
     },
     "extra": {
       "eas": {
-        "projectId": "REPLACE_WITH_YOUR_EAS_PROJECT_ID"
+        "projectId": "d6cd090c-bb09-479b-9b07-fe38aec89cf3"
       }
-    }
+    },
+    "owner": "manasijmandal1999"
   }
 }
