@@ -7,6 +7,7 @@ load_dotenv(ROOT_DIR / ".env")
 
 import re
 import io
+import base64
 import zipfile
 import uuid
 import asyncio
@@ -170,8 +171,14 @@ class CategoryUpdate(BaseModel):
     name: Optional[str] = None
     color: Optional[str] = None
     icon: Optional[str] = None
+    custom_icon_b64: Optional[str] = None  # null clears, string sets
     keywords: Optional[list[str]] = None
     sort_order: Optional[int] = None
+
+
+class IconGenerateRequest(BaseModel):
+    description: str
+    style_hint: Optional[str] = None
 
 
 # ============================================================
@@ -314,6 +321,7 @@ def cat_to_meta(c: dict) -> dict:
         "name": c["name"],
         "color": c.get("color", "#3B82F6"),
         "icon": c.get("icon", "folder"),
+        "custom_icon_b64": c.get("custom_icon_b64"),
         "keywords": c.get("keywords", []),
         "sort_order": c.get("sort_order", 999),
         "is_default": bool(c.get("is_default", False)),
@@ -984,6 +992,57 @@ async def create_category(payload: CategoryCreate, current=Depends(get_current_a
     return meta
 
 
+@api_router.post("/categories/generate-icon")
+async def generate_category_icon(payload: IconGenerateRequest, current=Depends(get_current_admin)):
+    """Generate a unique flat-style icon image for a category using OpenAI gpt-image-1.
+    Returns the image base64-encoded so the frontend can preview / save without
+    a second round-trip. This does NOT yet attach the icon to a category — the
+    admin reviews the preview and explicitly saves it via PUT /categories/{id}.
+    """
+    desc = (payload.description or "").strip()
+    if not desc or len(desc) < 3:
+        raise HTTPException(status_code=400, detail="Please describe the icon in a few words")
+    if len(desc) > 400:
+        raise HTTPException(status_code=400, detail="Description too long (max 400 chars)")
+
+    api_key = os.environ.get("EMERGENT_LLM_KEY")
+    if not api_key:
+        raise HTTPException(status_code=500, detail="Image generation is not configured (missing key)")
+
+    style = (payload.style_hint or "").strip() or "flat icon, minimalist, vector style, single subject, vibrant solid colors, simple shapes"
+    prompt = (
+        f"A clean modern app-style icon representing: {desc}. "
+        f"Style: {style}. "
+        "Center the subject. White or transparent background. No text, no watermarks, "
+        "no borders. High contrast. Easy to read at small sizes (32px-64px). "
+        "Professional, friendly, glanceable design."
+    )
+
+    try:
+        from emergentintegrations.llm.openai.image_generation import OpenAIImageGeneration
+        gen = OpenAIImageGeneration(api_key=api_key)
+        images = await gen.generate_images(
+            prompt=prompt,
+            model="gpt-image-1",
+            number_of_images=1,
+        )
+        if not images or len(images) == 0:
+            raise HTTPException(status_code=502, detail="Image generation returned no result. Try again.")
+        b64 = base64.b64encode(images[0]).decode("utf-8")
+        return {"image_base64": b64, "prompt_used": prompt}
+    except HTTPException:
+        raise
+    except Exception as e:
+        msg = str(e) or "Image generation failed"
+        # Common: rate limit / invalid key / safety block
+        if "rate" in msg.lower() or "limit" in msg.lower():
+            raise HTTPException(status_code=429, detail="Rate limited. Please try again in a few seconds.")
+        if "safety" in msg.lower() or "policy" in msg.lower():
+            raise HTTPException(status_code=400, detail="The description was blocked by content safety. Please rephrase.")
+        logging.error(f"Icon generation failed: {e}")
+        raise HTTPException(status_code=500, detail=f"Generation failed: {msg[:120]}")
+
+
 @api_router.put("/categories/{cat_id}")
 async def update_category(cat_id: str, payload: CategoryUpdate, current=Depends(get_current_admin)):
     cat = await db.categories.find_one({"id": cat_id, "admin_id": current["id"]}, {"_id": 0})
@@ -999,6 +1058,9 @@ async def update_category(cat_id: str, payload: CategoryUpdate, current=Depends(
         update["color"] = payload.color
     if payload.icon is not None:
         update["icon"] = payload.icon
+    if payload.custom_icon_b64 is not None:
+        # Empty string clears the custom icon, anything else replaces it
+        update["custom_icon_b64"] = payload.custom_icon_b64 if payload.custom_icon_b64 else None
     if payload.keywords is not None:
         update["keywords"] = [k.strip().lower() for k in payload.keywords if k and k.strip()]
     if payload.sort_order is not None:

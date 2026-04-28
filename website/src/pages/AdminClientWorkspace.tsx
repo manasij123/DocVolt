@@ -4,6 +4,7 @@ import api, {
   CATEGORY_LABELS, CATEGORY_ICONS, DocumentMeta, fileUrl, bulkDownloadDocs,
   getToken, getUser, logout, UserInfo, initials, colorFromString,
   Category, listCategories, createCategory, updateCategoryApi, deleteCategoryApi,
+  generateCategoryIcon,
   CATEGORY_COLOR_PRESETS, CATEGORY_ICON_PRESETS, emojiForIcon, categoryDisplay,
 } from "../api";
 import { useDocsSocket } from "../useDocsSocket";
@@ -652,7 +653,11 @@ function CategoriesPanel({ clientId, cats, reload }: { clientId: string; cats: C
       <div className="cat-grid">
         {cats.map((c) => (
           <div key={c.id} className="cat-row">
-            <div className="cat-row-icon" style={{ background: `${c.color}1a`, color: c.color, borderColor: `${c.color}33` }}>{emojiForIcon(c.icon)}</div>
+            <div className="cat-row-icon" style={{ background: c.custom_icon_b64 ? "#fff" : `${c.color}1a`, color: c.color, borderColor: `${c.color}33`, padding: c.custom_icon_b64 ? 0 : undefined, overflow: "hidden" }}>
+              {c.custom_icon_b64
+                ? <img src={`data:image/png;base64,${c.custom_icon_b64}`} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+                : emojiForIcon(c.icon)}
+            </div>
             <div className="cat-row-meta">
               <div className="cat-row-name">{c.name}</div>
               <div className="cat-row-sub">
@@ -697,6 +702,28 @@ function CategoryEditor({ clientId, existing, onClose, onSaved }: {
   const [keywordsRaw, setKeywordsRaw] = useState((existing?.keywords || []).join(", "));
   const [saving, setSaving] = useState(false);
   const [err, setErr] = useState<string | null>(null);
+  // AI icon generation state
+  const [aiOpen, setAiOpen] = useState(!!existing?.custom_icon_b64);
+  const [aiDesc, setAiDesc] = useState("");
+  const [aiBusy, setAiBusy] = useState(false);
+  const [aiPreview, setAiPreview] = useState<string | null>(existing?.custom_icon_b64 || null);
+  const [aiErr, setAiErr] = useState<string | null>(null);
+
+  const generate = async () => {
+    if (!aiDesc.trim() || aiDesc.trim().length < 5) {
+      setAiErr("Please describe the icon in a few words (min 5 characters)");
+      return;
+    }
+    setAiBusy(true); setAiErr(null);
+    try {
+      const r = await generateCategoryIcon({ description: aiDesc.trim() });
+      setAiPreview(r.image_base64);
+    } catch (e: any) {
+      setAiErr(e?.response?.data?.detail || "Generation failed. Please try again.");
+    } finally {
+      setAiBusy(false);
+    }
+  };
 
   const save = async () => {
     if (!name.trim()) { setErr("Name is required"); return; }
@@ -704,9 +731,15 @@ function CategoryEditor({ clientId, existing, onClose, onSaved }: {
     const keywords = keywordsRaw.split(",").map((k) => k.trim()).filter(Boolean);
     try {
       if (existing) {
-        await updateCategoryApi(existing.id, { name: name.trim(), color, icon, keywords });
+        await updateCategoryApi(existing.id, {
+          name: name.trim(), color, icon, keywords,
+          custom_icon_b64: aiPreview || "",
+        } as any);
       } else {
-        await createCategory({ client_id: clientId, name: name.trim(), color, icon, keywords });
+        const created = await createCategory({ client_id: clientId, name: name.trim(), color, icon, keywords });
+        if (aiPreview) {
+          await updateCategoryApi(created.id, { custom_icon_b64: aiPreview } as any);
+        }
       }
       onSaved();
     } catch (e: any) {
@@ -717,7 +750,7 @@ function CategoryEditor({ clientId, existing, onClose, onSaved }: {
 
   return (
     <div className="modal-back" onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}>
-      <div className="modal-card" style={{ maxWidth: 520 }}>
+      <div className="modal-card" style={{ maxWidth: 560 }}>
         <h3>{existing ? "Edit category" : "New category"}</h3>
         {err && <div className="bulk-row-err" style={{ marginBottom: 10 }}>⚠ {err}</div>}
 
@@ -730,35 +763,71 @@ function CategoryEditor({ clientId, existing, onClose, onSaved }: {
           <label>Color</label>
           <div className="chip-row">
             {CATEGORY_COLOR_PRESETS.map((c) => (
-              <button
-                key={c}
-                className="chip"
-                onClick={() => setColor(c)}
-                style={{
-                  background: c,
-                  color: "#fff",
-                  borderColor: color === c ? "#0F172A" : "transparent",
-                  borderWidth: color === c ? 3 : 1,
-                  minWidth: 36, height: 36,
-                  padding: 0,
-                }}
-                title={c}
-              >{color === c ? "✓" : ""}</button>
+              <button key={c} className="chip" onClick={() => setColor(c)}
+                style={{ background: c, color: "#fff", borderColor: color === c ? "#0F172A" : "transparent", borderWidth: color === c ? 3 : 1, minWidth: 36, height: 36, padding: 0 }}
+                title={c}>{color === c ? "✓" : ""}</button>
             ))}
           </div>
         </div>
 
+        {/* AI icon generation */}
+        <div className="field" style={{ background: "linear-gradient(135deg, #EEF2FF, #FCE7F3)", padding: 14, borderRadius: 12, border: "1px solid #C7D2FE" }}>
+          <label style={{ display: "flex", alignItems: "center", gap: 8 }}>
+            <span style={{ fontSize: 16 }}>✨</span>
+            <span>Custom icon with AI</span>
+            {aiPreview && <span style={{ fontSize: 11, padding: "2px 6px", background: "#10B981", color: "#fff", borderRadius: 6, fontWeight: 700 }}>ACTIVE</span>}
+          </label>
+          {!aiOpen ? (
+            <button className="btn btn-ghost btn-sm" type="button" style={{ marginTop: 6 }} onClick={() => setAiOpen(true)}>
+              ✨ Generate icon with AI (gpt-image-1)
+            </button>
+          ) : (
+            <>
+              <p style={{ fontSize: 12, color: "#475569", marginTop: 4, marginBottom: 8, lineHeight: 1.5 }}>
+                Describe what the icon should look like. <b>Tips:</b> name the subject, mention style ("flat", "minimalist"), avoid text or complex scenes.<br/>
+                <span style={{ color: "#64748B" }}>
+                  Examples: "iron tablet pill being given to a school student" · "envelope with utilization certificate stamp" · "monthly attendance register at a school"
+                </span>
+              </p>
+              <textarea
+                className="input"
+                style={{ minHeight: 60, fontFamily: "inherit", resize: "vertical" }}
+                value={aiDesc}
+                onChange={(e) => setAiDesc(e.target.value)}
+                placeholder="e.g. Iron Folic Acid tablet for school students, flat icon style, blue background"
+                maxLength={400}
+              />
+              {aiErr && <div className="bulk-row-err" style={{ marginTop: 6 }}>⚠ {aiErr}</div>}
+              <div style={{ display: "flex", gap: 10, marginTop: 10, alignItems: "center", flexWrap: "wrap" }}>
+                <button className="btn btn-primary btn-sm" type="button" disabled={aiBusy} onClick={generate}>
+                  {aiBusy ? "🎨 Generating… (~30s)" : (aiPreview ? "🔄 Regenerate" : "🎨 Generate")}
+                </button>
+                {aiPreview && (
+                  <button className="btn btn-ghost btn-sm" type="button" onClick={() => { setAiPreview(null); setAiDesc(""); }}>
+                    ✕ Remove
+                  </button>
+                )}
+              </div>
+              {aiBusy && <p style={{ fontSize: 11, color: "#64748B", marginTop: 6 }}>This typically takes 30-60 seconds. The AI is creating a unique icon for you.</p>}
+              {aiPreview && (
+                <div style={{ marginTop: 14, padding: 14, background: "#fff", borderRadius: 12, border: "1px solid #E5E7EB", display: "flex", gap: 12, alignItems: "center" }}>
+                  <img src={`data:image/png;base64,${aiPreview}`} alt="Preview" style={{ width: 80, height: 80, borderRadius: 12, objectFit: "cover", border: `3px solid ${color}` }} />
+                  <div style={{ flex: 1 }}>
+                    <div style={{ fontSize: 13, fontWeight: 700 }}>Your AI icon</div>
+                    <div style={{ fontSize: 11, color: "#64748B", marginTop: 2 }}>Will replace the emoji icon when saved.</div>
+                  </div>
+                </div>
+              )}
+            </>
+          )}
+        </div>
+
         <div className="field">
-          <label>Icon</label>
+          <label>{aiPreview ? "Fallback emoji icon (used if custom icon is removed)" : "Icon"}</label>
           <div className="chip-row">
             {CATEGORY_ICON_PRESETS.map((p) => (
-              <button
-                key={p.name}
-                className={`chip ${icon === p.name ? "active" : ""}`}
-                onClick={() => setIcon(p.name)}
-                style={{ fontSize: 18, minWidth: 40, justifyContent: "center" }}
-                title={p.name}
-              >{p.emoji}</button>
+              <button key={p.name} className={`chip ${icon === p.name ? "active" : ""}`} onClick={() => setIcon(p.name)}
+                style={{ fontSize: 18, minWidth: 40, justifyContent: "center" }} title={p.name}>{p.emoji}</button>
             ))}
           </div>
         </div>
