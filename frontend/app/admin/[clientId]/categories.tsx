@@ -28,6 +28,7 @@ import {
 } from "../../../src/api";
 import { colors, radius } from "../../../src/theme";
 import { useDocsSocket } from "../../../src/useDocsSocket";
+import { suggestColorFromText } from "../../../src/colorTheme";
 import { useToast } from "../../../src/Toast";
 import GradientButton from "../../../src/GradientButton";
 import PressableScale from "../../../src/PressableScale";
@@ -206,6 +207,8 @@ function CategoryEditorModal({ clientId, existing, onClose, onSaved }: {
   const [aiBusy, setAiBusy] = useState(false);
   const [aiPreview, setAiPreview] = useState<string | null>(existing?.custom_icon_b64 || null);
   const [aiErr, setAiErr] = useState<string | null>(null);
+  const [colorPickedManually, setColorPickedManually] = useState(!!existing?.color);
+  const [colorAutoSuggested, setColorAutoSuggested] = useState(false);
 
   const generate = async () => {
     if (!aiDesc.trim() || aiDesc.trim().length < 5) {
@@ -213,6 +216,13 @@ function CategoryEditorModal({ clientId, existing, onClose, onSaved }: {
       return;
     }
     setAiBusy(true); setAiErr(null);
+    if (!colorPickedManually) {
+      const suggested = suggestColorFromText(`${name} ${aiDesc} ${keywordsRaw}`);
+      if (suggested) {
+        setColor(suggested);
+        setColorAutoSuggested(true);
+      }
+    }
     try {
       const tok = await getToken();
       const r = await generateCategoryIcon({ description: aiDesc.trim() }, tok || undefined);
@@ -285,9 +295,15 @@ function CategoryEditorModal({ clientId, existing, onClose, onSaved }: {
             />
 
             <Text style={s.fieldLabel}>Color</Text>
+            {colorAutoSuggested && !colorPickedManually && (
+              <View style={s.autoBadge}>
+                <Ionicons name="sparkles" size={11} color="#7C3AED" />
+                <Text style={s.autoBadgeText}>Auto-suggested from your AI prompt</Text>
+              </View>
+            )}
             <View style={s.swatchRow}>
               {CATEGORY_COLOR_PRESETS.map((c) => (
-                <PressableScale key={c} onPress={() => setColor(c)}>
+                <PressableScale key={c} onPress={() => { setColor(c); setColorPickedManually(true); setColorAutoSuggested(false); }}>
                   <View style={[s.swatch, { backgroundColor: c, borderColor: color === c ? "#0F172A" : "transparent", borderWidth: color === c ? 3 : 1 }]}>
                     {color === c && <Ionicons name="checkmark" size={18} color="#fff" />}
                   </View>
@@ -303,8 +319,9 @@ function CategoryEditorModal({ clientId, existing, onClose, onSaved }: {
                 onChangeText={(v) => {
                   let t = v.trim();
                   if (t && !t.startsWith("#")) t = "#" + t;
-                  // Allow up to #RRGGBBAA but visually update only on valid 4/7/9 length hex.
                   setColor(t.slice(0, 9));
+                  setColorPickedManually(true);
+                  setColorAutoSuggested(false);
                 }}
                 placeholder="#3B82F6"
                 placeholderTextColor="#94A3B8"
@@ -517,6 +534,18 @@ const s = StyleSheet.create({
     fontFamily: Platform.OS === "ios" ? "Menlo" : "monospace",
   },
   hexHint: { fontSize: 11, color: "#64748B", fontWeight: "700" },
+
+  autoBadge: {
+    flexDirection: "row", alignItems: "center", gap: 4,
+    alignSelf: "flex-start",
+    backgroundColor: "#F3E8FF",
+    borderColor: "#C4B5FD",
+    borderWidth: 1,
+    borderRadius: 999,
+    paddingHorizontal: 10, paddingVertical: 4,
+    marginBottom: 8,
+  },
+  autoBadgeText: { fontSize: 11, fontWeight: "700", color: "#7C3AED" },
 
   iconGrid: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
   iconChoice: {

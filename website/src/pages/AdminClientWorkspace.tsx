@@ -9,6 +9,8 @@ import api, {
 } from "../api";
 import { useDocsSocket } from "../useDocsSocket";
 import LiveBadge from "../LiveBadge";
+import ModernColorPicker from "../ModernColorPicker";
+import { suggestColorFromText } from "../colorTheme";
 
 const MONTHS = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
 const MONTH_MAP: Record<string, number> = {
@@ -708,6 +710,10 @@ function CategoryEditor({ clientId, existing, onClose, onSaved }: {
   const [aiBusy, setAiBusy] = useState(false);
   const [aiPreview, setAiPreview] = useState<string | null>(existing?.custom_icon_b64 || null);
   const [aiErr, setAiErr] = useState<string | null>(null);
+  /** Tracks whether the admin manually picked a color. While false, generating
+   * an AI icon will auto-set a thematic color from the description text. */
+  const [colorPickedManually, setColorPickedManually] = useState(!!existing?.color);
+  const [colorAutoSuggested, setColorAutoSuggested] = useState(false);
 
   const generate = async () => {
     if (!aiDesc.trim() || aiDesc.trim().length < 5) {
@@ -715,6 +721,15 @@ function CategoryEditor({ clientId, existing, onClose, onSaved }: {
       return;
     }
     setAiBusy(true); setAiErr(null);
+    // Auto-pick a thematic color BEFORE the long-running image call so the
+    // hero updates instantly; admin can still override at any time.
+    if (!colorPickedManually) {
+      const suggested = suggestColorFromText(`${name} ${aiDesc} ${keywordsRaw}`);
+      if (suggested) {
+        setColor(suggested);
+        setColorAutoSuggested(true);
+      }
+    }
     try {
       const r = await generateCategoryIcon({ description: aiDesc.trim() });
       setAiPreview(r.image_base64);
@@ -761,36 +776,13 @@ function CategoryEditor({ clientId, existing, onClose, onSaved }: {
 
         <div className="field">
           <label>Color</label>
-          <div className="chip-row">
-            {CATEGORY_COLOR_PRESETS.map((c) => (
-              <button key={c} className="chip" onClick={() => setColor(c)}
-                style={{ background: c, color: "#fff", borderColor: color === c ? "#0F172A" : "transparent", borderWidth: color === c ? 3 : 1, minWidth: 36, height: 36, padding: 0 }}
-                title={c}>{color === c ? "✓" : ""}</button>
-            ))}
-          </div>
-          {/* Free hex picker — native color wheel + hex text input */}
-          <div style={{ display: "flex", gap: 10, alignItems: "center", marginTop: 10 }}>
-            <input
-              type="color"
-              value={(/^#[0-9A-Fa-f]{6}$/.test(color) ? color : "#3B82F6")}
-              onChange={(e) => setColor(e.target.value)}
-              style={{ width: 44, height: 44, padding: 0, border: "1px solid #E5E7EB", borderRadius: 10, cursor: "pointer", background: "transparent" }}
-              title="Pick any color"
-            />
-            <input
-              className="input"
-              value={color}
-              onChange={(e) => {
-                let t = e.target.value.trim();
-                if (t && !t.startsWith("#")) t = "#" + t;
-                setColor(t.slice(0, 9).toUpperCase());
-              }}
-              placeholder="#3B82F6"
-              maxLength={9}
-              style={{ flex: 1, fontFamily: "ui-monospace, Menlo, monospace", fontWeight: 700 }}
-            />
-            <span style={{ fontSize: 11, color: "#64748B", fontWeight: 700 }}>Any HEX</span>
-          </div>
+          <ModernColorPicker
+            value={color}
+            onChange={setColor}
+            presets={CATEGORY_COLOR_PRESETS}
+            autoSuggested={colorAutoSuggested && !colorPickedManually}
+            onUserPick={() => { setColorPickedManually(true); setColorAutoSuggested(false); }}
+          />
         </div>
 
         {/* AI icon generation */}
