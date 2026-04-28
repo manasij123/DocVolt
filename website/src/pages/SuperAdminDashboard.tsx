@@ -166,7 +166,7 @@ export default function SuperAdminDashboard() {
           <ConnectionsView data={data} search={search} filterText={filterText} />
         )}
         {tab === "documents" && (
-          <DocumentsTable docs={data.documents} filterText={filterText} />
+          <DocumentsTable docs={data.documents} connections={data.connections} filterText={filterText} />
         )}
       </div>
     </div>
@@ -385,58 +385,235 @@ function NetworkGraph({ data, visible, highlight }: {
 
 function trunc(s: string, n: number) { return s && s.length > n ? s.slice(0, n - 1) + "…" : s; }
 
-function DocumentsTable({ docs, filterText }: {
+function DocumentsTable({ docs, connections, filterText }: {
   docs: SADocument[];
+  connections: SAConnection[];
   filterText: (...parts: (string | undefined)[]) => boolean;
 }) {
-  const visible = docs.filter((d) => filterText(d.admin_name, d.admin_email, d.client_name, d.client_email, d.filename));
+  // ──────────────────────────────────────────────────────────────────────
+  // Group documents by their admin↔client pair, then order the resulting
+  // groups by the connection's `created_at` (oldest first ⇒ "1st" badge
+  // shows the very first relationship that ever existed in the system).
+  // ──────────────────────────────────────────────────────────────────────
+  const groups = useMemo(() => {
+    const byKey: Record<string, { conn: SAConnection | null; docs: SADocument[] }> = {};
+    // Seed every known connection so even empty connections show up below.
+    for (const cn of connections) {
+      const k = `${cn.admin_id}::${cn.client_id}`;
+      byKey[k] = { conn: cn, docs: [] };
+    }
+    for (const d of docs) {
+      const k = `${d.admin_id}::${d.client_id}`;
+      if (!byKey[k]) byKey[k] = { conn: null, docs: [] };
+      byKey[k].docs.push(d);
+    }
+    // Sort docs within each group by uploaded_at desc (newest at top of each section).
+    Object.values(byKey).forEach((g) => g.docs.sort((a, b) => (b.uploaded_at || "").localeCompare(a.uploaded_at || "")));
+    // Order groups by connection.created_at asc (oldest connection first ⇒ #1).
+    const list = Object.entries(byKey).map(([k, v]) => ({ key: k, ...v }));
+    list.sort((a, b) => {
+      const ax = a.conn?.created_at || "9999";
+      const bx = b.conn?.created_at || "9999";
+      return ax.localeCompare(bx);
+    });
+    return list;
+  }, [docs, connections]);
+
+  const visibleGroups = groups.filter((g) =>
+    g.conn
+      ? filterText(g.conn.admin_name, g.conn.admin_email, g.conn.client_name, g.conn.client_email) || g.docs.some((d) => filterText(d.filename))
+      : g.docs.some((d) => filterText(d.admin_name, d.admin_email, d.client_name, d.client_email, d.filename)),
+  );
+
+  const totalDocs = visibleGroups.reduce((s, g) => s + g.docs.length, 0);
+
   return (
-    <div style={{ background: "#1E293B", border: "1px solid #334155", borderRadius: 12, overflow: "hidden" }}>
-      <div style={{ padding: "12px 16px", fontSize: 11, color: "#94A3B8", borderBottom: "1px solid #334155", display: "flex", justifyContent: "space-between" }}>
-        <span>📄 Read-only document log — newest first</span>
-        <span><strong style={{ color: "#fff" }}>{visible.length}</strong> shown</span>
+    <div>
+      {/* Header bar */}
+      <div style={{
+        display: "flex", justifyContent: "space-between", alignItems: "center",
+        background: "#1E293B", border: "1px solid #334155", borderRadius: 12,
+        padding: "12px 16px", marginBottom: 14,
+      }}>
+        <span style={{ fontSize: 12, color: "#94A3B8" }}>📄 Read-only document log — grouped by admin↔client connection (oldest first)</span>
+        <span style={{ fontSize: 12, color: "#94A3B8" }}>
+          <strong style={{ color: "#fff" }}>{visibleGroups.length}</strong> connections · <strong style={{ color: "#fff" }}>{totalDocs}</strong> docs
+        </span>
       </div>
-      <div style={{ overflowX: "auto" }}>
-        <table style={{ width: "100%", borderCollapse: "collapse", minWidth: 760 }}>
-          <thead>
-            <tr style={{ background: "#0F172A" }}>
-              {["Admin (sender)", "→", "Client (receiver)", "Filename", "Category", "Size", "Uploaded"].map((h, i) => (
-                <th key={i} style={{ textAlign: "left", padding: "12px 16px", fontSize: 11, color: "#94A3B8", textTransform: "uppercase", letterSpacing: 0.6, borderBottom: "1px solid #334155" }}>{h}</th>
-              ))}
-            </tr>
-          </thead>
-          <tbody>
-            {visible.length === 0 ? (
-              <tr><td colSpan={7} style={{ padding: 40, textAlign: "center", color: "#64748B" }}>No documents</td></tr>
-            ) : visible.map((d) => (
-              <tr key={d.id} style={{ borderBottom: "1px solid #334155" }}>
-                <td style={cellStyle}>
-                  <div style={{ fontWeight: 700, color: "#A78BFA" }}>{d.admin_name}</div>
-                  <div style={{ fontSize: 11, color: "#94A3B8" }}>{d.admin_email}</div>
-                </td>
-                <td style={{ ...cellStyle, fontSize: 18, color: "#FBBF24" }}>→</td>
-                <td style={cellStyle}>
-                  <div style={{ fontWeight: 700, color: "#34D399" }}>{d.client_name}</div>
-                  <div style={{ fontSize: 11, color: "#94A3B8" }}>{d.client_email}</div>
-                </td>
-                <td style={cellStyle}>
-                  <span style={{ color: "#fff", wordBreak: "break-all" }}>📎 {d.filename}</span>
-                </td>
-                <td style={cellStyle}>
-                  {d.category ? <span style={{ background: "#334155", padding: "2px 8px", borderRadius: 6, fontSize: 11, color: "#FBBF24", fontWeight: 700 }}>{d.category}</span> : <span style={{ color: "#64748B" }}>—</span>}
-                </td>
-                <td style={{ ...cellStyle, fontSize: 12, color: "#94A3B8" }}>{fmtSize(d.size_bytes)}</td>
-                <td style={{ ...cellStyle, fontSize: 12, color: "#94A3B8" }}>{fmtDate(d.uploaded_at)}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
+
+      {visibleGroups.length === 0 ? (
+        <div style={{ padding: 40, textAlign: "center", color: "#64748B", background: "#1E293B", borderRadius: 12, border: "1px solid #334155" }}>
+          No connections / documents match your search.
+        </div>
+      ) : (
+        <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+          {visibleGroups.map((g, idx) => (
+            <ConnectionGroup key={g.key} index={idx + 1} group={g} />
+          ))}
+        </div>
+      )}
     </div>
   );
 }
 
-const cellStyle: React.CSSProperties = { padding: "12px 16px", fontSize: 13, color: "#E2E8F0", verticalAlign: "top" };
+function ConnectionGroup({ index, group }: {
+  index: number;
+  group: { conn: SAConnection | null; docs: SADocument[] };
+}) {
+  const cn = group.conn;
+  const adminName = cn?.admin_name ?? group.docs[0]?.admin_name ?? "?";
+  const adminEmail = cn?.admin_email ?? group.docs[0]?.admin_email ?? "—";
+  const clientName = cn?.client_name ?? group.docs[0]?.client_name ?? "?";
+  const clientEmail = cn?.client_email ?? group.docs[0]?.client_email ?? "—";
+  const adminInitial = (adminName?.[0] || "?").toUpperCase();
+  const clientInitial = (clientName?.[0] || "?").toUpperCase();
+  const docCount = group.docs.length;
+
+  return (
+    <div style={{
+      background: "linear-gradient(180deg, #1E293B 0%, #1E293B 100%)",
+      border: "1px solid #334155", borderRadius: 16, overflow: "hidden",
+      boxShadow: "0 4px 16px rgba(0,0,0,0.25)",
+    }}>
+      {/* Section header: serial + admin → client */}
+      <div style={{
+        display: "flex", alignItems: "center", gap: 14, padding: "16px 18px",
+        background: "linear-gradient(90deg, rgba(167,139,250,0.10) 0%, rgba(52,211,153,0.10) 100%)",
+        borderBottom: "1px solid #334155",
+      }}>
+        {/* Serial number badge */}
+        <div style={{
+          width: 36, height: 36, borderRadius: 10,
+          background: "linear-gradient(135deg, #FACC15, #F59E0B)",
+          color: "#0F172A", fontWeight: 900, fontSize: 14,
+          display: "flex", alignItems: "center", justifyContent: "center",
+          boxShadow: "0 4px 14px rgba(245,158,11,0.35)",
+          flexShrink: 0,
+        }}>#{index}</div>
+
+        {/* Admin avatar + name */}
+        <div style={{ display: "flex", alignItems: "center", gap: 10, minWidth: 0, flex: 1 }}>
+          <div style={{
+            width: 38, height: 38, borderRadius: 10,
+            background: "#A78BFA22", border: "1.5px solid #A78BFA",
+            color: "#A78BFA", fontWeight: 800, fontSize: 14,
+            display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0,
+          }}>{adminInitial}</div>
+          <div style={{ minWidth: 0 }}>
+            <div style={{ fontSize: 13, fontWeight: 800, color: "#A78BFA", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{adminName}</div>
+            <div style={{ fontSize: 11, color: "#94A3B8", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{adminEmail}</div>
+          </div>
+        </div>
+
+        {/* Animated arrow connector */}
+        <div style={{
+          display: "flex", alignItems: "center", gap: 4,
+          color: "#FBBF24", fontSize: 18, fontWeight: 800,
+          padding: "0 8px",
+        }}>
+          <span style={{ borderTop: "2px dashed #FBBF24", width: 20, height: 0 }} />
+          <span style={{ fontSize: 18 }}>→</span>
+        </div>
+
+        {/* Client avatar + name */}
+        <div style={{ display: "flex", alignItems: "center", gap: 10, minWidth: 0, flex: 1, justifyContent: "flex-end" }}>
+          <div style={{ minWidth: 0, textAlign: "right" }}>
+            <div style={{ fontSize: 13, fontWeight: 800, color: "#34D399", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{clientName}</div>
+            <div style={{ fontSize: 11, color: "#94A3B8", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{clientEmail}</div>
+          </div>
+          <div style={{
+            width: 38, height: 38, borderRadius: 10,
+            background: "#34D39922", border: "1.5px solid #34D399",
+            color: "#34D399", fontWeight: 800, fontSize: 14,
+            display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0,
+          }}>{clientInitial}</div>
+        </div>
+
+        {/* Meta */}
+        <div style={{
+          display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 2,
+          paddingLeft: 12, borderLeft: "1px solid #334155",
+          minWidth: 110,
+        }}>
+          <div style={{ fontSize: 11, color: "#94A3B8", fontWeight: 700, letterSpacing: 0.4, textTransform: "uppercase" }}>Connected</div>
+          <div style={{ fontSize: 11, color: "#E2E8F0", fontWeight: 700 }}>{fmtDate(cn?.created_at)}</div>
+          <div style={{
+            marginTop: 2, fontSize: 10, fontWeight: 800,
+            background: docCount > 0 ? "#F472B622" : "#64748B22",
+            color: docCount > 0 ? "#F472B6" : "#94A3B8",
+            padding: "2px 8px", borderRadius: 999,
+          }}>{docCount} {docCount === 1 ? "doc" : "docs"}</div>
+        </div>
+      </div>
+
+      {/* Document list (timeline-style under the connection) */}
+      {docCount === 0 ? (
+        <div style={{ padding: "20px 18px", color: "#64748B", fontSize: 12, textAlign: "center" }}>
+          No documents shared in this connection yet.
+        </div>
+      ) : (
+        <div style={{ padding: "8px 18px 16px", position: "relative" }}>
+          {/* Vertical timeline rail */}
+          <div style={{
+            position: "absolute", left: 30, top: 16, bottom: 16, width: 2,
+            background: "linear-gradient(180deg, #A78BFA 0%, #34D399 100%)",
+            opacity: 0.25, borderRadius: 2,
+          }} />
+          {group.docs.map((d, i) => (
+            <div key={d.id} style={{
+              display: "flex", alignItems: "flex-start", gap: 14,
+              padding: "10px 0",
+              borderBottom: i === group.docs.length - 1 ? "none" : "1px dashed #33415555",
+              position: "relative",
+            }}>
+              {/* Timeline node */}
+              <div style={{
+                width: 24, height: 24, borderRadius: "50%",
+                background: "#0F172A", border: "2px solid #FBBF24",
+                display: "flex", alignItems: "center", justifyContent: "center",
+                fontSize: 10, fontWeight: 800, color: "#FBBF24",
+                flexShrink: 0, marginTop: 2, zIndex: 1,
+                boxShadow: "0 0 0 4px #1E293B",
+              }}>{i + 1}</div>
+              {/* Filename + meta */}
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div style={{ fontSize: 14, fontWeight: 700, color: "#fff", display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
+                  <span style={{ fontSize: 14 }}>📎</span>
+                  <span style={{ wordBreak: "break-word" }}>{d.filename}</span>
+                  {d.category && (
+                    <span style={{
+                      fontSize: 10, fontWeight: 800,
+                      background: "#FBBF2422", color: "#FBBF24",
+                      padding: "2px 8px", borderRadius: 6,
+                    }}>{d.category}</span>
+                  )}
+                </div>
+                <div style={{ marginTop: 4, fontSize: 11, color: "#94A3B8", display: "flex", gap: 10, flexWrap: "wrap" }}>
+                  <span style={{ display: "flex", alignItems: "center", gap: 4 }}>
+                    <span style={{ fontSize: 10 }}>🕐</span>{fmtDateLong(d.uploaded_at)}
+                  </span>
+                  <span style={{ color: "#475569" }}>·</span>
+                  <span>{fmtSize(d.size_bytes)}</span>
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function fmtDateLong(iso?: string) {
+  if (!iso) return "—";
+  try {
+    const d = new Date(iso);
+    return d.toLocaleString(undefined, {
+      year: "numeric", month: "short", day: "numeric",
+      hour: "2-digit", minute: "2-digit",
+    });
+  } catch { return iso; }
+}
 
 function StatCard({ label, value, color }: { label: string; value: number; color: string }) {
   return (
