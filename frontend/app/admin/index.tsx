@@ -14,6 +14,7 @@ import { useToast } from "../../src/Toast";
 import ConnectModal from "../../src/ConnectModal";
 import { FadeInItem } from "../../src/AnimatedList";
 import { colors, gradients, radius, shadow } from "../../src/theme";
+import { Ic } from "../../src/Icons";
 
 export default function AdminHome() {
   const router = useRouter();
@@ -95,7 +96,7 @@ export default function AdminHome() {
               <Text style={st.who} numberOfLines={1}>{user?.email}</Text>
             </View>
             <TouchableOpacity onPress={onLogout} style={st.logoutBtn}>
-              <Ionicons name="log-out-outline" size={18} color="#fff" />
+              <Ic kind="logout" size={18} />
               <Text style={st.logoutText}>Logout</Text>
             </TouchableOpacity>
           </View>

@@ -14,6 +14,7 @@ import ConnectModal from "../../src/ConnectModal";
 import { FadeInItem } from "../../src/AnimatedList";
 import { colors, gradients, radius, shadow } from "../../src/theme";
 import { LinearGradient } from "expo-linear-gradient";
+import { Ic } from "../../src/Icons";
 
 export default function ClientHome() {
   const router = useRouter();
@@ -87,7 +88,7 @@ export default function ClientHome() {
               <Text style={st.who} numberOfLines={1}>{user?.email}</Text>
             </View>
             <TouchableOpacity onPress={onLogout} style={st.logoutBtn}>
-              <Ionicons name="log-out-outline" size={18} color="#202124" />
+              <Ic kind="logout" size={18} />
             </TouchableOpacity>
           </View>
         </SafeAreaView>

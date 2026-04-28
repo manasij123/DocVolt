@@ -11,6 +11,7 @@ import { colors, radius, gradients } from "../src/theme";
 import PressableScale from "../src/PressableScale";
 import { useAuth } from "../src/auth";
 import SecurityBackground from "../src/SecurityBackground";
+import { Ic } from "../src/Icons";
 
 export default function Landing() {
   const router = useRouter();
@@ -83,7 +84,7 @@ export default function Landing() {
             style={{ flex: 1 }}
           >
             <View style={styles.roleAction}>
-              <Ionicons name={lockIcon} size={18} color="#1E293B" />
+              <Ic kind="login" size={20} />
               <Text style={styles.roleActionText} numberOfLines={1}>Login</Text>
             </View>
           </PressableScale>
@@ -93,7 +94,7 @@ export default function Landing() {
             style={{ flex: 1 }}
           >
             <View style={[styles.roleAction, styles.roleActionAlt]}>
-              <Ionicons name={clipboardIcon} size={18} color="#fff" />
+              <Ic kind="register" size={20} />
               <Text style={[styles.roleActionText, { color: "#fff" }]} numberOfLines={1}>Register</Text>
             </View>
           </PressableScale>

@@ -9,6 +9,7 @@ import { useRouter, Link } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import { colors, gradients, radius } from "./theme";
 import { useAuth, AUTH_WRONG_ROLE } from "./auth";
+import { Ic } from "./Icons";
 
 type Mode = "login" | "register";
 type Role = "admin" | "client";
@@ -185,8 +186,12 @@ export default function AuthForm({ mode, role, defaultEmail = "" }: { mode: Mode
 
               <TouchableOpacity onPress={submit} disabled={loading} style={[st.btn, loading && { opacity: 0.6 }]}>
                 <LinearGradient colors={gradients.primary} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={st.btnGrad}>
-                  {loading ? <ActivityIndicator color="#fff" /> :
-                    <Text style={st.btnText}>{mode === "login" ? "Sign In →" : "Create account →"}</Text>}
+                  {loading ? <ActivityIndicator color="#fff" /> : (
+                    <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
+                      <Ic kind={mode === "login" ? "login" : "register"} size={20} />
+                      <Text style={st.btnText}>{mode === "login" ? "Sign In" : "Create account"}</Text>
+                    </View>
+                  )}
                 </LinearGradient>
               </TouchableOpacity>
 
