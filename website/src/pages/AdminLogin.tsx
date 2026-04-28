@@ -5,7 +5,7 @@ import AuthHeroIcon from "../AuthHeroIcon";
 
 export default function AdminLogin() {
   const nav = useNavigate();
-  const [email, setEmail] = useState("admin@example.com");
+  const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [showPwd, setShowPwd] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -55,7 +55,6 @@ export default function AdminLogin() {
             <button type="submit" className="btn btn-primary btn-lg" style={{ width: "100%", marginTop: 10 }} disabled={loading}>
               {loading ? "Signing in…" : "Sign In →"}
             </button>
-            <div className="hint">ℹ️ Demo: <span className="kbd">admin@example.com</span> / <span className="kbd">admin123</span></div>
           </form>
         </div>
       </div>

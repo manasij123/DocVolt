@@ -1,7 +1,7 @@
 import React, { useEffect, useRef, useState } from "react";
 import {
   View, Text, StyleSheet, Animated, Easing, ActivityIndicator,
-  ScrollView, TouchableOpacity, Linking, Alert,
+  ScrollView, TouchableOpacity, Linking, Alert, Image,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { LinearGradient } from "expo-linear-gradient";
@@ -136,7 +136,13 @@ export default function Landing() {
             style={styles.webRow}
             testID="btn-open-web-version"
           >
-            <View style={styles.webIcon}><Ionicons name="globe-outline" size={18} color="#fff" /></View>
+            <View style={styles.webIcon}>
+              <Image
+                source={{ uri: "https://img.icons8.com/3d-fluency/94/chrome-browser.png" }}
+                style={{ width: 26, height: 26 }}
+                resizeMode="contain"
+              />
+            </View>
             <View style={{ flex: 1, minWidth: 0 }}>
               <Text style={styles.webTitle} numberOfLines={2}>Open Web Version</Text>
               <Text style={styles.webSub} numberOfLines={2}>doc-organizer-app.emergent.host</Text>

@@ -45,7 +45,15 @@ export default function Landing() {
             className="apk-cta"
             aria-label="Download Android APK"
           >
-            <span className="apk-cta-icon" aria-hidden>📱</span>
+            <span className="apk-cta-icon" aria-hidden>
+              <img
+                src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABgAAAAYCAYAAADgdz34AAAACXBIWXMAAAsTAAALEwEAmpwYAAAB6klEQVR4nL2WS0/bQBSFz3UBYQWbipgWKI8SQkhEy/uVpkKgUiERiyDxWnXVVdUdVXcFdcumEkLiByB2IHXXLf+Ax4Jd/wKIrqlzqzvEYAyUOAm50pHsMzPf0YztGQP51VMA60R0JpLrnFd0VQD4TJoCZ5tSL1gk1+JJW65PQTVFGp0A4PAryxn/Mcn2zzmlic13/GzgeVbaSKPfABaDgBMg+iWDQw0hZ/Dr8BXYr7HvKa5pMRwVRLQPoO9/YAvABghOZajSSXzo5pnd2XvhrtJ7Ge751MdVRtVfEGRW2wAa/fC3pNEfrUJzOuaiPL2TfhBs+yRjZKwwhAUgdY0nHOv1+sXk1vvAYNsnYeiWfgHCoXcGTnQhVjTczik6H2NhegM4thwvWUBsOS4BfG/AyLckV4d1pZHVpPKMFkMNuuG1mty/Msjt6Q4222vzDxCI0WYq6ZauPOlTFw/f8mqaL4M7l7ryD3Dv3Y6uZ/XW3woAgbs/vg62RLnGK9keT+Cja8niA+oSYSV4AvwvQsFLJMsw8GWI+1eG2Hxp3vC8AeK5D7k2EuAhP8Zr6jzuh0Y4ks+7xFvFgXcGKdmg6AllI5nCN7tIJsrCII3OAbwp63ZdlgOnbEcmPHXnoS9LUYpD31vub8upKMhvyz/0e9rjQpxzCwAAAABJRU5ErkJggg=="
+                alt="APK"
+                width={32}
+                height={32}
+                style={{ display: "block" }}
+              />
+            </span>
             <span className="apk-cta-body">
               <span className="apk-cta-title">Download Android App (.apk)</span>
               <span className="apk-cta-sub">Install DocVault on your phone — same data, real-time sync</span>
