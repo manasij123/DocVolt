@@ -110,9 +110,13 @@ export default function Landing() {
       <SafeAreaView style={{ flex: 1 }} edges={["top", "bottom"]}>
         <ScrollView contentContainerStyle={{ flexGrow: 1, padding: 24 }}>
           <Animated.View style={{ opacity: heroFade, transform: [{ translateY: heroSlide }], maxWidth: 640, alignSelf: "center", width: "100%" }}>
-            <LinearGradient colors={gradients.primary} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={styles.logoWrap}>
-              <Ionicons name="document-text" size={28} color="#fff" />
-            </LinearGradient>
+            <View style={styles.logoWrap}>
+              <Image
+                source={require("../assets/images/icon.png")}
+                style={{ width: 80, height: 80, borderRadius: 18 }}
+                resizeMode="cover"
+              />
+            </View>
             <Text style={styles.brand}>DocVault</Text>
             <Text style={styles.tagline}>Per-client privacy. Real-time sync.{"\n"}Same data on web & mobile.</Text>
           </Animated.View>
@@ -183,7 +187,7 @@ export default function Landing() {
 
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: colors.primary, alignItems: "center", justifyContent: "center" },
-  logoWrap: { width: 60, height: 60, borderRadius: 16, alignItems: "center", justifyContent: "center", marginBottom: 18 },
+  logoWrap: { width: 80, height: 80, borderRadius: 18, alignItems: "center", justifyContent: "center", marginBottom: 18, alignSelf: "flex-start", overflow: "hidden" },
   brand: { fontSize: 40, fontWeight: "800", color: "#fff", letterSpacing: -1.2 },
   tagline: { fontSize: 14, color: "#CBD5E1", marginTop: 8, lineHeight: 20 },
   section: { color: "#94A3B8", fontSize: 11, fontWeight: "700", letterSpacing: 1.5, textTransform: "uppercase", marginTop: 4 },

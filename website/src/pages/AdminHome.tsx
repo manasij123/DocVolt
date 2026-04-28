@@ -84,7 +84,7 @@ export default function AdminHome() {
     <div className="app-shell">
       <header className="topbar admin-bar">
         <div className="container topbar-inner">
-          <div className="brand"><div className="brand-mark">DV</div> Admin Console</div>
+          <div className="brand"><img src="/api/web/favicon.png" alt="DocVault" style={{ width: 32, height: 32, borderRadius: 8, objectFit: "cover", marginRight: 8 }} /> Admin Console</div>
           <div className="topbar-actions">
             <LiveBadge />
             <span className="who-pill">{me?.name}</span>

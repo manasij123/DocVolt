@@ -71,7 +71,7 @@ export default function ClientHome() {
     <div className="app-shell">
       <header className="topbar">
         <div className="container topbar-inner">
-          <div className="brand"><div className="brand-mark">DV</div> DocVault</div>
+          <div className="brand"><img src="/api/web/favicon.png" alt="DocVault" style={{ width: 32, height: 32, borderRadius: 8, objectFit: "cover", marginRight: 8 }} /> DocVault</div>
           <div className="topbar-actions">
             <LiveBadge />
             <span className="who-pill light">{me?.name}</span>

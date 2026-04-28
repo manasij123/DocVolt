@@ -24,7 +24,12 @@ export default function Landing() {
       <SecurityBackground />
       <div className="landing-inner container">
         <div className="hero-block">
-          <div className="hero-logo">DV</div>
+          <img
+            src="/api/web/docvault-logo.png"
+            alt="DocVault"
+            className="hero-logo"
+            style={{ width: 96, height: 96, borderRadius: 22, objectFit: "cover", boxShadow: "0 16px 50px rgba(59,130,246,0.45)" }}
+          />
           <h1 className="hero-title">DocVault</h1>
           <p className="hero-tagline">
             Organised PDF storage for your team — Monthly Returns,
