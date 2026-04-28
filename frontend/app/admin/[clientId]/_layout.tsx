@@ -55,6 +55,8 @@ export default function PerClientLayout() {
       >
         <Tabs.Screen name="upload" options={{ title: "Upload", tabBarIcon: ({ color, focused }) => <Ionicons name={focused ? "cloud-upload" : "cloud-upload-outline"} size={22} color={color} /> }} />
         <Tabs.Screen name="manage" options={{ title: "Manage", tabBarIcon: ({ color, focused }) => <Ionicons name={focused ? "settings" : "settings-outline"} size={22} color={color} /> }} />
+        <Tabs.Screen name="categories" options={{ title: "Tabs", tabBarIcon: ({ color, focused }) => <Ionicons name={focused ? "pricetags" : "pricetags-outline"} size={22} color={color} /> }} />
+        <Tabs.Screen name="bulk-upload" options={{ href: null }} />
       </Tabs>
     </View>
   );

@@ -15,7 +15,7 @@ import {
   ScrollView,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
-import api, { CATEGORY_LABELS, DocumentMeta } from "../../../src/api";
+import api, { CATEGORY_LABELS, Category, DocumentMeta, listCategories, getToken } from "../../../src/api";
 import { colors, radius, shadow, categoryGradients } from "../../../src/theme";
 import { LinearGradient } from "expo-linear-gradient";
 import PressableScale from "../../../src/PressableScale";
@@ -35,6 +35,7 @@ export default function ManageScreen() {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [filterCat, setFilterCat] = useState<string>("ALL");
+  const [cats, setCats] = useState<Category[]>([]);
 
   const [editing, setEditing] = useState<DocumentMeta | null>(null);
   const [editName, setEditName] = useState("");
@@ -58,6 +59,19 @@ export default function ManageScreen() {
   useEffect(() => {
     load();
   }, [load]);
+
+  // Load per-client categories so the filter chips reflect the admin's
+  // customised tab labels (and any new ones they create).
+  useEffect(() => {
+    if (!clientId) return;
+    (async () => {
+      try {
+        const tok = await getToken();
+        const list = await listCategories({ client_id: String(clientId) }, tok || undefined);
+        setCats(list);
+      } catch { /* ignore */ }
+    })();
+  }, [clientId]);
 
   const onRefresh = () => {
     setRefreshing(true);
@@ -128,7 +142,15 @@ export default function ManageScreen() {
     }
   };
 
-  const filtered = filterCat === "ALL" ? docs : docs.filter((d) => d.category === filterCat);
+  // filterCat is now a category id (or "ALL"). Match documents by category_id
+  // (preferred) and fall back to legacy key matching for older rows.
+  const filtered = filterCat === "ALL"
+    ? docs
+    : docs.filter((d) => {
+        if (d.category_id === filterCat) return true;
+        const c = cats.find((x) => x.id === filterCat);
+        return c ? d.category === c.key : false;
+      });
 
   if (loading) {
     return (
@@ -153,7 +175,7 @@ export default function ManageScreen() {
         <View style={styles.metaWrap}>
           <Text style={styles.docTitle} numberOfLines={2}>{item.display_name}</Text>
           <Text style={styles.docSub} numberOfLines={1}>
-            {CATEGORY_LABELS[item.category]} · {item.month_label ? `${item.month_label} ` : ""}{item.year}
+            {(cats.find((c) => c.id === item.category_id)?.name) || CATEGORY_LABELS[item.category] || item.category} · {item.month_label ? `${item.month_label} ` : ""}{item.year}
           </Text>
         </View>
         <View style={styles.actions}>
@@ -179,22 +201,25 @@ export default function ManageScreen() {
       <Text style={styles.subtitle}>{docs.length} total</Text>
 
       <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.filterRow} style={styles.filterScroll}>
-        {["ALL", "MONTHLY_RETURN", "FORWARDING_LETTER", "IFA_REPORT", "OTHERS"].map((k) => {
-          const active = k === filterCat;
-          const label = k === "ALL" ? "All" : CATEGORY_LABELS[k];
+        {[{ id: "ALL", name: "All", color: colors.accent } as any, ...cats].map((c: any) => {
+          const id = c.id;
+          const active = id === filterCat;
+          const label = c.name;
           return (
-            <PressableScale key={k} onPress={() => setFilterCat(k)} haptic="light">
+            <PressableScale key={id} onPress={() => setFilterCat(id)} haptic="light">
               <View
                 style={[
                   styles.filterChip,
-                  active ? styles.filterChipActive : null,
+                  active && id !== "ALL" ? { borderColor: c.color, backgroundColor: `${c.color}1a` } : null,
+                  active && id === "ALL" ? styles.filterChipActive : null,
                 ]}
               >
                 <Text
                   numberOfLines={1}
                   style={[
                     styles.filterText,
-                    active ? styles.filterTextActive : null,
+                    active && id !== "ALL" ? { color: c.color } : null,
+                    active && id === "ALL" ? styles.filterTextActive : null,
                   ]}
                 >
                   {label}

@@ -88,7 +88,8 @@ export type DocumentMeta = {
   id: string;
   original_name: string;
   display_name: string;
-  category: "MONTHLY_RETURN" | "FORWARDING_LETTER" | "IFA_REPORT" | "OTHERS";
+  category: string;            // legacy enum or custom slug
+  category_id?: string | null; // new per-client category FK
   year: number;
   month: number | null;
   month_label: string | null;
@@ -96,6 +97,20 @@ export type DocumentMeta = {
   uploaded_at: string;
   admin_id: string;
   client_id: string;
+};
+
+export type Category = {
+  id: string;
+  admin_id: string;
+  client_id: string;
+  key: string;
+  name: string;
+  color: string;
+  icon: string;          // ionicons name (eg "stats-chart")
+  keywords: string[];
+  sort_order: number;
+  is_default: boolean;
+  created_at?: string;
 };
 
 export type ClientRow = UserInfo & {
@@ -114,6 +129,76 @@ export const CATEGORY_LABELS: Record<string, string> = {
   IFA_REPORT: "IFA Report",
   OTHERS: "Others",
 };
+
+// Visual presets for the Category Editor (mobile uses Ionicons names).
+export const CATEGORY_COLOR_PRESETS = [
+  "#3B82F6", "#8B5CF6", "#10B981", "#F59E0B",
+  "#EF4444", "#EC4899", "#06B6D4", "#6B7280",
+];
+export const CATEGORY_ICON_PRESETS: { name: string; label: string }[] = [
+  { name: "stats-chart",    label: "Chart" },
+  { name: "paper-plane",    label: "Mail" },
+  { name: "podium",         label: "Report" },
+  { name: "folder-open",    label: "Folder" },
+  { name: "receipt",        label: "Receipt" },
+  { name: "card",           label: "Card" },
+  { name: "cash",           label: "Cash" },
+  { name: "calculator",     label: "Calc" },
+  { name: "briefcase",      label: "Bag" },
+  { name: "document-text",  label: "Doc" },
+  { name: "shield",         label: "Shield" },
+  { name: "medkit",         label: "Med" },
+  { name: "school",         label: "School" },
+  { name: "home",           label: "Home" },
+  { name: "car",            label: "Car" },
+  { name: "gift",           label: "Gift" },
+];
+
+// ===== Per-client dynamic categories — CRUD helpers =====
+export async function listCategories(params: { client_id?: string; admin_id?: string }, token?: string): Promise<Category[]> {
+  const r = await api.get<Category[]>("/categories", {
+    params,
+    headers: token ? { Authorization: `Bearer ${token}` } : undefined,
+  });
+  return r.data;
+}
+export async function createCategory(payload: {
+  client_id: string;
+  name: string;
+  color?: string;
+  icon?: string;
+  keywords?: string[];
+}, token?: string): Promise<Category> {
+  const r = await api.post<Category>("/categories", payload, {
+    headers: token ? { Authorization: `Bearer ${token}` } : undefined,
+  });
+  return r.data;
+}
+export async function updateCategoryApi(id: string, payload: Partial<Pick<Category, "name" | "color" | "icon" | "keywords" | "sort_order">>, token?: string): Promise<Category> {
+  const r = await api.put<Category>(`/categories/${id}`, payload, {
+    headers: token ? { Authorization: `Bearer ${token}` } : undefined,
+  });
+  return r.data;
+}
+export async function deleteCategoryApi(id: string, token?: string): Promise<{ ok: boolean; moved_to_others: number }> {
+  const r = await api.delete(`/categories/${id}`, {
+    headers: token ? { Authorization: `Bearer ${token}` } : undefined,
+  });
+  return r.data;
+}
+
+/** Pick the category that best matches a filename via the per-client keywords.
+ * Returns the category id, falling back to the OTHERS row if no match. */
+export function autoDetectCategoryId(filename: string, cats: Category[]): string {
+  const n = (filename || "").toLowerCase();
+  for (const c of cats) {
+    for (const kw of c.keywords || []) {
+      if (kw && n.includes(kw.toLowerCase())) return c.id;
+    }
+  }
+  const others = cats.find((c) => c.key === "OTHERS");
+  return others ? others.id : (cats[0]?.id || "");
+}
 
 export function fileUrl(id: string) {
   return `${API_BASE_URL}/documents/${id}/file`;
