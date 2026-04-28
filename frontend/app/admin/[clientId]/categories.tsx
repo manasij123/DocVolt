@@ -294,6 +294,26 @@ function CategoryEditorModal({ clientId, existing, onClose, onSaved }: {
                 </PressableScale>
               ))}
             </View>
+            {/* Free hex picker — type any #RRGGBB and the swatch updates live. */}
+            <View style={s.hexRow}>
+              <View style={[s.hexPreview, { backgroundColor: color }]} />
+              <TextInput
+                style={s.hexInput}
+                value={color}
+                onChangeText={(v) => {
+                  let t = v.trim();
+                  if (t && !t.startsWith("#")) t = "#" + t;
+                  // Allow up to #RRGGBBAA but visually update only on valid 4/7/9 length hex.
+                  setColor(t.slice(0, 9));
+                }}
+                placeholder="#3B82F6"
+                placeholderTextColor="#94A3B8"
+                autoCapitalize="characters"
+                autoCorrect={false}
+                maxLength={9}
+              />
+              <Text style={s.hexHint}>Any HEX</Text>
+            </View>
 
             <Text style={s.fieldLabel}>✨ Custom icon with AI</Text>
             {!aiOpen ? (
@@ -477,6 +497,26 @@ const s = StyleSheet.create({
     width: 38, height: 38, borderRadius: 19,
     alignItems: "center", justifyContent: "center",
   },
+
+  hexRow: {
+    flexDirection: "row", alignItems: "center", gap: 10,
+    marginTop: 10,
+  },
+  hexPreview: {
+    width: 38, height: 38, borderRadius: 10,
+    borderWidth: 2, borderColor: "#0F172A22",
+  },
+  hexInput: {
+    flex: 1,
+    backgroundColor: "#F8FAFC",
+    borderRadius: 10,
+    paddingHorizontal: 12, paddingVertical: 10,
+    fontSize: 14, fontWeight: "700",
+    color: colors.textPrimary,
+    borderWidth: 1, borderColor: colors.border,
+    fontFamily: Platform.OS === "ios" ? "Menlo" : "monospace",
+  },
+  hexHint: { fontSize: 11, color: "#64748B", fontWeight: "700" },
 
   iconGrid: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
   iconChoice: {

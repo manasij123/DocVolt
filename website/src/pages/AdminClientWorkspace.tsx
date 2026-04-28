@@ -768,6 +768,29 @@ function CategoryEditor({ clientId, existing, onClose, onSaved }: {
                 title={c}>{color === c ? "✓" : ""}</button>
             ))}
           </div>
+          {/* Free hex picker — native color wheel + hex text input */}
+          <div style={{ display: "flex", gap: 10, alignItems: "center", marginTop: 10 }}>
+            <input
+              type="color"
+              value={(/^#[0-9A-Fa-f]{6}$/.test(color) ? color : "#3B82F6")}
+              onChange={(e) => setColor(e.target.value)}
+              style={{ width: 44, height: 44, padding: 0, border: "1px solid #E5E7EB", borderRadius: 10, cursor: "pointer", background: "transparent" }}
+              title="Pick any color"
+            />
+            <input
+              className="input"
+              value={color}
+              onChange={(e) => {
+                let t = e.target.value.trim();
+                if (t && !t.startsWith("#")) t = "#" + t;
+                setColor(t.slice(0, 9).toUpperCase());
+              }}
+              placeholder="#3B82F6"
+              maxLength={9}
+              style={{ flex: 1, fontFamily: "ui-monospace, Menlo, monospace", fontWeight: 700 }}
+            />
+            <span style={{ fontSize: 11, color: "#64748B", fontWeight: 700 }}>Any HEX</span>
+          </div>
         </div>
 
         {/* AI icon generation */}

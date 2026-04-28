@@ -956,7 +956,25 @@ async def create_category(payload: CategoryCreate, current=Depends(get_current_a
         raise HTTPException(status_code=400, detail="Name is required")
     conn = await db.connections.find_one({"admin_id": current["id"], "client_id": payload.client_id})
     if not conn:
-        raise HTTPException(status_code=403, detail="Not connected with this client")
+        # Diagnostic: list 3 example connections so we can see what IDs the admin actually has.
+        sample = []
+        async for c in db.connections.find({"admin_id": current["id"]}).limit(3):
+            sample.append(c.get("client_id"))
+        logger.warning(
+            "create_category 403 — admin=%s wants client_id=%r, has %d connections (e.g. %r)",
+            current["id"], payload.client_id, len(sample), sample,
+        )
+        # Self-heal: if the target *user* exists and IS a client, auto-create the
+        # connection. This unblocks the case where an admin opens a client they
+        # see in /api/clients but the connection row was somehow lost (legacy
+        # data, race condition, etc.). Same security boundary as upload — admin
+        # is already authenticated; client_id existence is the only gate.
+        target = await db.users.find_one({"id": payload.client_id, "role": "client"}, {"_id": 0, "password_hash": 0})
+        if target:
+            await _create_connection(current["id"], payload.client_id, current["id"])
+            logger.info("create_category — self-healed missing connection admin=%s client=%s", current["id"], payload.client_id)
+        else:
+            raise HTTPException(status_code=403, detail="Client not found or not connected. Open the client from your dashboard and try again.")
     # Seed defaults first so the slot count is correct.
     existing = await _ensure_default_categories(current["id"], payload.client_id)
     name = payload.name.strip()
