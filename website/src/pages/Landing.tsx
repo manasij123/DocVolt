@@ -27,14 +27,45 @@ export default function Landing() {
           <img
             src="/api/web/docvault-logo.png"
             alt="DocVault"
-            className="hero-logo"
-            style={{ width: 96, height: 96, borderRadius: 22, objectFit: "cover", boxShadow: "0 16px 50px rgba(59,130,246,0.45)" }}
+            className="dv-fullmark"
+            style={{
+              width: "min(420px, 80vw)",
+              height: "auto",
+              objectFit: "contain",
+              filter: "drop-shadow(0 16px 50px rgba(59,130,246,0.30))",
+              marginBottom: 8,
+            }}
           />
-          <h1 className="hero-title">DocVault</h1>
+          <p
+            className="hero-slogan"
+            style={{
+              display: "inline-block",
+              fontSize: "clamp(14px, 2.2vw, 18px)",
+              fontWeight: 800,
+              letterSpacing: 0.3,
+              margin: "10px 0 18px",
+              fontStyle: "italic",
+              padding: "10px 16px",
+              borderRadius: 12,
+              background: "rgba(255,255,255,0.92)",
+              boxShadow: "0 6px 22px rgba(15,23,42,0.18), inset 0 0 0 1px rgba(255,255,255,0.6)",
+              backdropFilter: "blur(6px)",
+              WebkitBackdropFilter: "blur(6px)",
+            }}
+          >
+            <span
+              style={{
+                background: "linear-gradient(90deg, #0F172A 0%, #1E40AF 55%, #2563EB 100%)",
+                WebkitBackgroundClip: "text",
+                WebkitTextFillColor: "transparent",
+                backgroundClip: "text",
+              }}
+            >
+              Organised PDF storage. Per-client privacy. Real-time sync.
+            </span>
+          </p>
           <p className="hero-tagline">
-            Organised PDF storage for your team — Monthly Returns,
-            Forwarding Letters, IFA Reports.<br />
-            <strong>Per-client privacy. Real-time sync. Same data on web & mobile.</strong>
+            Monthly Returns, Forwarding Letters, IFA Reports — all auto-categorised, instantly synced across web &amp; mobile.
           </p>
           <div className="hero-pills">
             <span className="hero-pill">⚡ Auto-categorise</span>
