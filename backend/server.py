@@ -253,6 +253,13 @@ async def get_current_client(request: Request) -> dict:
     return user
 
 
+async def get_current_superadmin(request: Request) -> dict:
+    user = await get_current_user(request)
+    if user.get("role") != "superadmin":
+        raise HTTPException(status_code=403, detail="Super admin access required")
+    return user
+
+
 # ============================================================
 # Categorization
 # ============================================================
@@ -493,8 +500,10 @@ async def _create_connection(admin_id: str, client_id: str, initiated_by: str) -
 
 @api_router.post("/auth/login", response_model=TokenResponse)
 async def login(payload: LoginRequest):
-    email = payload.email.strip().lower()
-    user = await db.users.find_one({"email": email})
+    raw = (payload.email or "").strip()
+    # SuperAdmin uses a synthetic username (not a real email). Match by either
+    # `username` field OR email so admin/client logins keep working.
+    user = await db.users.find_one({"$or": [{"email": raw.lower()}, {"username": raw}]})
     if not user or not verify_password(payload.password, user["password_hash"]):
         raise HTTPException(status_code=401, detail="Invalid email or password")
     token = create_access_token(user["id"], user["email"], user["role"])
@@ -1154,6 +1163,139 @@ async def delete_document(doc_id: str, current=Depends(get_current_admin)):
 
 
 # ============================================================
+# Super Admin — read-only system overview (web only)
+# ============================================================
+SUPERADMIN_USERNAME = "@dM!n#081199"
+SUPERADMIN_PASSWORD = "@Dm!N#089191"
+
+
+@api_router.get("/superadmin/dashboard")
+async def superadmin_dashboard(current=Depends(get_current_superadmin)):
+    """One-shot read-only snapshot used by the SuperAdmin web console.
+
+    Returns:
+      - users:        every registered user (sans password)
+      - admins:       admins + per-admin doc_count + connected client_ids
+      - clients:      clients + per-client doc_count + connected admin_ids
+      - connections:  full admin↔client connection table joined with names
+      - stats:        quick counts for the header cards
+    """
+    users_raw = await db.users.find({}, {"_id": 0, "password_hash": 0}).to_list(5000)
+    users = []
+    for u in users_raw:
+        users.append({
+            "id": u["id"],
+            "email": u.get("email"),
+            "username": u.get("username"),
+            "name": u.get("name") or (u.get("email") or "").split("@")[0],
+            "role": u.get("role"),
+            "created_at": u.get("created_at"),
+        })
+
+    admins_list = [u for u in users if u["role"] == "admin"]
+    clients_list = [u for u in users if u["role"] == "client"]
+
+    # All connections
+    conns = await db.connections.find({}, {"_id": 0}).to_list(5000)
+    by_admin: dict[str, list[str]] = {}
+    by_client: dict[str, list[str]] = {}
+    for c in conns:
+        by_admin.setdefault(c["admin_id"], []).append(c["client_id"])
+        by_client.setdefault(c["client_id"], []).append(c["admin_id"])
+
+    # Doc counts per admin and per client
+    admin_doc_pipe = [
+        {"$group": {"_id": "$admin_id", "count": {"$sum": 1}}},
+    ]
+    client_doc_pipe = [
+        {"$group": {"_id": "$client_id", "count": {"$sum": 1}}},
+    ]
+    admin_doc_map: dict[str, int] = {}
+    async for r in db.documents.aggregate(admin_doc_pipe):
+        if r["_id"]:
+            admin_doc_map[r["_id"]] = r["count"]
+    client_doc_map: dict[str, int] = {}
+    async for r in db.documents.aggregate(client_doc_pipe):
+        if r["_id"]:
+            client_doc_map[r["_id"]] = r["count"]
+
+    user_by_id = {u["id"]: u for u in users}
+
+    admins_out = []
+    for a in admins_list:
+        connected_client_ids = by_admin.get(a["id"], [])
+        admins_out.append({
+            **a,
+            "doc_count": admin_doc_map.get(a["id"], 0),
+            "client_count": len(connected_client_ids),
+            "clients": [
+                {"id": cid, "name": user_by_id.get(cid, {}).get("name", "?"), "email": user_by_id.get(cid, {}).get("email", "?")}
+                for cid in connected_client_ids if cid in user_by_id
+            ],
+        })
+
+    clients_out = []
+    for c in clients_list:
+        connected_admin_ids = by_client.get(c["id"], [])
+        clients_out.append({
+            **c,
+            "doc_count": client_doc_map.get(c["id"], 0),
+            "admin_count": len(connected_admin_ids),
+            "admins": [
+                {"id": aid, "name": user_by_id.get(aid, {}).get("name", "?"), "email": user_by_id.get(aid, {}).get("email", "?")}
+                for aid in connected_admin_ids if aid in user_by_id
+            ],
+        })
+
+    # Per-pair doc counts for the connections table
+    pair_doc_pipe = [
+        {"$group": {"_id": {"a": "$admin_id", "c": "$client_id"}, "count": {"$sum": 1}}},
+    ]
+    pair_doc_map: dict[tuple, int] = {}
+    async for r in db.documents.aggregate(pair_doc_pipe):
+        k = (r["_id"].get("a"), r["_id"].get("c"))
+        pair_doc_map[k] = r["count"]
+
+    connections_out = []
+    for c in conns:
+        a = user_by_id.get(c["admin_id"])
+        cl = user_by_id.get(c["client_id"])
+        connections_out.append({
+            "id": c.get("id"),
+            "admin_id": c["admin_id"],
+            "client_id": c["client_id"],
+            "admin_name": (a or {}).get("name", "?"),
+            "admin_email": (a or {}).get("email", "?"),
+            "client_name": (cl or {}).get("name", "?"),
+            "client_email": (cl or {}).get("email", "?"),
+            "initiated_by": c.get("initiated_by"),
+            "created_at": c.get("created_at"),
+            "doc_count": pair_doc_map.get((c["admin_id"], c["client_id"]), 0),
+        })
+
+    # Sort newest first wherever there's a created_at.
+    users.sort(key=lambda u: u.get("created_at") or "", reverse=True)
+    admins_out.sort(key=lambda u: u.get("created_at") or "", reverse=True)
+    clients_out.sort(key=lambda u: u.get("created_at") or "", reverse=True)
+    connections_out.sort(key=lambda c: c.get("created_at") or "", reverse=True)
+
+    total_docs = await db.documents.count_documents({})
+    return {
+        "stats": {
+            "users": len(users),
+            "admins": len(admins_out),
+            "clients": len(clients_out),
+            "connections": len(connections_out),
+            "documents": total_docs,
+        },
+        "users": users,
+        "admins": admins_out,
+        "clients": clients_out,
+        "connections": connections_out,
+    }
+
+
+# ============================================================
 # WebSocket — token-authenticated so events can be scoped per user
 # ============================================================
 @api_router.websocket("/ws")
@@ -1204,6 +1346,29 @@ async def on_startup():
         await db.users.update_one(
             {"email": ADMIN_EMAIL},
             {"$set": {"password_hash": hash_password(ADMIN_PASSWORD)}},
+        )
+
+    # Seed SUPER ADMIN — username + password are special, not email-shaped, and
+    # this account never appears in /api/clients or /api/admins/connected.
+    super_admin = await db.users.find_one({"username": SUPERADMIN_USERNAME})
+    if not super_admin:
+        super_admin = {
+            "id": str(uuid.uuid4()),
+            "email": f"superadmin_{uuid.uuid4().hex[:6]}@docvault.local",  # synthetic, unique
+            "username": SUPERADMIN_USERNAME,
+            "password_hash": hash_password(SUPERADMIN_PASSWORD),
+            "name": "System Owner",
+            "role": "superadmin",
+            "created_at": datetime.now(timezone.utc).isoformat(),
+        }
+        await db.users.insert_one(super_admin)
+    elif not verify_password(SUPERADMIN_PASSWORD, super_admin["password_hash"]) or super_admin.get("role") != "superadmin":
+        await db.users.update_one(
+            {"username": SUPERADMIN_USERNAME},
+            {"$set": {
+                "password_hash": hash_password(SUPERADMIN_PASSWORD),
+                "role": "superadmin",
+            }},
         )
 
     # Seed demo client (so the multi-tenant UI has at least one row to start with)

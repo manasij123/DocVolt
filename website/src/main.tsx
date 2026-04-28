@@ -11,6 +11,8 @@ import AdminHome from "./pages/AdminHome";
 import AdminClientWorkspace from "./pages/AdminClientWorkspace";
 import ClientHome from "./pages/ClientHome";
 import ClientCategoryView from "./pages/ClientCategoryView";
+import SuperAdminLogin from "./pages/SuperAdminLogin";
+import SuperAdminDashboard from "./pages/SuperAdminDashboard";
 
 ReactDOM.createRoot(document.getElementById("root")!).render(
   <React.StrictMode>
@@ -25,6 +27,8 @@ ReactDOM.createRoot(document.getElementById("root")!).render(
         <Route path="/admin/c/:clientId" element={<AdminClientWorkspace />} />
         <Route path="/client" element={<ClientHome />} />
         <Route path="/client/a/:adminId" element={<ClientCategoryView />} />
+        <Route path="/superadmin/login" element={<SuperAdminLogin />} />
+        <Route path="/superadmin" element={<SuperAdminDashboard />} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
     </BrowserRouter>

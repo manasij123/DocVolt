@@ -7,7 +7,7 @@ const api = axios.create({ baseURL: API_BASE, timeout: 60000 });
 const TOKEN_KEY = "docvault_token";
 const USER_KEY = "docvault_user";
 
-export type UserInfo = { id: string; email: string; name: string; role: "admin" | "client" };
+export type UserInfo = { id: string; email: string; name: string; role: "admin" | "client" | "superadmin" };
 
 export const setToken = (t: string | null) =>
   t ? localStorage.setItem(TOKEN_KEY, t) : localStorage.removeItem(TOKEN_KEY);
@@ -22,6 +22,7 @@ export const getUser = (): UserInfo | null => {
 };
 
 export const logout = () => { setToken(null); setUser(null); };
+export const clearAuth = logout;
 
 api.interceptors.request.use((config) => {
   const t = getToken();

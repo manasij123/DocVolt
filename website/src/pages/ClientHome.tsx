@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import api, { ConnectedAdmin, getToken, getUser, logout, initials, colorFromString } from "../api";
+import { Ic } from "../Icons";
 import { useDocsSocket } from "../useDocsSocket";
 import LiveBadge from "../LiveBadge";
 import ConnectModal from "../ConnectModal";
@@ -74,7 +75,7 @@ export default function ClientHome() {
           <div className="topbar-actions">
             <LiveBadge />
             <span className="who-pill light">{me?.name}</span>
-            <button className="icon-btn" title="Logout" onClick={onLogout}>↪</button>
+            <button className="icon-btn" title="Logout" onClick={onLogout} style={{ display: "inline-flex", alignItems: "center", justifyContent: "center" }}><Ic kind="logout" size={18} /></button>
           </div>
         </div>
       </header>

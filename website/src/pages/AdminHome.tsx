@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import api, { ClientRow, getToken, getUser, logout, initials, colorFromString } from "../api";
+import { Ic } from "../Icons";
 import { useDocsSocket } from "../useDocsSocket";
 import LiveBadge from "../LiveBadge";
 import ConnectModal from "../ConnectModal";
@@ -87,7 +88,7 @@ export default function AdminHome() {
           <div className="topbar-actions">
             <LiveBadge />
             <span className="who-pill">{me?.name}</span>
-            <button className="btn btn-sm" style={{ background: "rgba(255,255,255,0.10)", color: "#fff", borderRadius: 9, padding: "8px 14px" }} onClick={onLogout}>Logout ↪</button>
+            <button className="btn btn-sm" style={{ background: "rgba(255,255,255,0.10)", color: "#fff", borderRadius: 9, padding: "8px 14px", display: "inline-flex", alignItems: "center", gap: 6 }} onClick={onLogout}><Ic kind="logout" size={16} /> Logout</button>
           </div>
         </div>
       </header>
