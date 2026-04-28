@@ -33,13 +33,9 @@ export default function SuperAdminLogin() {
       <div className="login-card">
         <Link to="/" style={{ color: "#fff", display: "inline-block", marginBottom: 18, opacity: 0.85, fontSize: 14, fontWeight: 600 }}>← Back</Link>
         <div style={{ textAlign: "center", marginBottom: 18 }}>
-          <img
-            src="https://img.icons8.com/3d-fluency/94/user-shield.png"
-            alt="System Owner"
-            width={94}
-            height={94}
-            style={{ filter: "drop-shadow(0 8px 28px rgba(245,158,11,0.35))" }}
-          />
+          <div style={{ width: 72, height: 72, borderRadius: 18, background: "linear-gradient(135deg, #FACC15, #F59E0B)", display: "inline-flex", alignItems: "center", justifyContent: "center", boxShadow: "0 8px 28px rgba(245,158,11,0.35)" }}>
+            <span style={{ fontSize: 36 }}>🛡️</span>
+          </div>
         </div>
         <h2 className="login-title" style={{ color: "#fff" }}>System Owner</h2>
         <p className="login-sub" style={{ color: "#CBD5E1" }}>Restricted access — global system overview</p>

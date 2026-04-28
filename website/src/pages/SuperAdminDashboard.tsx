@@ -74,7 +74,13 @@ export default function SuperAdminDashboard() {
         padding: "14px 24px", display: "flex", alignItems: "center", gap: 14,
         borderBottom: "1px solid #334155", position: "sticky", top: 0, zIndex: 10,
       }}>
-        <div style={{ width: 38, height: 38, borderRadius: 10, background: "linear-gradient(135deg,#FACC15,#F59E0B)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 18 }}>🛡️</div>
+        <img
+          src="https://img.icons8.com/3d-fluency/94/user-shield.png"
+          alt="System Owner"
+          width={48}
+          height={48}
+          style={{ filter: "drop-shadow(0 4px 14px rgba(96,165,250,0.45))" }}
+        />
         <div style={{ flex: 1, minWidth: 0 }}>
           <div style={{ fontSize: 16, fontWeight: 800, color: "#fff" }}>System Owner Console</div>
           <div style={{ fontSize: 12, color: "#94A3B8" }}>Read-only · Live database snapshot</div>
