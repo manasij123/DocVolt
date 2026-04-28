@@ -6,7 +6,10 @@ export type DocsEvent =
   | { type: "doc:created"; doc: any }
   | { type: "doc:updated"; doc: any }
   | { type: "doc:deleted"; id: string; admin_id?: string; client_id?: string }
-  | { type: "client:registered"; client: any };
+  | { type: "client:registered"; client: any }
+  | { type: "category:created"; category: any }
+  | { type: "category:updated"; category: any }
+  | { type: "category:deleted"; id: string; admin_id?: string; client_id?: string; moved_to_others?: number };
 
 export function useDocsSocket(onEvent: (e: DocsEvent) => void) {
   const handlerRef = useRef(onEvent);

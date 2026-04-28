@@ -1,22 +1,20 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import api, {
-  CATEGORY_DESCRIPTIONS, CATEGORY_ICONS, CATEGORY_LABELS,
   DocumentMeta, fileUrl, bulkDownloadDocs,
   getToken, getUser, logout, UserInfo, initials, colorFromString,
+  Category, listCategories, emojiForIcon,
 } from "../api";
 import { useDocsSocket } from "../useDocsSocket";
 import LiveBadge from "../LiveBadge";
-
-const TAB_ORDER = ["MONTHLY_RETURN", "FORWARDING_LETTER", "IFA_REPORT", "OTHERS"] as const;
-type Tab = (typeof TAB_ORDER)[number];
 
 export default function ClientCategoryView() {
   const nav = useNavigate();
   const { adminId } = useParams<{ adminId: string }>();
   const me = getUser();
   const [admin, setAdmin] = useState<UserInfo | null>(null);
-  const [tab, setTab] = useState<Tab>("MONTHLY_RETURN");
+  const [cats, setCats] = useState<Category[]>([]);
+  const [tabId, setTabId] = useState<string>("");
   const [docs, setDocs] = useState<DocumentMeta[]>([]);
   const [year, setYear] = useState<number | null>(null);
   const [loading, setLoading] = useState(true);
@@ -38,28 +36,43 @@ export default function ClientCategoryView() {
     api.get<any[]>("/admins/connected").then((r) => {
       const a = r.data.find((x) => x.id === adminId); if (a) setAdmin(a);
     });
+    listCategories({ admin_id: adminId }).then((list) => {
+      setCats(list);
+      if (list.length > 0 && !tabId) setTabId(list[0].id);
+    }).catch((e) => console.error("load cats", e));
   }, [adminId]);
 
-  const load = async (cat: Tab) => {
-    if (!adminId) return;
+  const load = async (cId: string) => {
+    if (!adminId || !cId) return;
     setLoading(true);
     try {
-      const r = await api.get<DocumentMeta[]>("/documents", { params: { category: cat, admin_id: adminId } });
+      const r = await api.get<DocumentMeta[]>("/documents", { params: { category_id: cId, admin_id: adminId } });
       setDocs(r.data);
       const ys = Array.from(new Set(r.data.map((d) => d.year))).sort((a, b) => b - a);
       setYear((prev) => prev && ys.includes(prev) ? prev : (ys[0] ?? null));
     } finally { setLoading(false); }
   };
-  useEffect(() => { load(tab); /* eslint-disable-line */ }, [tab, adminId]);
+  useEffect(() => { if (tabId) load(tabId); /* eslint-disable-line */ }, [tabId, adminId]);
 
   useDocsSocket((e) => {
     if (e.type === "doc:created" || e.type === "doc:updated") {
-      if (e.doc?.admin_id === adminId && e.doc?.category === tab) load(tab);
+      if (e.doc?.admin_id === adminId && (e.doc?.category_id === tabId || e.doc?.category === activeCat?.key)) load(tabId);
     } else if (e.type === "doc:deleted") {
-      if (e.admin_id === adminId && docs.some((d) => d.id === e.id)) load(tab);
+      if (e.admin_id === adminId && docs.some((d) => d.id === e.id)) load(tabId);
+    } else if (e.type === "category:created" && e.category) {
+      setCats((p) => p.some((c) => c.id === e.category.id) ? p : [...p, e.category].sort((a, b) => (a.sort_order ?? 999) - (b.sort_order ?? 999)));
+    } else if (e.type === "category:updated" && e.category) {
+      setCats((p) => p.map((c) => (c.id === e.category.id ? e.category : c)));
+    } else if (e.type === "category:deleted") {
+      setCats((p) => {
+        const next = p.filter((c) => c.id !== e.id);
+        if (tabId === e.id) setTabId(next[0]?.id || "");
+        return next;
+      });
     }
   });
 
+  const activeCat = useMemo(() => cats.find((c) => c.id === tabId), [cats, tabId]);
   const years = useMemo(() => Array.from(new Set(docs.map((d) => d.year))).sort((a, b) => b - a), [docs]);
   const filtered = useMemo(() => (year ? docs.filter((d) => d.year === year) : []), [docs, year]);
 
@@ -96,22 +109,29 @@ export default function ClientCategoryView() {
         </div>
       </div>
 
-      <main className="container page-anim" style={{ padding: "18px 24px 60px" }} key={tab}>
+      <main className="container page-anim" style={{ padding: "18px 24px 60px" }} key={tabId}>
         <div className="tab-row">
-          {TAB_ORDER.map((c) => (
-            <button key={c} className={`tab ${tab === c ? "active" : ""}`} onClick={() => setTab(c)}>
-              {CATEGORY_ICONS[c]} {CATEGORY_LABELS[c]}
+          {cats.map((c) => (
+            <button
+              key={c.id}
+              className={`tab ${tabId === c.id ? "active" : ""}`}
+              onClick={() => setTabId(c.id)}
+              style={tabId === c.id ? { borderColor: c.color, color: c.color, background: `${c.color}14` } : undefined}
+            >
+              {emojiForIcon(c.icon)} {c.name}
             </button>
           ))}
         </div>
-        <div className={`cat-hero ${tab}`}>
-          <div className="cat-hero-top">
-            <div className="cat-hero-icon">{CATEGORY_ICONS[tab]}</div>
-            <div className="cat-hero-count">{docs.length} files</div>
+        {activeCat && (
+          <div className="cat-hero" style={{ background: `linear-gradient(135deg, ${activeCat.color}1a, ${activeCat.color}08)`, borderColor: `${activeCat.color}33` }}>
+            <div className="cat-hero-top">
+              <div className="cat-hero-icon" style={{ background: activeCat.color }}>{emojiForIcon(activeCat.icon)}</div>
+              <div className="cat-hero-count">{docs.length} files</div>
+            </div>
+            <h2>{activeCat.name}</h2>
+            <p>{activeCat.keywords.length > 0 ? `Auto-detected: ${activeCat.keywords.join(", ")}` : "Documents in this category"}</p>
           </div>
-          <h2>{CATEGORY_LABELS[tab]}</h2>
-          <p>{CATEGORY_DESCRIPTIONS[tab]}</p>
-        </div>
+        )}
 
         {loading ? (
           <div><div className="skeleton" /><div className="skeleton" /><div className="skeleton" /></div>
@@ -169,6 +189,7 @@ export default function ClientCategoryView() {
                 <div className="doc-grid">
                   {filtered.map((d, i) => {
                     const isSelected = selected.has(d.id);
+                    const dispColor = activeCat?.color || "#6B7280";
                     return (
                       <div
                         key={d.id}
@@ -180,7 +201,7 @@ export default function ClientCategoryView() {
                           <span className={`doc-checkbox ${isSelected ? "checked" : ""}`} aria-hidden>{isSelected ? "✓" : ""}</span>
                         )}
                         <div className="doc-top">
-                          <div className={`doc-icon ${d.category}`}>📄</div>
+                          <div className="doc-icon" style={{ background: `${dispColor}1a`, color: dispColor, borderColor: `${dispColor}33` }}>📄</div>
                           <div className="doc-meta">
                             <div className="doc-title">{d.display_name}</div>
                             <div className="doc-sub">

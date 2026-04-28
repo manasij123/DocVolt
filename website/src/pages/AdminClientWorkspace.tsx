@@ -3,6 +3,8 @@ import { Link, useNavigate, useParams } from "react-router-dom";
 import api, {
   CATEGORY_LABELS, CATEGORY_ICONS, DocumentMeta, fileUrl, bulkDownloadDocs,
   getToken, getUser, logout, UserInfo, initials, colorFromString,
+  Category, listCategories, createCategory, updateCategoryApi, deleteCategoryApi,
+  CATEGORY_COLOR_PRESETS, CATEGORY_ICON_PRESETS, emojiForIcon, categoryDisplay,
 } from "../api";
 import { useDocsSocket } from "../useDocsSocket";
 import LiveBadge from "../LiveBadge";
@@ -12,14 +14,19 @@ const MONTH_MAP: Record<string, number> = {
   jan:1,january:1,feb:2,february:2,mar:3,march:3,apr:4,april:4,may:5,jun:6,june:6,
   jul:7,july:7,aug:8,august:8,sep:9,sept:9,september:9,oct:10,october:10,nov:11,november:11,dec:12,december:12,
 };
-const CATEGORY_KEYS = ["MONTHLY_RETURN","FORWARDING_LETTER","IFA_REPORT","OTHERS"] as const;
 
-function detectCategory(name: string) {
-  const n = name.toLowerCase();
-  if (n.includes("monthly return") || n.includes("monthly_return")) return "MONTHLY_RETURN";
-  if (n.includes("forwarding-letter") || n.includes("forwarding letter") || n.includes("forwarding_letter")) return "FORWARDING_LETTER";
-  if (n.includes("ifa report") || n.includes("ifa_report") || n.includes("ifareport")) return "IFA_REPORT";
-  return "OTHERS";
+/** Match a filename against the per-client categories using each row's
+ * keyword list. Returns the category id of the best match (first hit) or
+ * the OTHERS row's id as fallback. Falls back to a "" when categories empty. */
+function autoDetectCategoryId(name: string, cats: Category[]): string {
+  const n = (name || "").toLowerCase();
+  for (const c of cats) {
+    for (const kw of (c.keywords || [])) {
+      if (kw && n.includes(kw.toLowerCase())) return c.id;
+    }
+  }
+  const others = cats.find((c) => c.key === "OTHERS");
+  return others ? others.id : (cats[0]?.id || "");
 }
 function detectMonthYear(name: string): { month: number | null; year: number | null } {
   const n = name.replace(/[_-]/g, " ");
@@ -41,8 +48,9 @@ export default function AdminClientWorkspace() {
   const { clientId } = useParams<{ clientId: string }>();
   const me = getUser();
   const [client, setClient] = useState<UserInfo | null>(null);
-  const [tab, setTab] = useState<"upload" | "manage">("upload");
+  const [tab, setTab] = useState<"upload" | "manage" | "categories">("upload");
   const [docs, setDocs] = useState<DocumentMeta[]>([]);
+  const [cats, setCats] = useState<Category[]>([]);
   const [filter, setFilter] = useState<string>("ALL");
   const [editing, setEditing] = useState<DocumentMeta | null>(null);
 
@@ -57,12 +65,22 @@ export default function AdminClientWorkspace() {
       if (found) setClient(found);
     });
     reload();
+    reloadCategories();
   }, [clientId]);
 
   const reload = async () => {
     if (!clientId) return;
     const r = await api.get<DocumentMeta[]>("/documents", { params: { client_id: clientId } });
     setDocs(r.data);
+  };
+  const reloadCategories = async () => {
+    if (!clientId) return;
+    try {
+      const list = await listCategories({ client_id: clientId });
+      setCats(list);
+    } catch (e) {
+      console.error("Failed to load categories", e);
+    }
   };
 
   // Real-time: only react to events for THIS (admin, client) pair
@@ -73,6 +91,14 @@ export default function AdminClientWorkspace() {
       setDocs((p) => p.map((d) => (d.id === e.doc.id ? e.doc : d)));
     } else if (e.type === "doc:deleted" && e.client_id === clientId) {
       setDocs((p) => p.filter((d) => d.id !== e.id));
+    } else if (e.type === "category:created" && e.category?.client_id === clientId) {
+      setCats((p) => p.some((c) => c.id === e.category.id) ? p : [...p, e.category].sort((a, b) => (a.sort_order ?? 999) - (b.sort_order ?? 999)));
+    } else if (e.type === "category:updated" && e.category?.client_id === clientId) {
+      setCats((p) => p.map((c) => (c.id === e.category.id ? e.category : c)));
+    } else if (e.type === "category:deleted" && e.client_id === clientId) {
+      setCats((p) => p.filter((c) => c.id !== e.id));
+      // Refresh docs because items may have been re-tagged to OTHERS
+      reload();
     }
   });
 
@@ -104,17 +130,20 @@ export default function AdminClientWorkspace() {
         <div className="admin-tabs">
           <button className={`admin-tab ${tab === "upload" ? "active" : ""}`} onClick={() => setTab("upload")}>📤 Upload</button>
           <button className={`admin-tab ${tab === "manage" ? "active" : ""}`} onClick={() => { setTab("manage"); reload(); }}>⚙️ Manage</button>
+          <button className={`admin-tab ${tab === "categories" ? "active" : ""}`} onClick={() => { setTab("categories"); reloadCategories(); }}>🏷️ Categories</button>
         </div>
       </div>
 
       <main className="container page-anim" style={{ padding: "20px 24px 60px" }} key={tab}>
         {tab === "upload"
-          ? <UploadPanel clientId={clientId!} onUploaded={reload} />
-          : <ManagePanel docs={docs} setDocs={setDocs} filter={filter} setFilter={setFilter} setEditing={setEditing} />}
+          ? <UploadPanel clientId={clientId!} cats={cats} onUploaded={reload} />
+          : tab === "manage"
+            ? <ManagePanel docs={docs} cats={cats} setDocs={setDocs} filter={filter} setFilter={setFilter} setEditing={setEditing} />
+            : <CategoriesPanel clientId={clientId!} cats={cats} reload={reloadCategories} />}
       </main>
 
       {editing && (
-        <EditModal doc={editing} onClose={() => setEditing(null)} onSaved={(d) => {
+        <EditModal doc={editing} cats={cats} onClose={() => setEditing(null)} onSaved={(d) => {
           setDocs((p) => p.map((x) => (x.id === d.id ? d : x))); setEditing(null);
         }} />
       )}
@@ -122,16 +151,16 @@ export default function AdminClientWorkspace() {
   );
 }
 
-function UploadPanel({ clientId, onUploaded }: { clientId: string; onUploaded: () => void }) {
+function UploadPanel({ clientId, cats, onUploaded }: { clientId: string; cats: Category[]; onUploaded: () => void }) {
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const bulkInputRef = useRef<HTMLInputElement | null>(null);
   const [picked, setPicked] = useState<File | null>(null);
   const [stage, setStage] = useState<"idle" | "scanned" | "manual">("idle");
   const [drag, setDrag] = useState(false);
-  const [detCat, setDetCat] = useState("OTHERS");
+  const [detCatId, setDetCatId] = useState<string>("");
   const [detYear, setDetYear] = useState<number | null>(null);
   const [detMonth, setDetMonth] = useState<number | null>(null);
-  const [cat, setCat] = useState("OTHERS");
+  const [catId, setCatId] = useState<string>("");
   const [year, setYear] = useState(new Date().getFullYear());
   const [month, setMonth] = useState<number | null>(null);
   const [uploading, setUploading] = useState(false);
@@ -142,7 +171,7 @@ function UploadPanel({ clientId, onUploaded }: { clientId: string; onUploaded: (
   type BulkRow = {
     id: string;
     file: File;
-    category: string;
+    categoryId: string;
     year: number;
     month: number | null;
     status: "pending" | "uploading" | "done" | "error";
@@ -160,20 +189,20 @@ function UploadPanel({ clientId, onUploaded }: { clientId: string; onUploaded: (
   const acceptFile = (f: File) => {
     if (!f.name.toLowerCase().endsWith(".pdf")) { setErr("Please choose a PDF file."); return; }
     setPicked(f);
-    const c = detectCategory(f.name);
+    const cId = autoDetectCategoryId(f.name, cats);
     const my = detectMonthYear(f.name);
-    setDetCat(c); setDetYear(my.year); setDetMonth(my.month);
-    setCat(c); if (my.year) setYear(my.year); setMonth(my.month);
+    setDetCatId(cId); setDetYear(my.year); setDetMonth(my.month);
+    setCatId(cId); if (my.year) setYear(my.year); setMonth(my.month);
     setStage("scanned"); setDone(null); setErr(null);
   };
-  const send = async (cTo: string, yTo: number, mTo: number | null) => {
+  const send = async (cIdTo: string, yTo: number, mTo: number | null) => {
     if (!picked) return;
     setUploading(true); setErr(null);
     try {
       const fd = new FormData();
       fd.append("file", picked);
       fd.append("client_id", clientId);
-      fd.append("category_override", cTo);
+      if (cIdTo) fd.append("category_id", cIdTo);
       fd.append("year_override", String(yTo));
       if (mTo !== null) fd.append("month_override", String(mTo));
       const r = await api.post("/documents/upload", fd, { headers: { "Content-Type": "multipart/form-data" } });
@@ -183,7 +212,8 @@ function UploadPanel({ clientId, onUploaded }: { clientId: string; onUploaded: (
     } finally { setUploading(false); }
   };
 
-  const looksGood = detCat !== "OTHERS" && detYear !== null && detMonth !== null;
+  const detCat = cats.find((c) => c.id === detCatId);
+  const looksGood = !!detCat && detCat.key !== "OTHERS" && detYear !== null && detMonth !== null;
   const yrs = [year - 2, year - 1, year, year + 1];
 
   // ---- Bulk-upload helpers ----
@@ -194,12 +224,12 @@ function UploadPanel({ clientId, onUploaded }: { clientId: string; onUploaded: (
       if (!f.name.toLowerCase().endsWith(".pdf")) continue;
       // Skip duplicates (same name + size already queued)
       if (bulkRows.some((b) => b.file.name === f.name && b.file.size === f.size)) continue;
-      const c = detectCategory(f.name);
+      const cId = autoDetectCategoryId(f.name, cats);
       const my = detectMonthYear(f.name);
       next.push({
         id: Math.random().toString(36).slice(2),
         file: f,
-        category: c,
+        categoryId: cId,
         year: my.year ?? new Date().getFullYear(),
         month: my.month,
         status: "pending",
@@ -225,7 +255,7 @@ function UploadPanel({ clientId, onUploaded }: { clientId: string; onUploaded: (
         const fd = new FormData();
         fd.append("file", row.file);
         fd.append("client_id", clientId);
-        fd.append("category_override", row.category);
+        if (row.categoryId) fd.append("category_id", row.categoryId);
         fd.append("year_override", String(row.year));
         if (row.month !== null) fd.append("month_override", String(row.month));
         const resp = await api.post("/documents/upload", fd, {
@@ -274,7 +304,7 @@ function UploadPanel({ clientId, onUploaded }: { clientId: string; onUploaded: (
             </div>
           </div>
           <div className="detect-table">
-            <div className="detect-row"><span className="lbl">Tab</span><span className={`val ${detCat === "OTHERS" ? "warn" : ""}`}>{CATEGORY_LABELS[detCat]}</span></div>
+            <div className="detect-row"><span className="lbl">Tab</span><span className={`val ${detCat?.key === "OTHERS" ? "warn" : ""}`}>{detCat ? `${emojiForIcon(detCat.icon)} ${detCat.name}` : "—"}</span></div>
             <div className="detect-row"><span className="lbl">Year</span><span className={`val ${!detYear ? "warn" : ""}`}>{detYear ?? "—"}</span></div>
             <div className="detect-row"><span className="lbl">Month</span><span className={`val ${!detMonth ? "warn" : ""}`}>{detMonth ? MONTHS[detMonth - 1] : "—"}</span></div>
           </div>
@@ -282,7 +312,7 @@ function UploadPanel({ clientId, onUploaded }: { clientId: string; onUploaded: (
           <div className="detect-actions">
             <button className="btn btn-danger" onClick={reset} disabled={uploading}>✕ Cancel</button>
             <button className="btn btn-ghost" onClick={() => setStage("manual")} disabled={uploading}>✎ No, manual</button>
-            <button className="btn btn-primary" onClick={() => send(detCat, detYear ?? new Date().getFullYear(), detMonth)} disabled={uploading}>{uploading ? "Uploading…" : "✓ Yes, upload"}</button>
+            <button className="btn btn-primary" onClick={() => send(detCatId, detYear ?? new Date().getFullYear(), detMonth)} disabled={uploading}>{uploading ? "Uploading…" : "✓ Yes, upload"}</button>
           </div>
         </div>
       )}
@@ -290,8 +320,10 @@ function UploadPanel({ clientId, onUploaded }: { clientId: string; onUploaded: (
         <div className="detect-card">
           <h3 style={{ marginTop: 0 }}>Set category & date manually</h3>
           <div className="muted" style={{ fontSize: 11, fontWeight: 800, textTransform: "uppercase", letterSpacing: 0.8, marginTop: 12, marginBottom: 8 }}>Category</div>
-          <div className="chip-row">{Object.keys(CATEGORY_LABELS).map((k) => (
-            <button key={k} className={`chip ${cat === k ? "active" : ""}`} onClick={() => setCat(k)}>{CATEGORY_LABELS[k]}</button>
+          <div className="chip-row">{cats.map((c) => (
+            <button key={c.id} className={`chip ${catId === c.id ? "active" : ""}`} onClick={() => setCatId(c.id)} style={catId === c.id ? { borderColor: c.color, background: `${c.color}1a`, color: c.color } : undefined}>
+              {emojiForIcon(c.icon)} {c.name}
+            </button>
           ))}</div>
           <div className="muted" style={{ fontSize: 11, fontWeight: 800, textTransform: "uppercase", letterSpacing: 0.8, marginTop: 12, marginBottom: 8 }}>Year</div>
           <div className="chip-row">{yrs.map((y) => <button key={y} className={`chip ${year === y ? "active" : ""}`} onClick={() => setYear(y)}>{y}</button>)}</div>
@@ -303,7 +335,7 @@ function UploadPanel({ clientId, onUploaded }: { clientId: string; onUploaded: (
           <div className="detect-actions" style={{ marginTop: 22 }}>
             <button className="btn btn-danger" onClick={reset} disabled={uploading}>✕ Cancel</button>
             <button className="btn btn-ghost" onClick={() => setStage("scanned")} disabled={uploading}>← Back</button>
-            <button className="btn btn-primary" onClick={() => send(cat, year, month)} disabled={uploading}>{uploading ? "Uploading…" : "📤 Upload"}</button>
+            <button className="btn btn-primary" onClick={() => send(catId, year, month)} disabled={uploading}>{uploading ? "Uploading…" : "📤 Upload"}</button>
           </div>
         </div>
       )}
@@ -343,13 +375,17 @@ function UploadPanel({ clientId, onUploaded }: { clientId: string; onUploaded: (
         ) : (
           <>
             <div className="bulk-list">
-              {bulkRows.map((b) => (
+              {bulkRows.map((b) => {
+                const bc = cats.find((c) => c.id === b.categoryId);
+                return (
                 <div key={b.id} className={`bulk-row status-${b.status}`}>
                   <div className="bulk-row-icon">📄</div>
                   <div className="bulk-row-meta">
                     <div className="bulk-row-name" title={b.file.name}>{b.file.name}</div>
                     <div className="bulk-row-sub">
-                      <span className="badge">{CATEGORY_LABELS[b.category]}</span>
+                      <span className="badge" style={bc ? { background: `${bc.color}1a`, color: bc.color, borderColor: `${bc.color}33` } : undefined}>
+                        {bc ? `${emojiForIcon(bc.icon)} ${bc.name}` : "—"}
+                      </span>
                       {b.month && <span className="badge">{MONTHS[b.month - 1]}</span>}
                       <span className="badge year">{b.year}</span>
                       <span>{(b.file.size / 1024).toFixed(0)} KB</span>
@@ -381,7 +417,7 @@ function UploadPanel({ clientId, onUploaded }: { clientId: string; onUploaded: (
                     >×</button>
                   )}
                 </div>
-              ))}
+              );})}
             </div>
             <div className="bulk-upload-actions">
               {!bulkBusy && bulkRows.some((b) => b.status === "done") && (
@@ -411,8 +447,8 @@ function UploadPanel({ clientId, onUploaded }: { clientId: string; onUploaded: (
   );
 }
 
-function ManagePanel({ docs, setDocs, filter, setFilter, setEditing }: {
-  docs: DocumentMeta[]; setDocs: (d: DocumentMeta[]) => void;
+function ManagePanel({ docs, cats, setDocs, filter, setFilter, setEditing }: {
+  docs: DocumentMeta[]; cats: Category[]; setDocs: (d: DocumentMeta[]) => void;
   filter: string; setFilter: (f: string) => void; setEditing: (d: DocumentMeta | null) => void;
 }) {
   // ===== Multi-select / bulk-download state =====
@@ -433,12 +469,21 @@ function ManagePanel({ docs, setDocs, filter, setFilter, setEditing }: {
     try { await api.delete(`/documents/${d.id}`); setDocs(docs.filter((x) => x.id !== d.id)); }
     catch (e: any) { alert(e?.response?.data?.detail || "Delete failed"); }
   };
+  // Group docs by category id (preferred) falling back to legacy key for older rows.
   const grouped = useMemo(() => {
-    const g: Record<string, DocumentMeta[]> = { MONTHLY_RETURN: [], FORWARDING_LETTER: [], IFA_REPORT: [], OTHERS: [] };
-    for (const d of docs) (g[d.category] ?? g.OTHERS).push(d);
-    return g;
-  }, [docs]);
-  const filtered = filter === "ALL" ? docs : docs.filter((d) => d.category === filter);
+    const g: Record<string, DocumentMeta[]> = {};
+    for (const c of cats) g[c.id] = [];
+    const orphan: DocumentMeta[] = [];
+    for (const d of docs) {
+      const cid = d.category_id || cats.find((c) => c.key === d.category)?.id;
+      if (cid && g[cid]) g[cid].push(d);
+      else orphan.push(d);
+    }
+    return { byId: g, orphan };
+  }, [docs, cats]);
+  const filtered = filter === "ALL"
+    ? docs
+    : docs.filter((d) => (d.category_id || cats.find((c) => c.key === d.category)?.id) === filter);
   const visibleIds = useMemo(() => filtered.map((d) => d.id), [filtered]);
   const allSelectedInView = selecting && visibleIds.length > 0 && visibleIds.every((id) => selected.has(id));
   const selectAllInView = () => {
@@ -467,6 +512,7 @@ function ManagePanel({ docs, setDocs, filter, setFilter, setEditing }: {
 
   const renderCard = (d: DocumentMeta, i: number) => {
     const isSelected = selected.has(d.id);
+    const disp = categoryDisplay(d, cats);
     return (
       <div
         key={d.id}
@@ -480,11 +526,11 @@ function ManagePanel({ docs, setDocs, filter, setFilter, setEditing }: {
           </span>
         )}
         <div className="doc-top">
-          <div className={`doc-icon ${d.category}`}>📄</div>
+          <div className="doc-icon" style={{ background: `${disp.color}1a`, color: disp.color, borderColor: `${disp.color}33` }}>{disp.emoji}</div>
           <div className="doc-meta">
             <div className="doc-title">{d.display_name}</div>
             <div className="doc-sub">
-              <span className="badge">{CATEGORY_LABELS[d.category]}</span>
+              <span className="badge" style={{ background: `${disp.color}1a`, color: disp.color, borderColor: `${disp.color}33` }}>{disp.name}</span>
               {d.month_label && <span className="badge">{d.month_label}</span>}
               <span className="badge year">{d.year}</span>
               <span>{(d.size / 1024).toFixed(0)} KB</span>
@@ -530,24 +576,36 @@ function ManagePanel({ docs, setDocs, filter, setFilter, setEditing }: {
       )}
       <div style={{ height: 14 }} />
       <div className="tab-row">
-        {["ALL", "MONTHLY_RETURN", "FORWARDING_LETTER", "IFA_REPORT", "OTHERS"].map((k) => (
-          <button key={k} className={`tab ${filter === k ? "active" : ""}`} onClick={() => setFilter(k)}>
-            {k === "ALL" ? "All" : `${CATEGORY_ICONS[k]} ${CATEGORY_LABELS[k]}`}
+        <button key="ALL" className={`tab ${filter === "ALL" ? "active" : ""}`} onClick={() => setFilter("ALL")}>All</button>
+        {cats.map((c) => (
+          <button
+            key={c.id}
+            className={`tab ${filter === c.id ? "active" : ""}`}
+            onClick={() => setFilter(c.id)}
+            style={filter === c.id ? { borderColor: c.color, color: c.color, background: `${c.color}14` } : undefined}
+          >
+            {emojiForIcon(c.icon)} {c.name}
           </button>
         ))}
       </div>
       {docs.length === 0 ? (
         <div className="empty"><div className="empty-icon">📂</div><h3>No documents yet</h3><p>Upload from the Upload tab.</p></div>
       ) : filter === "ALL" ? (
-        <>{CATEGORY_KEYS.map((k) => {
-          const items = grouped[k]; if (!items.length) return null;
+        <>{cats.map((c) => {
+          const items = grouped.byId[c.id]; if (!items || !items.length) return null;
           return (
-            <section key={k}>
-              <div className="section-head"><span className={`section-dot ${k}`} /><span className="section-title">{CATEGORY_LABELS[k]}</span><span className="section-count">· {items.length}</span></div>
+            <section key={c.id}>
+              <div className="section-head"><span className="section-dot" style={{ background: c.color }} /><span className="section-title">{emojiForIcon(c.icon)} {c.name}</span><span className="section-count">· {items.length}</span></div>
               <div className="doc-grid">{items.map((d, i) => renderCard(d, i))}</div>
             </section>
           );
-        })}</>
+        })}
+        {grouped.orphan.length > 0 && (
+          <section>
+            <div className="section-head"><span className="section-dot" style={{ background: "#9CA3AF" }} /><span className="section-title">📁 Uncategorised</span><span className="section-count">· {grouped.orphan.length}</span></div>
+            <div className="doc-grid">{grouped.orphan.map((d, i) => renderCard(d, i))}</div>
+          </section>
+        )}</>
       ) : filtered.length === 0 ? (
         <div className="empty"><div className="empty-icon">📂</div><h3>No documents in this category</h3></div>
       ) : (
@@ -557,16 +615,183 @@ function ManagePanel({ docs, setDocs, filter, setFilter, setEditing }: {
   );
 }
 
-function EditModal({ doc, onClose, onSaved }: { doc: DocumentMeta; onClose: () => void; onSaved: (d: DocumentMeta) => void }) {
+// ============================================================
+//  Categories management panel — admin only, per-client
+// ============================================================
+function CategoriesPanel({ clientId, cats, reload }: { clientId: string; cats: Category[]; reload: () => void }) {
+  const [creating, setCreating] = useState(false);
+  const [editing, setEditing] = useState<Category | null>(null);
+  const [busy, setBusy] = useState<string | null>(null);
+
+  const remove = async (c: Category) => {
+    if (!window.confirm(`Delete category "${c.name}"?\nAny documents in it will be moved to "Others".`)) return;
+    setBusy(c.id);
+    try {
+      const r = await deleteCategoryApi(c.id);
+      if (r.moved_to_others > 0) {
+        alert(`Deleted. ${r.moved_to_others} document${r.moved_to_others === 1 ? "" : "s"} moved to Others.`);
+      }
+      reload();
+    } catch (e: any) {
+      alert(e?.response?.data?.detail || "Delete failed");
+    } finally { setBusy(null); }
+  };
+
+  return (
+    <>
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 8 }}>
+        <div>
+          <h2 style={{ fontSize: 22, fontWeight: 800, margin: "0 0 4px" }}>Categories</h2>
+          <p className="muted" style={{ marginTop: 0, marginBottom: 0 }}>
+            Customise tab labels for this client only. The 4 defaults can be renamed but "Others" cannot be deleted.
+          </p>
+        </div>
+        <button className="btn btn-primary btn-sm" onClick={() => setCreating(true)}>＋ New category</button>
+      </div>
+      <div style={{ height: 16 }} />
+      <div className="cat-grid">
+        {cats.map((c) => (
+          <div key={c.id} className="cat-row">
+            <div className="cat-row-icon" style={{ background: `${c.color}1a`, color: c.color, borderColor: `${c.color}33` }}>{emojiForIcon(c.icon)}</div>
+            <div className="cat-row-meta">
+              <div className="cat-row-name">{c.name}</div>
+              <div className="cat-row-sub">
+                {c.is_default && <span className="badge">Default</span>}
+                {c.keywords.length > 0 && (
+                  <span className="muted" style={{ fontSize: 12 }}>Keywords: {c.keywords.join(", ")}</span>
+                )}
+              </div>
+            </div>
+            <button className="btn btn-ghost btn-sm" onClick={() => setEditing(c)}>✎ Edit</button>
+            {c.key !== "OTHERS" && (
+              <button className="btn btn-danger btn-sm" disabled={busy === c.id} onClick={() => remove(c)}>
+                {busy === c.id ? "…" : "🗑"}
+              </button>
+            )}
+          </div>
+        ))}
+        {cats.length === 0 && <div className="empty"><div className="empty-icon">🏷️</div><h3>Loading categories…</h3></div>}
+      </div>
+
+      {(creating || editing) && (
+        <CategoryEditor
+          clientId={clientId}
+          existing={editing || undefined}
+          onClose={() => { setCreating(false); setEditing(null); }}
+          onSaved={() => { setCreating(false); setEditing(null); reload(); }}
+        />
+      )}
+    </>
+  );
+}
+
+function CategoryEditor({ clientId, existing, onClose, onSaved }: {
+  clientId: string;
+  existing?: Category;
+  onClose: () => void;
+  onSaved: () => void;
+}) {
+  const [name, setName] = useState(existing?.name || "");
+  const [color, setColor] = useState(existing?.color || CATEGORY_COLOR_PRESETS[0]);
+  const [icon, setIcon] = useState(existing?.icon || "folder-open");
+  const [keywordsRaw, setKeywordsRaw] = useState((existing?.keywords || []).join(", "));
+  const [saving, setSaving] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
+
+  const save = async () => {
+    if (!name.trim()) { setErr("Name is required"); return; }
+    setSaving(true); setErr(null);
+    const keywords = keywordsRaw.split(",").map((k) => k.trim()).filter(Boolean);
+    try {
+      if (existing) {
+        await updateCategoryApi(existing.id, { name: name.trim(), color, icon, keywords });
+      } else {
+        await createCategory({ client_id: clientId, name: name.trim(), color, icon, keywords });
+      }
+      onSaved();
+    } catch (e: any) {
+      setErr(e?.response?.data?.detail || "Save failed");
+      setSaving(false);
+    }
+  };
+
+  return (
+    <div className="modal-back" onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}>
+      <div className="modal-card" style={{ maxWidth: 520 }}>
+        <h3>{existing ? "Edit category" : "New category"}</h3>
+        {err && <div className="bulk-row-err" style={{ marginBottom: 10 }}>⚠ {err}</div>}
+
+        <div className="field">
+          <label>Name</label>
+          <input className="input" value={name} onChange={(e) => setName(e.target.value)} placeholder="e.g. Invoice, Tax Filing, Bank Statement" maxLength={40} />
+        </div>
+
+        <div className="field">
+          <label>Color</label>
+          <div className="chip-row">
+            {CATEGORY_COLOR_PRESETS.map((c) => (
+              <button
+                key={c}
+                className="chip"
+                onClick={() => setColor(c)}
+                style={{
+                  background: c,
+                  color: "#fff",
+                  borderColor: color === c ? "#0F172A" : "transparent",
+                  borderWidth: color === c ? 3 : 1,
+                  minWidth: 36, height: 36,
+                  padding: 0,
+                }}
+                title={c}
+              >{color === c ? "✓" : ""}</button>
+            ))}
+          </div>
+        </div>
+
+        <div className="field">
+          <label>Icon</label>
+          <div className="chip-row">
+            {CATEGORY_ICON_PRESETS.map((p) => (
+              <button
+                key={p.name}
+                className={`chip ${icon === p.name ? "active" : ""}`}
+                onClick={() => setIcon(p.name)}
+                style={{ fontSize: 18, minWidth: 40, justifyContent: "center" }}
+                title={p.name}
+              >{p.emoji}</button>
+            ))}
+          </div>
+        </div>
+
+        <div className="field">
+          <label>Keywords (comma separated, used for auto-detect on upload)</label>
+          <input className="input" value={keywordsRaw} onChange={(e) => setKeywordsRaw(e.target.value)} placeholder="invoice, bill, inv" />
+        </div>
+
+        <div className="modal-actions">
+          <button className="btn btn-ghost" onClick={onClose} disabled={saving}>Cancel</button>
+          <button className="btn btn-primary" onClick={save} disabled={saving}>{saving ? "Saving…" : (existing ? "✓ Save" : "＋ Create")}</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function EditModal({ doc, cats, onClose, onSaved }: { doc: DocumentMeta; cats: Category[]; onClose: () => void; onSaved: (d: DocumentMeta) => void }) {
   const [name, setName] = useState(doc.display_name);
-  const [cat, setCat] = useState(doc.category);
+  const [catId, setCatId] = useState<string>(doc.category_id || cats.find((c) => c.key === doc.category)?.id || cats[0]?.id || "");
   const [year, setYear] = useState(doc.year);
   const [month, setMonth] = useState<number | null>(doc.month);
   const [saving, setSaving] = useState(false);
   const save = async () => {
     setSaving(true);
-    try { const r = await api.put(`/documents/${doc.id}`, { display_name: name, category: cat, year, month }); onSaved(r.data); }
-    catch (e: any) { alert(e?.response?.data?.detail || "Save failed"); setSaving(false); }
+    try {
+      const r = await api.put(`/documents/${doc.id}`, { display_name: name, category_id: catId, year, month });
+      onSaved(r.data);
+    } catch (e: any) {
+      alert(e?.response?.data?.detail || "Save failed");
+      setSaving(false);
+    }
   };
   return (
     <div className="modal-back" onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}>
@@ -574,8 +799,11 @@ function EditModal({ doc, onClose, onSaved }: { doc: DocumentMeta; onClose: () =
         <h3>Edit Document</h3>
         <div className="field"><label>Display name</label><input className="input" value={name} onChange={(e) => setName(e.target.value)} /></div>
         <div className="field"><label>Category</label>
-          <div className="chip-row">{Object.keys(CATEGORY_LABELS).map((k) => (
-            <button key={k} className={`chip ${cat === k ? "active" : ""}`} onClick={() => setCat(k as any)}>{CATEGORY_LABELS[k]}</button>
+          <div className="chip-row">{cats.map((c) => (
+            <button key={c.id} className={`chip ${catId === c.id ? "active" : ""}`} onClick={() => setCatId(c.id)}
+              style={catId === c.id ? { borderColor: c.color, background: `${c.color}1a`, color: c.color } : undefined}>
+              {emojiForIcon(c.icon)} {c.name}
+            </button>
           ))}</div>
         </div>
         <div className="field"><label>Year</label><input className="input" type="number" value={year} onChange={(e) => setYear(parseInt(e.target.value || "0", 10))} /></div>

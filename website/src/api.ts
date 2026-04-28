@@ -54,7 +54,8 @@ export type DocumentMeta = {
   id: string;
   original_name: string;
   display_name: string;
-  category: "MONTHLY_RETURN" | "FORWARDING_LETTER" | "IFA_REPORT" | "OTHERS";
+  category: string; // legacy enum key (MONTHLY_RETURN, FORWARDING_LETTER, IFA_REPORT, OTHERS) — also custom keys
+  category_id?: string | null; // new per-client category FK
   year: number;
   month: number | null;
   month_label: string | null;
@@ -62,6 +63,20 @@ export type DocumentMeta = {
   uploaded_at: string;
   admin_id: string;
   client_id: string;
+};
+
+export type Category = {
+  id: string;
+  admin_id: string;
+  client_id: string;
+  key: string;
+  name: string;
+  color: string;
+  icon: string; // ionicons name
+  keywords: string[];
+  sort_order: number;
+  is_default: boolean;
+  created_at?: string;
 };
 
 export type ClientRow = UserInfo & {
@@ -95,6 +110,88 @@ export const CATEGORY_ICONS: Record<string, string> = {
   IFA_REPORT: "📈",
   OTHERS: "📁",
 };
+
+// ===== Per-client dynamic categories — CRUD helpers =====
+export async function listCategories(params: { client_id?: string; admin_id?: string }): Promise<Category[]> {
+  const r = await api.get<Category[]>("/categories", { params });
+  return r.data;
+}
+export async function createCategory(payload: {
+  client_id: string;
+  name: string;
+  color?: string;
+  icon?: string;
+  keywords?: string[];
+}): Promise<Category> {
+  const r = await api.post<Category>("/categories", payload);
+  return r.data;
+}
+export async function updateCategoryApi(id: string, payload: Partial<Pick<Category, "name" | "color" | "icon" | "keywords" | "sort_order">>): Promise<Category> {
+  const r = await api.put<Category>(`/categories/${id}`, payload);
+  return r.data;
+}
+export async function deleteCategoryApi(id: string): Promise<{ ok: boolean; moved_to_others: number }> {
+  const r = await api.delete(`/categories/${id}`);
+  return r.data;
+}
+
+// 8-color preset palette for category creation
+export const CATEGORY_COLOR_PRESETS = [
+  "#3B82F6", // blue
+  "#8B5CF6", // purple
+  "#10B981", // green
+  "#F59E0B", // amber
+  "#EF4444", // red
+  "#EC4899", // pink
+  "#06B6D4", // cyan
+  "#6B7280", // slate
+];
+
+// Web emoji-icon presets (since we don't ship Ionicons in the Vite app)
+export const CATEGORY_ICON_PRESETS: { name: string; emoji: string }[] = [
+  { name: "stats-chart",   emoji: "📊" },
+  { name: "paper-plane",   emoji: "✉️" },
+  { name: "podium",        emoji: "📈" },
+  { name: "folder-open",   emoji: "📁" },
+  { name: "receipt",       emoji: "🧾" },
+  { name: "card",          emoji: "💳" },
+  { name: "cash",          emoji: "💵" },
+  { name: "calculator",    emoji: "🧮" },
+  { name: "briefcase",     emoji: "💼" },
+  { name: "document-text", emoji: "📄" },
+  { name: "shield",        emoji: "🛡️" },
+  { name: "medkit",        emoji: "🩺" },
+  { name: "school",        emoji: "🎓" },
+  { name: "home",          emoji: "🏠" },
+  { name: "car",           emoji: "🚗" },
+  { name: "gift",          emoji: "🎁" },
+];
+
+export function emojiForIcon(iconName: string | undefined | null): string {
+  if (!iconName) return "📁";
+  const found = CATEGORY_ICON_PRESETS.find((p) => p.name === iconName);
+  return found ? found.emoji : "📁";
+}
+
+/** Look up display info for a doc's category — preferring the dynamic
+ * categories list, falling back to the legacy enum labels for backward compat.
+ */
+export function categoryDisplay(
+  doc: Pick<DocumentMeta, "category" | "category_id">,
+  cats: Category[],
+): { name: string; emoji: string; color: string; key: string } {
+  const byId = doc.category_id ? cats.find((c) => c.id === doc.category_id) : undefined;
+  const byKey = !byId ? cats.find((c) => c.key === doc.category) : undefined;
+  const c = byId || byKey;
+  if (c) return { name: c.name, emoji: emojiForIcon(c.icon), color: c.color, key: c.key };
+  // Legacy fallback
+  return {
+    name: CATEGORY_LABELS[doc.category] || doc.category || "Others",
+    emoji: CATEGORY_ICONS[doc.category] || "📁",
+    color: "#6B7280",
+    key: doc.category || "OTHERS",
+  };
+}
 
 export function fileUrl(id: string) {
   return `${API_BASE}/documents/${id}/file`;

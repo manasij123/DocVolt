@@ -1153,3 +1153,59 @@ main {
   margin-top: 6px;
   animation: scaleIn 0.25s var(--ease-out) both;
 }
+
+/* ===== Per-client Categories management panel ===== */
+.cat-grid {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.cat-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 14px;
+  background: #fff;
+  border: 1px solid #E5E7EB;
+  border-radius: 12px;
+  transition: border-color 0.15s var(--ease-out), box-shadow 0.15s var(--ease-out);
+}
+.cat-row:hover {
+  border-color: #C7D2FE;
+  box-shadow: 0 1px 4px rgba(15,23,42,0.06);
+}
+.cat-row-icon {
+  width: 44px;
+  height: 44px;
+  border-radius: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 22px;
+  border: 1px solid;
+  flex-shrink: 0;
+}
+.cat-row-meta {
+  flex: 1;
+  min-width: 0;
+}
+.cat-row-name {
+  font-weight: 800;
+  font-size: 15px;
+  color: #0F172A;
+}
+.cat-row-sub {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  margin-top: 2px;
+}
+.cat-row .badge {
+  background: #EEF2FF;
+  color: #4F46E5;
+  font-size: 11px;
+  padding: 2px 8px;
+  border-radius: 999px;
+  font-weight: 700;
+}
