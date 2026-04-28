@@ -14,7 +14,7 @@ import * as DocumentPicker from "expo-document-picker";
 import { Ionicons } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
 import { colors, radius, shadow, categoryGradients } from "../../../src/theme";
-import { CATEGORY_LABELS } from "../../../src/api";
+import { CATEGORY_LABELS, Category, listCategories, autoDetectCategoryId } from "../../../src/api";
 import api, { getToken } from "../../../src/api";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import PressableScale from "../../../src/PressableScale";
@@ -71,12 +71,14 @@ export default function UploadScreen() {
   const router = useRouter();
   const [picked, setPicked] = useState<PickedFile | null>(null);
   const [stage, setStage] = useState<Stage>("idle");
+  // Per-client categories — admin may have customised them.
+  const [cats, setCats] = useState<Category[]>([]);
 
-  const [detectedCategory, setDetectedCategory] = useState<string>("OTHERS");
+  const [detectedCategoryId, setDetectedCategoryId] = useState<string>("");
   const [detectedYear, setDetectedYear] = useState<number | null>(null);
   const [detectedMonth, setDetectedMonth] = useState<number | null>(null);
 
-  const [category, setCategory] = useState<string>("OTHERS");
+  const [categoryId, setCategoryId] = useState<string>("");
   const [year, setYear] = useState<number>(new Date().getFullYear());
   const [month, setMonth] = useState<number | null>(null);
 
@@ -85,6 +87,18 @@ export default function UploadScreen() {
 
   const cardFade = useRef(new Animated.Value(0)).current;
   const cardSlide = useRef(new Animated.Value(20)).current;
+
+  // Load categories on mount + whenever clientId changes
+  useEffect(() => {
+    if (!clientId) return;
+    (async () => {
+      try {
+        const tok = await getToken();
+        const list = await listCategories({ client_id: String(clientId) }, tok || undefined);
+        setCats(list);
+      } catch { /* ignore */ }
+    })();
+  }, [clientId]);
 
   useEffect(() => {
     if (stage !== "idle") {
@@ -100,10 +114,10 @@ export default function UploadScreen() {
   const reset = () => {
     setPicked(null);
     setStage("idle");
-    setDetectedCategory("OTHERS");
+    setDetectedCategoryId("");
     setDetectedYear(null);
     setDetectedMonth(null);
-    setCategory("OTHERS");
+    setCategoryId("");
     setYear(new Date().getFullYear());
     setMonth(null);
   };
@@ -124,13 +138,13 @@ export default function UploadScreen() {
       mimeType: file.mimeType || "application/pdf",
     });
 
-    const cat = detectCategory(name);
+    const cId = autoDetectCategoryId(name, cats);
     const my = detectMonthYear(name);
-    setDetectedCategory(cat);
+    setDetectedCategoryId(cId);
     setDetectedYear(my.year);
     setDetectedMonth(my.month);
 
-    setCategory(cat);
+    setCategoryId(cId);
     if (my.year) setYear(my.year);
     setMonth(my.month);
 
@@ -139,7 +153,7 @@ export default function UploadScreen() {
   };
 
   const doUpload = async (
-    catToSend: string,
+    catIdToSend: string,
     yearToSend: number,
     monthToSend: number | null,
   ) => {
@@ -161,7 +175,7 @@ export default function UploadScreen() {
           type: picked.mimeType || "application/pdf",
         } as any);
       }
-      form.append("category_override", catToSend);
+      if (catIdToSend) form.append("category_id", catIdToSend);
       form.append("year_override", String(yearToSend));
       if (monthToSend !== null) form.append("month_override", String(monthToSend));
       form.append("client_id", String(clientId || ""));
@@ -186,20 +200,24 @@ export default function UploadScreen() {
 
   const confirmDetection = () => {
     const yearToSend = detectedYear ?? new Date().getFullYear();
-    doUpload(detectedCategory, yearToSend, detectedMonth);
+    doUpload(detectedCategoryId, yearToSend, detectedMonth);
   };
 
   const goManual = () => setStage("manual");
 
-  const submitManual = () => doUpload(category, year, month);
+  const submitManual = () => doUpload(categoryId, year, month);
 
   const yearOptions = [year - 2, year - 1, year, year + 1];
   const monthLabel = (m: number | null) => (m ? MONTHS[m - 1].l : "—");
 
+  // Look up the detected category (or fallback OTHERS) for label/color display
+  const detectedCat = cats.find((c) => c.id === detectedCategoryId);
   const formatLooksGood =
-    detectedCategory !== "OTHERS" && detectedYear !== null && detectedMonth !== null;
+    !!detectedCat && detectedCat.key !== "OTHERS" && detectedYear !== null && detectedMonth !== null;
 
-  const detectGrad = formatLooksGood ? categoryGradients[detectedCategory] : (["#F59E0B", "#D97706"] as const);
+  const detectGrad = formatLooksGood && detectedCat
+    ? ([detectedCat.color, detectedCat.color] as const)
+    : (["#F59E0B", "#D97706"] as const);
 
   return (
     <ScrollView style={styles.root} contentContainerStyle={[styles.inner, { paddingBottom: 60 }]}>
@@ -292,8 +310,8 @@ export default function UploadScreen() {
               <Text style={styles.detectLabel}>Tab</Text>
               <View style={styles.detectValueWrap}>
                 <View style={[styles.dotInline, { backgroundColor: detectGrad[0] }]} />
-                <Text style={[styles.detectValue, detectedCategory === "OTHERS" && styles.detectValueWarn]}>
-                  {CATEGORY_LABELS[detectedCategory]}
+                <Text style={[styles.detectValue, (!detectedCat || detectedCat.key === "OTHERS") && styles.detectValueWarn]}>
+                  {detectedCat ? detectedCat.name : "—"}
                 </Text>
               </View>
             </View>
@@ -353,28 +371,27 @@ export default function UploadScreen() {
           <View style={styles.section}>
             <Text style={styles.sectionLabel}>Category</Text>
             <View style={styles.chipRow}>
-              {Object.keys(CATEGORY_LABELS).map((k) => {
-                const active = k === category;
-                const cgrad = categoryGradients[k];
+              {cats.map((c) => {
+                const active = c.id === categoryId;
                 return (
                   <PressableScale
-                    key={k}
-                    onPress={() => setCategory(k)}
+                    key={c.id}
+                    onPress={() => setCategoryId(c.id)}
                     haptic="light"
-                    testID={`chip-cat-${k}`}
+                    testID={`chip-cat-${c.id}`}
                   >
                     {active ? (
                       <LinearGradient
-                        colors={cgrad}
+                        colors={[c.color, c.color]}
                         start={{ x: 0, y: 0 }}
                         end={{ x: 1, y: 1 }}
                         style={[styles.chip, styles.chipActive]}
                       >
-                        <Text style={styles.chipTextActive}>{CATEGORY_LABELS[k]}</Text>
+                        <Text style={styles.chipTextActive}>{c.name}</Text>
                       </LinearGradient>
                     ) : (
                       <View style={styles.chip}>
-                        <Text style={styles.chipText}>{CATEGORY_LABELS[k]}</Text>
+                        <Text style={styles.chipText}>{c.name}</Text>
                       </View>
                     )}
                   </PressableScale>

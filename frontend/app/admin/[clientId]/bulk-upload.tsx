@@ -22,7 +22,7 @@ import { Ionicons } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { SafeAreaView } from "react-native-safe-area-context";
-import api, { CATEGORY_LABELS, getToken } from "../../../src/api";
+import api, { CATEGORY_LABELS, Category, listCategories, autoDetectCategoryId, getToken } from "../../../src/api";
 import { colors, radius, shadow } from "../../../src/theme";
 import PressableScale from "../../../src/PressableScale";
 import GradientButton from "../../../src/GradientButton";
@@ -64,7 +64,7 @@ type Row = {
   name: string;
   size: number;
   mimeType?: string;
-  category: string;
+  categoryId: string;
   year: number;
   month: number | null;
   status: "pending" | "uploading" | "done" | "error";
@@ -79,6 +79,20 @@ export default function BulkUploadScreen() {
   const toast = useToast();
   const [rows, setRows] = useState<Row[]>([]);
   const [busy, setBusy] = useState(false);
+  const [cats, setCats] = useState<Category[]>([]);
+
+  // Load categories for this client so auto-detect uses the admin's
+  // customised keywords + names.
+  React.useEffect(() => {
+    if (!clientId) return;
+    (async () => {
+      try {
+        const tok = await getToken();
+        const list = await listCategories({ client_id: String(clientId) }, tok || undefined);
+        setCats(list);
+      } catch { /* ignore */ }
+    })();
+  }, [clientId]);
 
   const pendingCount = useMemo(
     () => rows.filter((r) => r.status === "pending" || r.status === "error").length,
@@ -99,7 +113,7 @@ export default function BulkUploadScreen() {
         const name = a.name || "document.pdf";
         if (!name.toLowerCase().endsWith(".pdf")) continue;
         if (rows.some((r) => r.name === name && r.size === (a.size || 0))) continue;
-        const c = detectCategory(name);
+        const cId = autoDetectCategoryId(name, cats);
         const my = detectMonthYear(name);
         next.push({
           id: Math.random().toString(36).slice(2),
@@ -107,7 +121,7 @@ export default function BulkUploadScreen() {
           name,
           size: a.size || 0,
           mimeType: a.mimeType,
-          category: c,
+          categoryId: cId,
           year: my.year ?? new Date().getFullYear(),
           month: my.month,
           status: "pending",
@@ -149,7 +163,7 @@ export default function BulkUploadScreen() {
           form.append("file", { uri: row.uri, name: row.name, type: row.mimeType || "application/pdf" } as any);
         }
         form.append("client_id", String(clientId || ""));
-        form.append("category_override", row.category);
+        if (row.categoryId) form.append("category_id", row.categoryId);
         form.append("year_override", String(row.year));
         if (row.month !== null) form.append("month_override", String(row.month));
         const resp = await api.post("/documents/upload", form, {
@@ -219,7 +233,7 @@ export default function BulkUploadScreen() {
               <View style={{ flex: 1, minWidth: 0 }}>
                 <Text style={st.rowName} numberOfLines={1}>{r.name}</Text>
                 <View style={st.rowSubLine}>
-                  <Text style={st.badge}>{CATEGORY_LABELS[r.category]}</Text>
+                  <Text style={st.badge} numberOfLines={1}>{cats.find((c) => c.id === r.categoryId)?.name || "—"}</Text>
                   {r.month && <Text style={st.badge}>{MONTHS_SHORT[r.month - 1]}</Text>}
                   <Text style={[st.badge, st.badgeYear]}>{r.year}</Text>
                   <Text style={st.sizeText}>{(r.size / 1024).toFixed(0)} KB</Text>
