@@ -5,6 +5,7 @@ import {
   StyleSheet,
   ScrollView,
   ActivityIndicator,
+  Image,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { useLocalSearchParams } from "expo-router";
@@ -108,12 +109,20 @@ export default function ClientAdminLanding() {
                     active ? { borderColor: c.color, backgroundColor: `${c.color}1a` } : null,
                   ]}
                 >
-                  <Ionicons
-                    name={c.icon as any}
-                    size={15}
-                    color={active ? c.color : "#64748B"}
-                    style={{ marginRight: 6 }}
-                  />
+                  {c.custom_icon_b64 ? (
+                    <Image
+                      source={{ uri: `data:image/png;base64,${c.custom_icon_b64}` }}
+                      style={s.pillImg}
+                      resizeMode="cover"
+                    />
+                  ) : (
+                    <Ionicons
+                      name={c.icon as any}
+                      size={15}
+                      color={active ? c.color : "#64748B"}
+                      style={{ marginRight: 6 }}
+                    />
+                  )}
                   <Text
                     numberOfLines={1}
                     style={[s.pillText, active ? { color: c.color } : null]}
@@ -175,5 +184,8 @@ const s = StyleSheet.create({
     fontSize: 13,
     fontWeight: "700",
     color: "#475569",
+  },
+  pillImg: {
+    width: 18, height: 18, borderRadius: 4, marginRight: 6,
   },
 });

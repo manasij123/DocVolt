@@ -107,6 +107,7 @@ export type Category = {
   name: string;
   color: string;
   icon: string;          // ionicons name (eg "stats-chart")
+  custom_icon_b64?: string | null; // AI-generated PNG; takes priority over icon when present
   keywords: string[];
   sort_order: number;
   is_default: boolean;
@@ -182,6 +183,14 @@ export async function updateCategoryApi(id: string, payload: Partial<Pick<Catego
 }
 export async function deleteCategoryApi(id: string, token?: string): Promise<{ ok: boolean; moved_to_others: number }> {
   const r = await api.delete(`/categories/${id}`, {
+    headers: token ? { Authorization: `Bearer ${token}` } : undefined,
+  });
+  return r.data;
+}
+export async function generateCategoryIcon(payload: { description: string; style_hint?: string }, token?: string): Promise<{ image_base64: string; prompt_used: string }> {
+  // gpt-image-1 can take 30-90s; bump axios timeout for this call.
+  const r = await api.post("/categories/generate-icon", payload, {
+    timeout: 180_000,
     headers: token ? { Authorization: `Bearer ${token}` } : undefined,
   });
   return r.data;

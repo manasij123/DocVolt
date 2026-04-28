@@ -7,6 +7,7 @@ import {
   Animated,
   Easing,
   RefreshControl,
+  Image,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
@@ -254,7 +255,15 @@ export default function CategoryView({ category, cat, adminId }: Props) {
         >
           <View style={styles.heroTop}>
             <View style={styles.heroIconBox}>
-              <Ionicons name={effectiveIcon} size={22} color="#fff" />
+              {cat?.custom_icon_b64 ? (
+                <Image
+                  source={{ uri: `data:image/png;base64,${cat.custom_icon_b64}` }}
+                  style={styles.heroIconImg}
+                  resizeMode="cover"
+                />
+              ) : (
+                <Ionicons name={effectiveIcon} size={22} color="#fff" />
+              )}
             </View>
             <View style={styles.heroCount}>
               <Text style={styles.heroCountNum}>{documents.length}</Text>
@@ -451,7 +460,9 @@ const styles = StyleSheet.create({
     borderColor: "rgba(255,255,255,0.22)",
     alignItems: "center",
     justifyContent: "center",
+    overflow: "hidden",
   },
+  heroIconImg: { width: 44, height: 44, borderRadius: 11 },
   heroCount: {
     flexDirection: "row",
     alignItems: "baseline",

@@ -11,6 +11,7 @@ import {
   ActivityIndicator,
   KeyboardAvoidingView,
   Platform,
+  Image,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { useLocalSearchParams } from "expo-router";
@@ -20,6 +21,7 @@ import {
   createCategory,
   updateCategoryApi,
   deleteCategoryApi,
+  generateCategoryIcon,
   CATEGORY_COLOR_PRESETS,
   CATEGORY_ICON_PRESETS,
   getToken,
@@ -125,8 +127,12 @@ export default function CategoriesScreen() {
         ) : (
           cats.map((c) => (
             <View key={c.id} style={s.row}>
-              <View style={[s.iconBox, { backgroundColor: `${c.color}1a`, borderColor: `${c.color}33` }]}>
-                <Ionicons name={c.icon as any} size={22} color={c.color} />
+              <View style={[s.iconBox, { backgroundColor: c.custom_icon_b64 ? "#fff" : `${c.color}1a`, borderColor: `${c.color}33`, padding: c.custom_icon_b64 ? 0 : undefined, overflow: "hidden" }]}>
+                {c.custom_icon_b64 ? (
+                  <Image source={{ uri: `data:image/png;base64,${c.custom_icon_b64}` }} style={{ width: 44, height: 44 }} resizeMode="cover" />
+                ) : (
+                  <Ionicons name={c.icon as any} size={22} color={c.color} />
+                )}
               </View>
               <View style={{ flex: 1, minWidth: 0 }}>
                 <Text style={s.name} numberOfLines={1}>{c.name}</Text>
@@ -194,6 +200,29 @@ function CategoryEditorModal({ clientId, existing, onClose, onSaved }: {
   const [keywordsRaw, setKeywordsRaw] = useState((existing?.keywords || []).join(", "));
   const [saving, setSaving] = useState(false);
   const [err, setErr] = useState<string | null>(null);
+  // AI icon generation state
+  const [aiOpen, setAiOpen] = useState(!!existing?.custom_icon_b64);
+  const [aiDesc, setAiDesc] = useState("");
+  const [aiBusy, setAiBusy] = useState(false);
+  const [aiPreview, setAiPreview] = useState<string | null>(existing?.custom_icon_b64 || null);
+  const [aiErr, setAiErr] = useState<string | null>(null);
+
+  const generate = async () => {
+    if (!aiDesc.trim() || aiDesc.trim().length < 5) {
+      setAiErr("Please describe the icon in a few words (min 5 characters)");
+      return;
+    }
+    setAiBusy(true); setAiErr(null);
+    try {
+      const tok = await getToken();
+      const r = await generateCategoryIcon({ description: aiDesc.trim() }, tok || undefined);
+      setAiPreview(r.image_base64);
+    } catch (e: any) {
+      setAiErr(e?.response?.data?.detail || "Generation failed. Please try again.");
+    } finally {
+      setAiBusy(false);
+    }
+  };
 
   const save = async () => {
     if (!name.trim()) {
@@ -206,9 +235,15 @@ function CategoryEditorModal({ clientId, existing, onClose, onSaved }: {
     try {
       const token = await getToken();
       if (existing) {
-        await updateCategoryApi(existing.id, { name: name.trim(), color, icon, keywords }, token || undefined);
+        await updateCategoryApi(existing.id, {
+          name: name.trim(), color, icon, keywords,
+          custom_icon_b64: aiPreview || "",
+        } as any, token || undefined);
       } else {
-        await createCategory({ client_id: clientId, name: name.trim(), color, icon, keywords }, token || undefined);
+        const created = await createCategory({ client_id: clientId, name: name.trim(), color, icon, keywords }, token || undefined);
+        if (aiPreview) {
+          await updateCategoryApi(created.id, { custom_icon_b64: aiPreview } as any, token || undefined);
+        }
       }
       onSaved();
     } catch (e: any) {
@@ -260,7 +295,72 @@ function CategoryEditorModal({ clientId, existing, onClose, onSaved }: {
               ))}
             </View>
 
-            <Text style={s.fieldLabel}>Icon</Text>
+            <Text style={s.fieldLabel}>✨ Custom icon with AI</Text>
+            {!aiOpen ? (
+              <TouchableOpacity onPress={() => setAiOpen(true)} style={s.aiOpenBtn}>
+                <Ionicons name="sparkles" size={18} color="#7C3AED" />
+                <Text style={s.aiOpenText}>Generate icon with AI</Text>
+              </TouchableOpacity>
+            ) : (
+              <View style={s.aiBox}>
+                <Text style={s.helperText}>
+                  Describe what icon you want. Tip: name the subject, mention style ("flat", "minimal"), avoid text or scenes.
+                </Text>
+                <Text style={[s.helperText, { fontSize: 11, fontStyle: "italic", marginTop: 2 }]}>
+                  e.g. "iron tablet pill being given to a school student"
+                </Text>
+                <TextInput
+                  style={[s.input, { minHeight: 60, textAlignVertical: "top" }]}
+                  value={aiDesc}
+                  onChangeText={setAiDesc}
+                  placeholder="Describe the icon…"
+                  placeholderTextColor="#94A3B8"
+                  multiline
+                  maxLength={400}
+                />
+                {aiErr && (
+                  <View style={s.errBox}>
+                    <Ionicons name="alert-circle" size={14} color="#B91C1C" />
+                    <Text style={s.errText}>{aiErr}</Text>
+                  </View>
+                )}
+                <View style={{ flexDirection: "row", gap: 8, marginTop: 10, alignItems: "center" }}>
+                  <TouchableOpacity onPress={generate} disabled={aiBusy} style={[s.aiGenBtn, aiBusy && { opacity: 0.6 }]}>
+                    {aiBusy ? (
+                      <ActivityIndicator size="small" color="#fff" />
+                    ) : (
+                      <Ionicons name={aiPreview ? "refresh" : "sparkles"} size={16} color="#fff" />
+                    )}
+                    <Text style={s.aiGenText}>
+                      {aiBusy ? "Generating… (~30s)" : (aiPreview ? "Regenerate" : "Generate")}
+                    </Text>
+                  </TouchableOpacity>
+                  {aiPreview && (
+                    <TouchableOpacity onPress={() => { setAiPreview(null); setAiDesc(""); }} style={s.aiClearBtn}>
+                      <Text style={s.aiClearText}>✕ Remove</Text>
+                    </TouchableOpacity>
+                  )}
+                </View>
+                {aiBusy && <Text style={[s.helperText, { marginTop: 6 }]}>This typically takes 30-60 seconds.</Text>}
+                {aiPreview && (
+                  <View style={s.aiPreviewBox}>
+                    <Image
+                      source={{ uri: `data:image/png;base64,${aiPreview}` }}
+                      style={[s.aiPreviewImg, { borderColor: color }]}
+                      resizeMode="cover"
+                    />
+                    <View style={{ flex: 1, marginLeft: 12 }}>
+                      <Text style={{ fontWeight: "800", fontSize: 13, color: "#0F172A" }}>Your AI icon</Text>
+                      <Text style={{ fontSize: 11, color: "#64748B", marginTop: 2 }}>
+                        Will replace the emoji icon when saved.
+                      </Text>
+                    </View>
+                  </View>
+                )}
+              </View>
+            )}
+
+            <Text style={s.fieldLabel}>{aiPreview ? "Fallback icon" : "Icon"}</Text>
             <View style={s.iconGrid}>
               {CATEGORY_ICON_PRESETS.map((p) => (
                 <PressableScale key={p.name} onPress={() => setIcon(p.name)}>
@@ -388,6 +488,35 @@ const s = StyleSheet.create({
 
   errBox: { flexDirection: "row", alignItems: "center", gap: 6, backgroundColor: "#FEF2F2", padding: 10, borderRadius: 8, marginBottom: 8 },
   errText: { color: "#B91C1C", fontSize: 12, fontWeight: "700", flex: 1 },
+
+  // AI generation styles
+  aiOpenBtn: {
+    flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 6,
+    backgroundColor: "#EEF2FF", borderRadius: 10, paddingVertical: 12, paddingHorizontal: 14,
+    borderWidth: 1, borderColor: "#C7D2FE",
+  },
+  aiOpenText: { color: "#7C3AED", fontWeight: "800", fontSize: 13 },
+  aiBox: {
+    backgroundColor: "#F5F3FF",
+    borderRadius: 12,
+    padding: 12,
+    borderWidth: 1,
+    borderColor: "#DDD6FE",
+  },
+  aiGenBtn: {
+    flexDirection: "row", alignItems: "center", gap: 6,
+    backgroundColor: "#7C3AED",
+    paddingVertical: 10, paddingHorizontal: 16, borderRadius: 10,
+  },
+  aiGenText: { color: "#fff", fontWeight: "800", fontSize: 13 },
+  aiClearBtn: { paddingVertical: 8, paddingHorizontal: 12 },
+  aiClearText: { color: "#64748B", fontWeight: "700", fontSize: 12 },
+  aiPreviewBox: {
+    flexDirection: "row", alignItems: "center",
+    backgroundColor: "#fff", borderRadius: 12, padding: 10, marginTop: 12,
+    borderWidth: 1, borderColor: "#E5E7EB",
+  },
+  aiPreviewImg: { width: 70, height: 70, borderRadius: 12, borderWidth: 3 },
 
   modalActions: { flexDirection: "row", gap: 10, marginTop: 14 },
   cancelBtn: { paddingHorizontal: 18, justifyContent: "center", borderRadius: 10, backgroundColor: "#F1F5F9" },
