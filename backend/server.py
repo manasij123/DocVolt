@@ -1279,6 +1279,31 @@ async def superadmin_dashboard(current=Depends(get_current_superadmin)):
     clients_out.sort(key=lambda u: u.get("created_at") or "", reverse=True)
     connections_out.sort(key=lambda c: c.get("created_at") or "", reverse=True)
 
+    # Documents — admin → client + filename + uploaded_at (newest first)
+    docs_raw = await db.documents.find({}, {
+        "_id": 0, "id": 1, "admin_id": 1, "client_id": 1,
+        "original_name": 1, "category": 1, "category_id": 1,
+        "uploaded_at": 1, "size_bytes": 1,
+    }).sort("uploaded_at", -1).to_list(2000)
+    documents_out = []
+    for d in docs_raw:
+        a = user_by_id.get(d.get("admin_id"))
+        cl = user_by_id.get(d.get("client_id"))
+        documents_out.append({
+            "id": d.get("id"),
+            "filename": d.get("original_name") or "(untitled)",
+            "category": d.get("category"),
+            "category_id": d.get("category_id"),
+            "size_bytes": d.get("size_bytes") or 0,
+            "uploaded_at": d.get("uploaded_at"),
+            "admin_id": d.get("admin_id"),
+            "client_id": d.get("client_id"),
+            "admin_name": (a or {}).get("name", "?"),
+            "admin_email": (a or {}).get("email", "?"),
+            "client_name": (cl or {}).get("name", "?"),
+            "client_email": (cl or {}).get("email", "?"),
+        })
+
     total_docs = await db.documents.count_documents({})
     return {
         "stats": {
@@ -1292,6 +1317,7 @@ async def superadmin_dashboard(current=Depends(get_current_superadmin)):
         "admins": admins_out,
         "clients": clients_out,
         "connections": connections_out,
+        "documents": documents_out,
     }
 
 
