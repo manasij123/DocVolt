@@ -1,10 +1,10 @@
 import React, { useEffect, useState } from "react";
-import { Tabs, useRouter, useLocalSearchParams } from "expo-router";
+import { Stack, useRouter, useLocalSearchParams } from "expo-router";
 import { View, Text, StyleSheet, TouchableOpacity, ActivityIndicator } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { SafeAreaView } from "react-native-safe-area-context";
 import api, { ConnectedAdmin, initials, colorFromString } from "../../../src/api";
-import { colors, radius } from "../../../src/theme";
+import { colors } from "../../../src/theme";
 
 function Header() {
   const router = useRouter();
@@ -43,20 +43,7 @@ export default function PerAdminLayout() {
   return (
     <View style={{ flex: 1, backgroundColor: colors.background }}>
       <Header />
-      <Tabs
-        screenOptions={{
-          headerShown: false,
-          tabBarActiveTintColor: colors.primary,
-          tabBarInactiveTintColor: colors.textMuted,
-          tabBarStyle: { backgroundColor: colors.surface, borderTopColor: colors.border, height: 70, paddingTop: 8, paddingBottom: 10 },
-          tabBarLabelStyle: { fontSize: 10, fontWeight: "700" },
-        }}
-      >
-        <Tabs.Screen name="monthly" options={{ title: "Monthly", tabBarIcon: ({ color, focused }) => <Ionicons name={focused ? "bar-chart" : "bar-chart-outline"} size={20} color={color} /> }} />
-        <Tabs.Screen name="forwarding" options={{ title: "Forwarding", tabBarIcon: ({ color, focused }) => <Ionicons name={focused ? "mail" : "mail-outline"} size={20} color={color} /> }} />
-        <Tabs.Screen name="ifa" options={{ title: "IFA", tabBarIcon: ({ color, focused }) => <Ionicons name={focused ? "trending-up" : "trending-up-outline"} size={20} color={color} /> }} />
-        <Tabs.Screen name="others" options={{ title: "Others", tabBarIcon: ({ color, focused }) => <Ionicons name={focused ? "folder" : "folder-outline"} size={20} color={color} /> }} />
-      </Tabs>
+      <Stack screenOptions={{ headerShown: false }} />
     </View>
   );
 }

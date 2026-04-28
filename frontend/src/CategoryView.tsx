@@ -10,7 +10,7 @@ import {
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
-import api, { CATEGORY_LABELS, DocumentMeta, getToken } from "./api";
+import api, { CATEGORY_LABELS, Category, DocumentMeta, getToken } from "./api";
 import { colors, radius, shadow, categoryGradients } from "./theme";
 import { shareDocument, shareDocumentsBulk } from "./share";
 import PressableScale from "./PressableScale";
@@ -18,8 +18,14 @@ import { useDocsSocket } from "./useDocsSocket";
 import { useResponsive } from "./useResponsive";
 import { useToast } from "./Toast";
 
+type LegacyKey = "MONTHLY_RETURN" | "FORWARDING_LETTER" | "IFA_REPORT" | "OTHERS";
+
 type Props = {
-  category: "MONTHLY_RETURN" | "FORWARDING_LETTER" | "IFA_REPORT" | "OTHERS";
+  /** Legacy enum prop — still supported for backward compatibility. */
+  category?: LegacyKey;
+  /** Preferred: full per-client Category object. When supplied, it takes
+   * priority over `category` and drives the filter (by id) + visuals (color/icon/name). */
+  cat?: Category | null;
   adminId?: string;
 };
 
@@ -140,7 +146,20 @@ function DocCard({
   );
 }
 
-export default function CategoryView({ category, adminId }: Props) {
+export default function CategoryView({ category, cat, adminId }: Props) {
+  // When a full Category object is passed (new per-client system), use it.
+  // Otherwise fall back to the legacy enum-based defaults so existing callers
+  // (e.g. tests) keep working.
+  const effectiveKey: string = (cat?.key as string) || (category as string) || "OTHERS";
+  const effectiveName: string = cat?.name || CATEGORY_LABELS[effectiveKey] || effectiveKey;
+  const effectiveDesc: string = cat
+    ? (cat.keywords.length > 0 ? `Auto-detected: ${cat.keywords.join(", ")}` : "Documents in this category")
+    : (CATEGORY_DESCRIPTIONS[effectiveKey] || "Documents in this category");
+  const effectiveIcon: any = (cat?.icon as any) || CATEGORY_ICONS[effectiveKey] || "folder";
+  // Build a 2-stop gradient from the cat color (or fall back to the legacy palette)
+  const heroGrad: readonly [string, string] = cat
+    ? [cat.color, cat.color] as const
+    : (categoryGradients[effectiveKey] || categoryGradients.OTHERS);
   const [documents, setDocuments] = useState<DocumentMeta[]>([]);
   const [years, setYears] = useState<number[]>([]);
   const [activeYear, setActiveYear] = useState<number | null>(null);
@@ -163,7 +182,10 @@ export default function CategoryView({ category, adminId }: Props) {
 
   const load = useCallback(async () => {
     try {
-      const params: any = { category };
+      const params: any = {};
+      // Prefer category_id when we have a Category object; fall back to legacy key.
+      if (cat?.id) params.category_id = cat.id;
+      else if (category) params.category = category;
       if (adminId) params.admin_id = adminId;
       const res = await api.get<DocumentMeta[]>("/documents", { params });
       setDocuments(res.data);
@@ -182,7 +204,7 @@ export default function CategoryView({ category, adminId }: Props) {
       setLoading(false);
       setRefreshing(false);
     }
-  }, [category]);
+  }, [category, cat?.id, adminId]);
 
   useEffect(() => {
     setLoading(true);
@@ -203,14 +225,16 @@ export default function CategoryView({ category, adminId }: Props) {
   // 🔴 Real-time sync: refresh on relevant doc events
   useDocsSocket((e) => {
     if (e.type === "doc:created" || e.type === "doc:updated") {
-      if (e.doc?.category === category) load();
+      const matchById = !!cat?.id && e.doc?.category_id === cat.id;
+      const matchByKey = !cat?.id && e.doc?.category === effectiveKey;
+      if (matchById || matchByKey) load();
     } else if (e.type === "doc:deleted") {
       if (documents.some((d) => d.id === e.id)) load();
     }
   });
 
   const filtered = activeYear ? documents.filter((d) => d.year === activeYear) : [];
-  const grad = categoryGradients[category];
+  const grad = heroGrad;
 
   return (
     <View style={styles.container}>
@@ -230,15 +254,15 @@ export default function CategoryView({ category, adminId }: Props) {
         >
           <View style={styles.heroTop}>
             <View style={styles.heroIconBox}>
-              <Ionicons name={CATEGORY_ICONS[category]} size={22} color="#fff" />
+              <Ionicons name={effectiveIcon} size={22} color="#fff" />
             </View>
             <View style={styles.heroCount}>
               <Text style={styles.heroCountNum}>{documents.length}</Text>
               <Text style={styles.heroCountLabel}>files</Text>
             </View>
           </View>
-          <Text style={styles.heroTitle}>{CATEGORY_LABELS[category]}</Text>
-          <Text style={styles.heroSub}>{CATEGORY_DESCRIPTIONS[category]}</Text>
+          <Text style={styles.heroTitle}>{effectiveName}</Text>
+          <Text style={styles.heroSub}>{effectiveDesc}</Text>
         </LinearGradient>
       </Animated.View>
 
