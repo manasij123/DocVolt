@@ -30,7 +30,7 @@ export default function Landing() {
             className="dv-fullmark"
             style={{
               display: "block",
-              width: "clamp(110px, 16vw, 160px)",
+              width: "clamp(110px, 16vw, 110px)",
               height: "auto",
               objectFit: "contain",
               filter: "drop-shadow(0 16px 42px rgba(59,130,246,0.32))",
