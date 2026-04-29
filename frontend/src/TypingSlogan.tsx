@@ -7,9 +7,11 @@ const PAUSE_AFTER_DONE = 2400;
 const ERASE_SPEED = 28;
 const PAUSE_BEFORE_RETYPE = 700;
 
-// Solid brand mono color — DocVault sky-blue (matches theme #1A73E8 family,
-// lifted to #38BDF8 for max readability on the dark navy hero background).
-const BRAND = "#38BDF8";
+// Solid mono color for the typing slogan. On the lighter sky-blue mobile hero
+// gradient, sky-blue text blends in — so we use crisp white with a soft cyan
+// glow for readability + brand vibe.
+const BRAND = "#FFFFFF";
+const GLOW = "rgba(125,211,252,0.55)"; // sky-300 glow ring
 
 interface Props {
   fontSize?: number;
@@ -82,9 +84,9 @@ export default function TypingSloganMobile({ fontSize = 14, width, align = "left
           textAlign: align,
           textShadow: undefined,
           // RN doesn't support textShadow shorthand; use individual props
-          textShadowColor: "rgba(56,189,248,0.45)",
+          textShadowColor: GLOW,
           textShadowOffset: { width: 0, height: 0 },
-          textShadowRadius: 8,
+          textShadowRadius: 10,
         }}
       >
         {text}
