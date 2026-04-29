@@ -3,6 +3,7 @@ import { Link, useNavigate } from "react-router-dom";
 import { getToken, getUser } from "../api";
 import SecurityBackground from "../SecurityBackground";
 import { Ic } from "../Icons";
+import TypingSlogan from "../TypingSlogan";
 
 const APK_URL = (import.meta.env.VITE_APK_URL as string | undefined)
   || "https://expo.dev/artifacts/eas/e6jGMGCfQQ1arLMmiJHdaq.apk";
@@ -37,19 +38,9 @@ export default function Landing() {
               marginBottom: 4,
             }}
           />
-          <img
-            src="/api/web/slogan.png"
-            alt="DocVault — Organise. Sync. Protect."
-            className="dv-slogan"
-            style={{
-              display: "block",
-              width: "clamp(220px, 32vw, 340px)",
-              height: "auto",
-              objectFit: "contain",
-              margin: "4px 0 14px",
-              filter: "drop-shadow(0 6px 16px rgba(15,23,42,0.18))",
-            }}
-          />
+          <div style={{ margin: "10px 0 14px", maxWidth: 520 }}>
+            <TypingSlogan size={18} />
+          </div>
           <p className="hero-tagline">
             Organise any kind of document your way — create your own categories, share with clients, and stay in sync across web &amp; mobile.
           </p>

@@ -12,6 +12,7 @@ import PressableScale from "../src/PressableScale";
 import { useAuth } from "../src/auth";
 import SecurityBackground from "../src/SecurityBackground";
 import { Ic } from "../src/Icons";
+import TypingSlogan from "../src/TypingSlogan";
 
 export default function Landing() {
   const router = useRouter();
@@ -122,11 +123,9 @@ export default function Landing() {
                 resizeMode="contain"
               />
             </View>
-            <Image
-              source={require("../assets/images/brand-slogan.png")}
-              style={{ width: sloganW, height: sloganH, alignSelf: "center", marginTop: 6 }}
-              resizeMode="contain"
-            />
+            <View style={{ width: sloganW, alignSelf: "center", marginTop: 8, marginBottom: 4 }}>
+              <TypingSlogan fontSize={Math.max(12, Math.round(sloganW * 0.062))} width={sloganW} align="center" />
+            </View>
             <Text style={styles.tagline}>Per-client privacy. Real-time sync.{"\n"}Same data on web & mobile.</Text>
           </Animated.View>
 
