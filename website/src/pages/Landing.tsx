@@ -25,45 +25,29 @@ export default function Landing() {
       <div className="landing-inner container">
         <div className="hero-block">
           <img
-            src="/api/web/docvault-logo.png"
+            src="/api/web/logo.svg"
             alt="DocVault"
             className="dv-fullmark"
             style={{
-              width: "min(420px, 80vw)",
+              width: "min(340px, 70vw)",
               height: "auto",
               objectFit: "contain",
-              filter: "drop-shadow(0 16px 50px rgba(59,130,246,0.30))",
-              marginBottom: 8,
+              filter: "drop-shadow(0 20px 55px rgba(59,130,246,0.35))",
+              marginBottom: 6,
             }}
           />
-          <p
-            className="hero-slogan"
+          <img
+            src="/api/web/slogan.svg"
+            alt="DocVault — Organise. Sync. Protect."
+            className="dv-slogan"
             style={{
-              display: "inline-block",
-              fontSize: "clamp(14px, 2.2vw, 18px)",
-              fontWeight: 800,
-              letterSpacing: 0.3,
-              margin: "10px 0 18px",
-              fontStyle: "italic",
-              padding: "10px 16px",
-              borderRadius: 12,
-              background: "rgba(255,255,255,0.92)",
-              boxShadow: "0 6px 22px rgba(15,23,42,0.18), inset 0 0 0 1px rgba(255,255,255,0.6)",
-              backdropFilter: "blur(6px)",
-              WebkitBackdropFilter: "blur(6px)",
+              width: "min(420px, 78vw)",
+              height: "auto",
+              objectFit: "contain",
+              margin: "6px 0 14px",
+              filter: "drop-shadow(0 6px 18px rgba(15,23,42,0.18))",
             }}
-          >
-            <span
-              style={{
-                background: "linear-gradient(90deg, #0F172A 0%, #1E40AF 55%, #2563EB 100%)",
-                WebkitBackgroundClip: "text",
-                WebkitTextFillColor: "transparent",
-                backgroundClip: "text",
-              }}
-            >
-              Organised PDF storage. Per-client privacy. Real-time sync.
-            </span>
-          </p>
+          />
           <p className="hero-tagline">
             Monthly Returns, Forwarding Letters, IFA Reports — all auto-categorised, instantly synced across web &amp; mobile.
           </p>

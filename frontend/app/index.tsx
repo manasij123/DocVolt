@@ -112,12 +112,16 @@ export default function Landing() {
           <Animated.View style={{ opacity: heroFade, transform: [{ translateY: heroSlide }], maxWidth: 640, alignSelf: "center", width: "100%" }}>
             <View style={styles.logoWrap}>
               <Image
-                source={require("../assets/images/icon.png")}
-                style={{ width: 80, height: 80, borderRadius: 18 }}
-                resizeMode="cover"
+                source={require("../assets/images/brand-logo.png")}
+                style={{ width: 140, height: 140 }}
+                resizeMode="contain"
               />
             </View>
-            <Text style={styles.brand}>DocVault</Text>
+            <Image
+              source={require("../assets/images/brand-slogan.png")}
+              style={{ width: 260, height: 52, alignSelf: "center", marginTop: 6 }}
+              resizeMode="contain"
+            />
             <Text style={styles.tagline}>Per-client privacy. Real-time sync.{"\n"}Same data on web & mobile.</Text>
           </Animated.View>
 
