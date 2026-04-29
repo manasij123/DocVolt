@@ -196,7 +196,7 @@ export default function Landing() {
 
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: colors.primary, alignItems: "center", justifyContent: "center" },
-  logoWrap: { width: 80, height: 80, borderRadius: 18, alignItems: "center", justifyContent: "center", marginBottom: 18, alignSelf: "flex-start", overflow: "hidden" },
+  logoWrap: { alignItems: "center", justifyContent: "center", marginBottom: 10, alignSelf: "flex-start" },
   brand: { fontSize: 40, fontWeight: "800", color: "#fff", letterSpacing: -1.2 },
   tagline: { fontSize: 14, color: "#CBD5E1", marginTop: 8, lineHeight: 20 },
   section: { color: "#94A3B8", fontSize: 11, fontWeight: "700", letterSpacing: 1.5, textTransform: "uppercase", marginTop: 4 },

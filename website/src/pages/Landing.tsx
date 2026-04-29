@@ -29,6 +29,7 @@ export default function Landing() {
             alt="DocVault"
             className="dv-fullmark"
             style={{
+              display: "block",
               width: "clamp(140px, 22vw, 220px)",
               height: "auto",
               objectFit: "contain",
@@ -41,6 +42,7 @@ export default function Landing() {
             alt="DocVault — Organise. Sync. Protect."
             className="dv-slogan"
             style={{
+              display: "block",
               width: "clamp(220px, 32vw, 340px)",
               height: "auto",
               objectFit: "contain",
