@@ -1,7 +1,7 @@
 import React, { useEffect, useRef, useState } from "react";
 import {
   View, Text, StyleSheet, Animated, Easing, ActivityIndicator,
-  ScrollView, TouchableOpacity, Linking, Alert, Image,
+  ScrollView, TouchableOpacity, Linking, Alert, Image, Dimensions,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { LinearGradient } from "expo-linear-gradient";
@@ -17,6 +17,11 @@ export default function Landing() {
   const router = useRouter();
   const { user, loading } = useAuth();
   const [ready, setReady] = useState(false);
+  const { width: screenW } = Dimensions.get("window");
+  // device-width-aware logo/slogan sizing (phones 320-480 wide)
+  const logoSize = Math.min(Math.max(screenW * 0.36, 110), 160);
+  const sloganW = Math.min(Math.max(screenW * 0.62, 200), 300);
+  const sloganH = sloganW * 0.2;
 
   const heroFade = useRef(new Animated.Value(0)).current;
   const heroSlide = useRef(new Animated.Value(40)).current;
@@ -113,13 +118,13 @@ export default function Landing() {
             <View style={styles.logoWrap}>
               <Image
                 source={require("../assets/images/brand-logo.png")}
-                style={{ width: 140, height: 140 }}
+                style={{ width: logoSize, height: logoSize }}
                 resizeMode="contain"
               />
             </View>
             <Image
               source={require("../assets/images/brand-slogan.png")}
-              style={{ width: 260, height: 52, alignSelf: "center", marginTop: 6 }}
+              style={{ width: sloganW, height: sloganH, alignSelf: "center", marginTop: 6 }}
               resizeMode="contain"
             />
             <Text style={styles.tagline}>Per-client privacy. Real-time sync.{"\n"}Same data on web & mobile.</Text>

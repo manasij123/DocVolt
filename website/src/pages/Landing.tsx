@@ -25,27 +25,27 @@ export default function Landing() {
       <div className="landing-inner container">
         <div className="hero-block">
           <img
-            src="/api/web/logo.svg"
+            src="/api/web/logo.png"
             alt="DocVault"
             className="dv-fullmark"
             style={{
-              width: "min(340px, 70vw)",
+              width: "clamp(140px, 22vw, 220px)",
               height: "auto",
               objectFit: "contain",
-              filter: "drop-shadow(0 20px 55px rgba(59,130,246,0.35))",
-              marginBottom: 6,
+              filter: "drop-shadow(0 16px 42px rgba(59,130,246,0.32))",
+              marginBottom: 4,
             }}
           />
           <img
-            src="/api/web/slogan.svg"
+            src="/api/web/slogan.png"
             alt="DocVault — Organise. Sync. Protect."
             className="dv-slogan"
             style={{
-              width: "min(420px, 78vw)",
+              width: "clamp(220px, 32vw, 340px)",
               height: "auto",
               objectFit: "contain",
-              margin: "6px 0 14px",
-              filter: "drop-shadow(0 6px 18px rgba(15,23,42,0.18))",
+              margin: "4px 0 14px",
+              filter: "drop-shadow(0 6px 16px rgba(15,23,42,0.18))",
             }}
           />
           <p className="hero-tagline">
