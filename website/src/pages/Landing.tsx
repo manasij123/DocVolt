@@ -51,7 +51,7 @@ export default function Landing() {
             }}
           />
           <p className="hero-tagline">
-            Monthly Returns, Forwarding Letters, IFA Reports — all auto-categorised, instantly synced across web &amp; mobile.
+            Organise any kind of document your way — create your own categories, share with clients, and stay in sync across web &amp; mobile.
           </p>
           <div className="hero-pills">
             <span className="hero-pill">⚡ Auto-categorise</span>

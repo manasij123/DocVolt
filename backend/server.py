@@ -46,13 +46,11 @@ ADMIN_PASSWORD = os.environ.get("ADMIN_PASSWORD", "admin123")
 
 CATEGORIES = ["MONTHLY_RETURN", "FORWARDING_LETTER", "IFA_REPORT", "OTHERS"]
 
-# Seed defaults for every (admin, client) pair. Admins can rename / add more
-# later — but these four are always created so legacy data keeps working.
-# `key` is the uppercase slug that maps to the legacy `documents.category` enum.
+# Seed only the OTHERS fallback category — admins build their own taxonomy.
+# The domain-specific defaults (Monthly Return / Forwarding Letter / IFA Report)
+# were removed at user request on 2026-04-29 — DocVault is a generic doc-vault
+# now, not an IFA/compliance-specific tool.
 DEFAULT_CATEGORIES: list[dict] = [
-    {"key": "MONTHLY_RETURN",    "name": "Monthly Return",   "color": "#3B82F6", "icon": "stats-chart",  "keywords": ["monthly return", "monthly_return"]},
-    {"key": "FORWARDING_LETTER", "name": "Forwarding Letter","color": "#8B5CF6", "icon": "paper-plane",   "keywords": ["forwarding letter", "forwarding_letter", "forwarding-letter"]},
-    {"key": "IFA_REPORT",        "name": "IFA Report",       "color": "#10B981", "icon": "podium",        "keywords": ["ifa report", "ifa_report", "ifa-report"]},
     {"key": "OTHERS",            "name": "Others",           "color": "#6B7280", "icon": "folder-open",   "keywords": []},
 ]
 

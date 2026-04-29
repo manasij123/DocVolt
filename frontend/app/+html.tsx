@@ -24,7 +24,7 @@ export default function Root({ children }: PropsWithChildren) {
         <meta name="msapplication-navbutton-color" content="#1A73E8" />
         <meta
           name="description"
-          content="DocVault — Organised PDF storage for your team. Monthly Returns, Forwarding Letters, IFA Reports."
+          content="DocVault — Organised document storage for your team. Create your own categories, share with clients, sync across web & mobile."
         />
 
         <link rel="manifest" href="/manifest.json" />
