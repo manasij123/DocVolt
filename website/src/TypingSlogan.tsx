@@ -6,10 +6,9 @@ const PAUSE_AFTER_DONE = 2400;
 const ERASE_SPEED_MS = 28;
 const PAUSE_BEFORE_RETYPE = 700;
 
-// Aurora — cool electric flowing gradient (cyan → sky → indigo → fuchsia → cyan loop)
-// Picked to harmonise with the dark-blue landing background and the purple/blue brand logo.
-const GRADIENT =
-  "linear-gradient(90deg, #22D3EE 0%, #38BDF8 18%, #6366F1 38%, #A855F7 58%, #EC4899 78%, #22D3EE 100%)";
+// Solid brand mono color — DocVault sky-blue (matches theme-color #1A73E8 family)
+// Slightly lifted to #38BDF8 for max readability on the dark navy hero background.
+const BRAND = "#38BDF8";
 
 export default function TypingSlogan({ size = 18 }: { size?: number }) {
   const [text, setText] = useState("");
@@ -56,22 +55,11 @@ export default function TypingSlogan({ size = 18 }: { size?: number }) {
         minHeight: size * 1.55,
         whiteSpace: "pre-wrap",
         wordBreak: "break-word",
+        color: BRAND,
+        textShadow: `0 0 18px rgba(56,189,248,0.35)`,
       }}
     >
-      <span
-        style={{
-          backgroundImage: GRADIENT,
-          backgroundSize: "300% 100%",
-          WebkitBackgroundClip: "text",
-          WebkitTextFillColor: "transparent",
-          backgroundClip: "text",
-          color: "transparent",
-          animation: "dv-aurora-shift 6s linear infinite",
-          filter: "drop-shadow(0 1px 6px rgba(99,102,241,0.35))",
-        }}
-      >
-        {text}
-      </span>
+      <span>{text}</span>
       <span
         aria-hidden
         style={{
@@ -79,22 +67,17 @@ export default function TypingSlogan({ size = 18 }: { size?: number }) {
           width: 2,
           height: size * 1.05,
           marginLeft: 4,
-          background:
-            "linear-gradient(180deg, #22D3EE 0%, #A855F7 55%, #EC4899 100%)",
+          background: BRAND,
           borderRadius: 1,
           verticalAlign: "text-bottom",
           animation: "dv-cursor-blink 0.85s steps(2, start) infinite",
-          boxShadow: "0 0 6px rgba(168,85,247,0.55)",
+          boxShadow: `0 0 8px ${BRAND}`,
         }}
       />
       <style>{`
         @keyframes dv-cursor-blink {
           0%, 49% { opacity: 1; }
           50%, 100% { opacity: 0; }
-        }
-        @keyframes dv-aurora-shift {
-          0%   { background-position: 0% 50%; }
-          100% { background-position: 200% 50%; }
         }
       `}</style>
     </span>
