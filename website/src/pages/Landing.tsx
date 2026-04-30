@@ -31,11 +31,12 @@ export default function Landing() {
             className="dv-fullmark"
             style={{
               display: "block",
-              width: "clamp(110px, 16vw, 110px)",
+              width: "clamp(140px, 20vw, 180px)",
               height: "auto",
               objectFit: "contain",
-              filter: "drop-shadow(0 16px 42px rgba(59,130,246,0.32))",
-              marginBottom: 4,
+              filter:
+                "drop-shadow(0 18px 48px rgba(168,85,247,0.45)) drop-shadow(0 6px 18px rgba(15,23,42,0.55))",
+              marginBottom: 8,
             }}
           />
           <div style={{ margin: "10px 0 14px", maxWidth: 520 }}>

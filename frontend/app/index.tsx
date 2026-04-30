@@ -20,8 +20,8 @@ export default function Landing() {
   const [ready, setReady] = useState(false);
   const { width: screenW } = Dimensions.get("window");
   // device-width-aware logo/slogan sizing (phones 320-480 wide)
-  const logoSize = Math.min(Math.max(screenW * 0.18, 60), 90);
-  const sloganW = Math.min(Math.max(screenW * 0.5, 160), 240);
+  const logoSize = Math.min(Math.max(screenW * 0.26, 90), 130);
+  const sloganW = Math.min(Math.max(screenW * 0.62, 200), 300);
   const sloganH = sloganW * 0.2;
 
   const heroFade = useRef(new Animated.Value(0)).current;
