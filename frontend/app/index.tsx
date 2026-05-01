@@ -90,20 +90,18 @@ export default function Landing() {
           )}
         </View>
 
-        {/* ─────── HERO LOGO ─────── */}
-        <View style={styles.heroLogoWrap}>
+        {/* ─────── HERO LOGO + HEADLINE (side by side) ─────── */}
+        <View style={styles.heroRow}>
           <Image
             source={require("../assets/images/brand-logo.png")}
             style={{ width: logoSize, height: logoSize }}
             resizeMode="contain"
           />
-        </View>
-
-        {/* ─────── HEADLINE (gradient last line) ─────── */}
-        <View style={styles.headlineWrap}>
-          <Text style={styles.headline}>Organised PDF storage.</Text>
-          <Text style={styles.headline}>Per-client privacy.</Text>
-          <Text style={[styles.headline, styles.headlineGreen]}>Real-time sync.</Text>
+          <View style={styles.headlineWrap}>
+            <Text style={styles.headline}>Organised PDF storage.</Text>
+            <Text style={styles.headline}>Per-client privacy.</Text>
+            <Text style={[styles.headline, styles.headlineGreen]}>Real-time sync.</Text>
+          </View>
         </View>
 
         {/* ─────── PILL ─────── */}
@@ -236,11 +234,20 @@ const styles = StyleSheet.create({
     marginTop: 20, marginBottom: 18,
   },
 
+  // Hero row — logo + headline side by side
+  heroRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingHorizontal: 16,
+    paddingVertical: 18,
+    gap: 12,
+  },
+
   // Headline
-  headlineWrap: { paddingHorizontal: 24, marginBottom: 16 },
+  headlineWrap: { flex: 1, paddingHorizontal: 0, marginBottom: 0 },
   headline: {
-    fontSize: 28, fontWeight: "800", letterSpacing: -0.6,
-    color: "#3B82F6", textAlign: "center", lineHeight: 34,
+    fontSize: 16, fontWeight: "800", letterSpacing: -0.3,
+    color: "#3B82F6", textAlign: "left", lineHeight: 21,
   },
   headlineGreen: { color: "#08C488" },
 
