@@ -1,7 +1,6 @@
 import { useEffect, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { getToken, getUser } from "../api";
-import TypingSlogan from "../TypingSlogan";
 
 const APK_URL =
   (import.meta.env.VITE_APK_URL as string | undefined) ||
@@ -39,14 +38,11 @@ export default function Landing() {
         </div>
       </header>
 
-      {/* ─────── HERO — logo card + typing slogan + role cards ─────── */}
+      {/* ─────── HERO — 3 columns: logo (L) + headline (M) + role cards (R) ─────── */}
       <section className="dv-hero-simple">
         <div className="dv-hero-simple-left">
           <span className="dv-pill">Secure. Organised. Always Accessible.</span>
           <img src="/api/web/logo.png" alt="" className="dv-hero-logo-card" />
-          <div className="dv-headline-wrap">
-            <TypingSlogan size={40} />
-          </div>
           <p className="dv-hero-sub">
             DocVault helps teams and professionals securely store, organise and share PDFs
             with complete control and peace of mind.
@@ -54,6 +50,14 @@ export default function Landing() {
           <a href={APK_URL} target="_blank" rel="noopener noreferrer" className="dv-apk-inline">
             📱 Download Android App (.apk)
           </a>
+        </div>
+
+        <div className="dv-hero-headline-mid">
+          <h1 className="dv-headline-static">
+            <span>Organised PDF storage.</span>
+            <span>Per-client privacy.</span>
+            <span className="dv-grad-text">Real-time sync.</span>
+          </h1>
         </div>
 
         <div className="dv-hero-simple-right">
