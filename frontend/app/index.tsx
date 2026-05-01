@@ -25,8 +25,8 @@ export default function Landing() {
   const [ready, setReady] = useState(false);
   const { width: screenW } = Dimensions.get("window");
 
-  // Responsive sizes
-  const logoSize = Math.min(Math.max(screenW * 0.5, 160), 240);
+  // Responsive sizes — smaller hero logo, left-aligned
+  const logoSize = Math.min(Math.max(screenW * 0.32, 110), 150);
 
   // Super-admin reveal: persistent flag OR specific email match,
   // plus a hidden gesture (tap brand mark 5× quickly) to unlock.
@@ -229,10 +229,11 @@ const styles = StyleSheet.create({
   brandWordmark: { width: 96, height: 22 },
   superBtn: { width: 78, height: 40 },
 
-  // Hero logo
+  // Hero logo — left-aligned, smaller
   heroLogoWrap: {
-    alignItems: "center", justifyContent: "center",
-    marginTop: 32, marginBottom: 24,
+    alignItems: "flex-start", justifyContent: "flex-start",
+    paddingHorizontal: 20,
+    marginTop: 20, marginBottom: 18,
   },
 
   // Headline
