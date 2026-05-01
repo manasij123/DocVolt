@@ -1513,6 +1513,21 @@ main {
   margin: 0;
   font-size: 13px;
 }
+/* Compact feature pill row — below "Secure. Organised. Always Accessible." */
+.dv-feature-pills {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  max-width: 420px;
+}
+.dv-feature-pills .dv-nav-pill {
+  padding: 5px 10px;
+  font-size: 11.5px;
+  font-weight: 600;
+}
+.dv-feature-pills .dv-np-ic {
+  font-size: 11px;
+}
 .dv-headline-static {
   margin: 0;
   font-family: 'Inter', system-ui, -apple-system, sans-serif;

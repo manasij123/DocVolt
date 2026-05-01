@@ -20,27 +20,13 @@ export default function Landing() {
 
   return (
     <div className="dv-landing-light">
-      {/* ─────── HEADER (brand + feature pills) ─────── */}
+      {/* ─────── HEADER (brand only) ─────── */}
       <header className="dv-nav">
         <div className="dv-nav-inner">
           <Link to="/" className="dv-brand">
             <img src="/api/web/logo.png" alt="" className="dv-brand-mark" />
             <img src="/api/web/wordmark.png" alt="DocVault" className="dv-brand-wordmark" />
           </Link>
-          <div className="dv-nav-pills">
-            <span className="dv-nav-pill dv-pill-yellow">
-              <span className="dv-np-ic">⚡</span> Auto-categorise
-            </span>
-            <span className="dv-nav-pill dv-pill-blue">
-              <span className="dv-np-ic">🔗</span> One-tap share
-            </span>
-            <span className="dv-nav-pill dv-pill-red">
-              <span className="dv-np-ic">🔴</span> Real-time sync
-            </span>
-            <span className="dv-nav-pill dv-pill-purple">
-              <span className="dv-np-ic">🔒</span> Per-client privacy
-            </span>
-          </div>
         </div>
       </header>
 
@@ -66,6 +52,20 @@ export default function Landing() {
           <span className="dv-pill dv-pill-under-head">
             Secure. Organised. Always Accessible.
           </span>
+          <div className="dv-feature-pills">
+            <span className="dv-nav-pill dv-pill-yellow">
+              <span className="dv-np-ic">⚡</span> Auto-categorise
+            </span>
+            <span className="dv-nav-pill dv-pill-blue">
+              <span className="dv-np-ic">🔗</span> One-tap share
+            </span>
+            <span className="dv-nav-pill dv-pill-red">
+              <span className="dv-np-ic">🔴</span> Real-time sync
+            </span>
+            <span className="dv-nav-pill dv-pill-purple">
+              <span className="dv-np-ic">🔒</span> Per-client privacy
+            </span>
+          </div>
         </div>
 
         <div className="dv-hero-simple-right">
