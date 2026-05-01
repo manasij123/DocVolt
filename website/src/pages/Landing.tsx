@@ -6,29 +6,79 @@ const APK_URL =
   (import.meta.env.VITE_APK_URL as string | undefined) ||
   "https://expo.dev/artifacts/eas/e6jGMGCfQQ1arLMmiJHdaq.apk";
 
+// Only this specific account gets the Super Admin entry visible permanently
+// (besides users who type the Konami code → persistent unlock).
+const SUPER_ADMIN_EMAIL = "mansijmandal1999@gmail.com";
+const UNLOCK_KEY = "dv_super_unlock";
+
+// Konami code — classic sequence ↑↑↓↓←→←→BA
+const KONAMI = [
+  "ArrowUp", "ArrowUp", "ArrowDown", "ArrowDown",
+  "ArrowLeft", "ArrowRight", "ArrowLeft", "ArrowRight",
+  "KeyB", "KeyA",
+];
+
 export default function Landing() {
   const navigate = useNavigate();
   const [showRoleModal, setShowRoleModal] = useState(false);
+  const [superUnlocked, setSuperUnlocked] = useState(false);
+  const [konamiFlash, setKonamiFlash] = useState(false);
 
+  // On mount, evaluate whether super-admin link should be visible.
   useEffect(() => {
     const u = getUser();
     if (u && getToken()) {
+      // auto-redirect logged-in users to their dashboard
       if (u.role === "admin") navigate("/admin", { replace: true });
       else if (u.role === "client") navigate("/client", { replace: true });
     }
+    // Super admin unlock logic
+    const emailMatch = u?.email?.toLowerCase?.() === SUPER_ADMIN_EMAIL;
+    const stored = typeof window !== "undefined" && localStorage.getItem(UNLOCK_KEY) === "1";
+    setSuperUnlocked(emailMatch || stored);
   }, [navigate]);
+
+  // Konami-code key sequence detector
+  useEffect(() => {
+    let buf: string[] = [];
+    const onKey = (e: KeyboardEvent) => {
+      buf.push(e.code);
+      if (buf.length > KONAMI.length) buf = buf.slice(-KONAMI.length);
+      if (buf.length === KONAMI.length && buf.every((k, i) => k === KONAMI[i])) {
+        localStorage.setItem(UNLOCK_KEY, "1");
+        setSuperUnlocked(true);
+        setKonamiFlash(true);
+        setTimeout(() => setKonamiFlash(false), 2600);
+        buf = [];
+      }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, []);
 
   return (
     <div className="dv-landing-light">
-      {/* ─────── HEADER (brand only) ─────── */}
+      {/* ─────── HEADER (brand + conditional Super Admin link) ─────── */}
       <header className="dv-nav">
         <div className="dv-nav-inner">
           <Link to="/" className="dv-brand">
             <img src="/api/web/logo.png" alt="" className="dv-brand-mark" />
             <img src="/api/web/wordmark.png" alt="DocVault" className="dv-brand-wordmark" />
           </Link>
+          {superUnlocked && (
+            <Link to="/superadmin/login" className="dv-nav-superadmin">
+              <span>👑</span> Super Admin
+            </Link>
+          )}
         </div>
       </header>
+
+      {/* Konami toast flash */}
+      {konamiFlash && (
+        <div className="dv-konami-toast">
+          🎮 Konami code accepted — Super Admin unlocked!
+        </div>
+      )}
 
       {/* ─────── HERO — 3 columns: logo (L) + headline (M) + role cards (R) ─────── */}
       <section className="dv-hero-simple">
@@ -107,10 +157,6 @@ export default function Landing() {
               </div>
             </div>
           </div>
-          <div className="dv-superadmin-hint">
-            System monitoring?{" "}
-            <Link to="/superadmin/login">Super Admin Login →</Link>
-          </div>
         </div>
       </section>
 
@@ -122,7 +168,7 @@ export default function Landing() {
         </div>
       </footer>
 
-      {/* ─────── ROLE SELECTOR MODAL (Login click) ─────── */}
+      {/* ─────── ROLE SELECTOR MODAL (unused in current nav but kept for later) ─────── */}
       {showRoleModal && (
         <div className="dv-modal-back" onClick={() => setShowRoleModal(false)}>
           <div className="dv-modal" onClick={(e) => e.stopPropagation()}>
@@ -146,17 +192,19 @@ export default function Landing() {
                   <small>Manage clients &amp; documents</small>
                 </div>
               </Link>
-              <Link
-                to="/superadmin/login"
-                className="dv-role-card dv-role-admin"
-                onClick={() => setShowRoleModal(false)}
-              >
-                <span className="dv-role-ic">👑</span>
-                <div>
-                  <strong>Super Admin</strong>
-                  <small>System overview &amp; monitoring</small>
-                </div>
-              </Link>
+              {superUnlocked && (
+                <Link
+                  to="/superadmin/login"
+                  className="dv-role-card dv-role-admin"
+                  onClick={() => setShowRoleModal(false)}
+                >
+                  <span className="dv-role-ic">👑</span>
+                  <div>
+                    <strong>Super Admin</strong>
+                    <small>System overview &amp; monitoring</small>
+                  </div>
+                </Link>
+              )}
             </div>
             <div className="dv-modal-foot muted">
               New to DocVault?{" "}

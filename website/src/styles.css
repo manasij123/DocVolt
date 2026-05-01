@@ -1249,6 +1249,45 @@ main {
 .dv-nav-links { display: flex; gap: 28px; font-size: 15px; font-weight: 500; color: #475569; flex: 1; justify-content: center; }
 .dv-nav-links a:hover { color: #0F172A; }
 .dv-nav-cta { display: flex; align-items: center; gap: 16px; }
+.dv-nav-superadmin {
+  display: inline-flex; align-items: center; gap: 7px;
+  padding: 8px 16px;
+  border-radius: 999px;
+  background: linear-gradient(90deg, #F59E0B 0%, #EF4444 100%);
+  color: #FFF !important;
+  font-size: 13px; font-weight: 700;
+  box-shadow: 0 6px 16px rgba(239,68,68,0.25);
+  transition: transform 0.15s ease, box-shadow 0.2s ease;
+}
+.dv-nav-superadmin:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 10px 24px rgba(239,68,68,0.35);
+}
+.dv-nav-superadmin > span { font-size: 14px; }
+
+/* Konami toast — celebratory unlock banner */
+.dv-konami-toast {
+  position: fixed; top: 80px; left: 50%;
+  transform: translateX(-50%);
+  z-index: 1200;
+  background: linear-gradient(90deg, #F59E0B 0%, #EF4444 50%, #A855F7 100%);
+  color: #FFF;
+  padding: 12px 22px;
+  border-radius: 999px;
+  font-weight: 700;
+  font-size: 14px;
+  box-shadow: 0 12px 40px rgba(239,68,68,0.45);
+  animation: dv-konami-pop 0.45s ease-out, dv-konami-fade 2.6s ease-in-out forwards;
+}
+@keyframes dv-konami-pop {
+  0% { transform: translateX(-50%) scale(0.5); opacity: 0; }
+  60% { transform: translateX(-50%) scale(1.08); }
+  100% { transform: translateX(-50%) scale(1); opacity: 1; }
+}
+@keyframes dv-konami-fade {
+  0%, 82% { opacity: 1; }
+  100% { opacity: 0; transform: translateX(-50%) translateY(-16px); }
+}
 .dv-nav-pills {
   display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
   justify-content: flex-end;
