@@ -107,17 +107,13 @@ export default function Landing() {
           </View>
         </View>
 
-        {/* ─────── FEATURE PILLS (single horizontal line, scrollable if needed) ─────── */}
-        <ScrollView
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          contentContainerStyle={styles.featurePills}
-        >
-          <FeaturePill icon="⚡" label="Auto-categorise" tint="#FACC15" bg="#FEFCE8" />
-          <FeaturePill icon="🔗" label="One-tap share" tint="#3B82F6" bg="#EFF6FF" />
-          <FeaturePill icon="🔴" label="Real-time sync" tint="#EF4444" bg="#FEF2F2" />
-          <FeaturePill icon="🔒" label="Per-client privacy" tint="#A855F7" bg="#FAF5FF" />
-        </ScrollView>
+        {/* ─────── FEATURE PILLS (single line, fits full width) ─────── */}
+        <View style={styles.featurePills}>
+          <FeaturePill icon="⚡" label="Auto-cat" tint="#FACC15" bg="#FEFCE8" />
+          <FeaturePill icon="🔗" label="Share" tint="#3B82F6" bg="#EFF6FF" />
+          <FeaturePill icon="🔴" label="Sync" tint="#EF4444" bg="#FEF2F2" />
+          <FeaturePill icon="🔒" label="Privacy" tint="#A855F7" bg="#FAF5FF" />
+        </View>
 
         {/* ─────── SUB TEXT ─────── */}
         <Text style={styles.subText}>
@@ -261,15 +257,16 @@ const styles = StyleSheet.create({
   },
   pillText: { fontSize: 11, fontWeight: "600", color: "#4F46E5" },
 
-  // Feature pills — single horizontal line, scrollable if overflow
+  // Feature pills — single horizontal row that fits screen width
   featurePills: {
     flexDirection: "row",
     flexWrap: "nowrap",
-    gap: 8,
-    paddingHorizontal: 16,
+    gap: 6,
+    paddingHorizontal: 12,
     paddingVertical: 4,
     marginBottom: 18,
     alignItems: "center",
+    justifyContent: "space-between",
   },
   fpill: {
     flexDirection: "row", alignItems: "center", gap: 5,
