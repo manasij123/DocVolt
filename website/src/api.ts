@@ -186,11 +186,17 @@ export function emojiForIcon(iconName: string | undefined | null): string {
 export function categoryDisplay(
   doc: Pick<DocumentMeta, "category" | "category_id">,
   cats: Category[],
-): { name: string; emoji: string; color: string; key: string } {
+): { name: string; emoji: string; color: string; key: string; custom_icon_b64?: string } {
   const byId = doc.category_id ? cats.find((c) => c.id === doc.category_id) : undefined;
   const byKey = !byId ? cats.find((c) => c.key === doc.category) : undefined;
   const c = byId || byKey;
-  if (c) return { name: c.name, emoji: emojiForIcon(c.icon), color: c.color, key: c.key };
+  if (c) return {
+    name: c.name,
+    emoji: emojiForIcon(c.icon),
+    color: c.color,
+    key: c.key,
+    custom_icon_b64: (c as any).custom_icon_b64 || undefined,
+  };
   // Legacy fallback
   return {
     name: CATEGORY_LABELS[doc.category] || doc.category || "Others",

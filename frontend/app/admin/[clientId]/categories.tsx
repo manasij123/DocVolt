@@ -43,15 +43,21 @@ export default function CategoriesScreen() {
   const toast = useToast();
 
   const reload = async () => {
-    if (!clientId) return;
+    if (!clientId) {
+      // No clientId on first render; don't leave the spinner forever.
+      setLoading(false);
+      return;
+    }
     setLoading(true);
     try {
       const token = await getToken();
       const list = await listCategories({ client_id: String(clientId) }, token || undefined);
       setCats(list);
     } catch (e: any) {
-      console.error(e);
-      toast?.show?.("Failed to load categories", { kind: "error", icon: "alert-circle" });
+      console.error("[categories] load failed", e?.response?.status, e?.response?.data, "clientId=", clientId);
+      const msg = e?.response?.data?.detail || "Failed to load categories";
+      toast?.show?.(msg, { kind: "error", icon: "alert-circle" });
+      setCats([]); // show empty state instead of infinite spinner
     } finally {
       setLoading(false);
     }

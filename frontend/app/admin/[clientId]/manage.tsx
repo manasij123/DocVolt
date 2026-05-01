@@ -13,6 +13,7 @@ import {
   KeyboardAvoidingView,
   Platform,
   ScrollView,
+  Image,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import api, { CATEGORY_LABELS, Category, DocumentMeta, listCategories, getToken } from "../../../src/api";
@@ -162,6 +163,10 @@ export default function ManageScreen() {
 
   const renderItem = ({ item }: { item: DocumentMeta }) => {
     const grad = categoryGradients[item.category] || categoryGradients.OTHERS;
+    // Use the document's own category (id) to find the matching per-client
+    // category row — so the icon here matches what the user chose in the
+    // Categories / tabs view (including any AI-generated custom_icon_b64).
+    const docCat = cats.find((c) => c.id === item.category_id) || cats.find((c) => c.key === item.category);
     return (
       <View style={styles.card} testID={`manage-card-${item.id}`}>
         <LinearGradient
@@ -170,7 +175,19 @@ export default function ManageScreen() {
           end={{ x: 1, y: 1 }}
           style={styles.iconWrap}
         >
-          <Ionicons name="document-text" size={18} color="#fff" />
+          {docCat?.custom_icon_b64 ? (
+            <Image
+              source={{ uri: `data:image/png;base64,${docCat.custom_icon_b64}` }}
+              style={styles.iconImg}
+              resizeMode="contain"
+            />
+          ) : (
+            <Ionicons
+              name={(docCat?.icon as any) || "document-text"}
+              size={18}
+              color="#fff"
+            />
+          )}
         </LinearGradient>
         <View style={styles.metaWrap}>
           <Text style={styles.docTitle} numberOfLines={2}>{item.display_name}</Text>
@@ -360,6 +377,7 @@ const styles = StyleSheet.create({
     borderRadius: radius.md,
     ...shadow.sm,
   },
+  iconImg: { width: 24, height: 24, borderRadius: 6 },
   iconWrap: {
     width: 40,
     height: 40,

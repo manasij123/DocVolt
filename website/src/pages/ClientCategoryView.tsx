@@ -201,7 +201,26 @@ export default function ClientCategoryView() {
                           <span className={`doc-checkbox ${isSelected ? "checked" : ""}`} aria-hidden>{isSelected ? "✓" : ""}</span>
                         )}
                         <div className="doc-top">
-                          <div className="doc-icon" style={{ background: `${dispColor}1a`, color: dispColor, borderColor: `${dispColor}33` }}>📄</div>
+                          <div
+                            className="doc-icon"
+                            style={{
+                              background: activeCat?.custom_icon_b64 ? "#fff" : `${dispColor}1a`,
+                              color: dispColor,
+                              borderColor: `${dispColor}33`,
+                              padding: activeCat?.custom_icon_b64 ? 0 : undefined,
+                              overflow: "hidden",
+                            }}
+                          >
+                            {activeCat?.custom_icon_b64 ? (
+                              <img
+                                src={`data:image/png;base64,${activeCat.custom_icon_b64}`}
+                                alt=""
+                                style={{ width: "100%", height: "100%", objectFit: "cover" }}
+                              />
+                            ) : (
+                              "📄"
+                            )}
+                          </div>
                           <div className="doc-meta">
                             <div className="doc-title">{d.display_name}</div>
                             <div className="doc-sub">

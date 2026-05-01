@@ -943,7 +943,16 @@ async def list_categories(
         # for clients they are connected to.
         conn = await db.connections.find_one({"admin_id": user["id"], "client_id": client_id})
         if not conn:
-            raise HTTPException(status_code=403, detail="Not connected with this client")
+            # Self-heal: if the target *user* exists and IS a client, auto-create
+            # the connection. Same pattern as POST /categories; unblocks the case
+            # where the connection row was lost but the client is still visible
+            # in the admin's dashboard.
+            target = await db.users.find_one({"id": client_id, "role": "client"}, {"_id": 0, "password_hash": 0})
+            if target:
+                await _create_connection(user["id"], client_id, user["id"])
+                logger.info("list_categories — self-healed missing connection admin=%s client=%s", user["id"], client_id)
+            else:
+                raise HTTPException(status_code=403, detail="Not connected with this client")
         cats = await _ensure_default_categories(user["id"], client_id)
     elif user["role"] == "client":
         if not admin_id:

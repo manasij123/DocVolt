@@ -529,7 +529,26 @@ function ManagePanel({ docs, cats, setDocs, filter, setFilter, setEditing }: {
           </span>
         )}
         <div className="doc-top">
-          <div className="doc-icon" style={{ background: `${disp.color}1a`, color: disp.color, borderColor: `${disp.color}33` }}>{disp.emoji}</div>
+          <div
+            className="doc-icon"
+            style={{
+              background: disp.custom_icon_b64 ? "#fff" : `${disp.color}1a`,
+              color: disp.color,
+              borderColor: `${disp.color}33`,
+              padding: disp.custom_icon_b64 ? 0 : undefined,
+              overflow: "hidden",
+            }}
+          >
+            {disp.custom_icon_b64 ? (
+              <img
+                src={`data:image/png;base64,${disp.custom_icon_b64}`}
+                alt=""
+                style={{ width: "100%", height: "100%", objectFit: "cover" }}
+              />
+            ) : (
+              disp.emoji
+            )}
+          </div>
           <div className="doc-meta">
             <div className="doc-title">{d.display_name}</div>
             <div className="doc-sub">
