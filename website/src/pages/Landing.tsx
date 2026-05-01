@@ -44,8 +44,8 @@ export default function Landing() {
         <div className="dv-hero-simple-left">
           <span className="dv-pill">Secure. Organised. Always Accessible.</span>
           <img src="/api/web/logo.png" alt="" className="dv-hero-logo-card" />
-          <div className="dv-typing-wrap">
-            <TypingSlogan size={22} />
+          <div className="dv-headline-wrap">
+            <TypingSlogan size={40} />
           </div>
           <p className="dv-hero-sub">
             DocVault helps teams and professionals securely store, organise and share PDFs

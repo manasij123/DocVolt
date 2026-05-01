@@ -1458,33 +1458,30 @@ main {
    ============================================================ */
 .dv-hero-simple {
   max-width: 1200px; margin: 0 auto;
-  padding: 60px 32px 80px;
-  display: grid; grid-template-columns: 1fr 1fr; gap: 64px; align-items: center;
-  min-height: calc(100vh - 200px);
+  padding: 40px 32px 60px;
+  display: grid; grid-template-columns: 1.1fr 0.9fr; gap: 48px; align-items: center;
+  min-height: calc(100vh - 160px);
 }
-.dv-hero-simple-left { max-width: 520px; }
-.dv-hero-simple-left .dv-pill { margin-bottom: 24px; }
+.dv-hero-simple-left { max-width: 640px; }
+.dv-hero-simple-left .dv-pill { margin-bottom: 16px; }
 
 .dv-hero-logo-card {
-  width: min(240px, 50%); height: auto;
+  width: 140px; height: 140px;
   display: block; margin: 0 0 20px;
-  filter: drop-shadow(0 20px 50px rgba(99,102,241,0.25)) drop-shadow(0 6px 16px rgba(15,23,42,0.12));
+  filter: drop-shadow(0 18px 40px rgba(99,102,241,0.22)) drop-shadow(0 4px 12px rgba(15,23,42,0.08));
+  object-fit: contain;
 }
 
-.dv-typing-wrap {
-  margin: 8px 0 24px;
-  padding: 18px 22px;
-  background: linear-gradient(135deg, rgba(99,102,241,0.06), rgba(168,85,247,0.06));
-  border: 1px solid rgba(99,102,241,0.18);
-  border-radius: 14px;
-  max-width: 520px;
+.dv-headline-wrap {
+  margin: 0 0 20px;
+  max-width: 620px;
 }
-/* Override typing slogan color to indigo for light theme */
-.dv-typing-wrap .dv-slogan-typing { color: #4F46E5 !important; text-shadow: none !important; }
-.dv-typing-wrap .dv-slogan-typing > span:first-child { color: #4F46E5 !important; }
+.dv-headline-typing {
+  font-size: clamp(28px, 3.4vw, 42px) !important;
+}
 
 .dv-hero-simple-left .dv-hero-sub {
-  font-size: 16px; line-height: 1.6; color: #475569; margin: 0 0 24px; max-width: 460px;
+  font-size: 15px; line-height: 1.55; color: #475569; margin: 0 0 22px; max-width: 520px;
 }
 
 .dv-hero-simple-right {
