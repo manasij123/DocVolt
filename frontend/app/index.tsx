@@ -107,12 +107,12 @@ export default function Landing() {
           </View>
         </View>
 
-        {/* ─────── FEATURE PILLS (single line, fits full width) ─────── */}
+        {/* ─────── FEATURE PILLS (full labels, compact, single line) ─────── */}
         <View style={styles.featurePills}>
-          <FeaturePill icon="⚡" label="Auto-cat" tint="#FACC15" bg="#FEFCE8" />
-          <FeaturePill icon="🔗" label="Share" tint="#3B82F6" bg="#EFF6FF" />
-          <FeaturePill icon="🔴" label="Sync" tint="#EF4444" bg="#FEF2F2" />
-          <FeaturePill icon="🔒" label="Privacy" tint="#A855F7" bg="#FAF5FF" />
+          <FeaturePill icon="⚡" label="Auto-categorise" tint="#FACC15" bg="#FEFCE8" />
+          <FeaturePill icon="🔗" label="One-tap share" tint="#3B82F6" bg="#EFF6FF" />
+          <FeaturePill icon="🔴" label="Real-time sync" tint="#EF4444" bg="#FEF2F2" />
+          <FeaturePill icon="🔒" label="Per-client privacy" tint="#A855F7" bg="#FAF5FF" />
         </View>
 
         {/* ─────── SUB TEXT ─────── */}
@@ -202,8 +202,8 @@ export default function Landing() {
 function FeaturePill({ icon, label, tint, bg }: { icon: string; label: string; tint: string; bg: string }) {
   return (
     <View style={[styles.fpill, { backgroundColor: bg, borderColor: tint + "55" }]}>
-      <Text style={styles.fpillIcon}>{icon}</Text>
-      <Text style={styles.fpillText}>{label}</Text>
+      <Text style={styles.fpillIcon} numberOfLines={1}>{icon}</Text>
+      <Text style={styles.fpillText} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.7}>{label}</Text>
     </View>
   );
 }
@@ -257,25 +257,37 @@ const styles = StyleSheet.create({
   },
   pillText: { fontSize: 11, fontWeight: "600", color: "#4F46E5" },
 
-  // Feature pills — single horizontal row that fits screen width
+  // Feature pills — equal-width row, all 4 full labels fit in screen
   featurePills: {
     flexDirection: "row",
     flexWrap: "nowrap",
-    gap: 6,
-    paddingHorizontal: 12,
+    gap: 4,
+    paddingHorizontal: 8,
     paddingVertical: 4,
     marginBottom: 18,
     alignItems: "center",
-    justifyContent: "space-between",
+    width: "100%",
   },
   fpill: {
-    flexDirection: "row", alignItems: "center", gap: 5,
-    paddingHorizontal: 10, paddingVertical: 5,
+    flex: 1,
+    flexBasis: 0,
+    flexGrow: 1,
+    flexShrink: 1,
+    minWidth: 0,
+    width: 0,
+    flexDirection: "row", alignItems: "center",
+    paddingHorizontal: 3, paddingVertical: 4,
     borderRadius: 999, borderWidth: 1,
-    flexShrink: 0,
+    justifyContent: "center",
+    overflow: "hidden",
   },
-  fpillIcon: { fontSize: 11 },
-  fpillText: { fontSize: 11, fontWeight: "600", color: "#334155", flexShrink: 0 },
+  fpillIcon: { fontSize: 7, marginRight: 2 },
+  fpillText: {
+    fontSize: 7.5,
+    fontWeight: "700",
+    color: "#334155",
+    letterSpacing: -0.3,
+  },
 
   // Sub text
   subText: {
