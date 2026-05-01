@@ -1451,3 +1451,100 @@ main {
   .dv-dash-sidebar { display: none; }
   .dv-dash-lists { grid-template-columns: 1fr; }
 }
+
+/* ============================================================
+   DocVault — Simplified Landing (Light theme — logo + role cards)
+   Added 2026-05-01 per user request: keep light theme, simpler layout
+   ============================================================ */
+.dv-hero-simple {
+  max-width: 1200px; margin: 0 auto;
+  padding: 60px 32px 80px;
+  display: grid; grid-template-columns: 1fr 1fr; gap: 64px; align-items: center;
+  min-height: calc(100vh - 200px);
+}
+.dv-hero-simple-left { max-width: 520px; }
+.dv-hero-simple-left .dv-pill { margin-bottom: 24px; }
+
+.dv-hero-logo-card {
+  width: min(240px, 50%); height: auto;
+  display: block; margin: 0 0 20px;
+  filter: drop-shadow(0 20px 50px rgba(99,102,241,0.25)) drop-shadow(0 6px 16px rgba(15,23,42,0.12));
+}
+
+.dv-typing-wrap {
+  margin: 8px 0 24px;
+  padding: 18px 22px;
+  background: linear-gradient(135deg, rgba(99,102,241,0.06), rgba(168,85,247,0.06));
+  border: 1px solid rgba(99,102,241,0.18);
+  border-radius: 14px;
+  max-width: 520px;
+}
+/* Override typing slogan color to indigo for light theme */
+.dv-typing-wrap .dv-slogan-typing { color: #4F46E5 !important; text-shadow: none !important; }
+.dv-typing-wrap .dv-slogan-typing > span:first-child { color: #4F46E5 !important; }
+
+.dv-hero-simple-left .dv-hero-sub {
+  font-size: 16px; line-height: 1.6; color: #475569; margin: 0 0 24px; max-width: 460px;
+}
+
+.dv-hero-simple-right {
+  display: flex; flex-direction: column; gap: 16px;
+}
+.dv-role-grid-lg { display: flex; flex-direction: column; gap: 18px; }
+.dv-role-card-lg {
+  background: #FFF; border: 1.5px solid var(--dv-border); border-radius: 18px;
+  padding: 24px 28px; transition: transform 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease;
+  box-shadow: 0 2px 8px rgba(15,23,42,0.04);
+}
+.dv-role-card-lg:hover {
+  transform: translateY(-3px);
+  box-shadow: 0 20px 50px rgba(99,102,241,0.18);
+  border-color: rgba(99,102,241,0.45);
+}
+.dv-role-card-head {
+  display: flex; align-items: center; gap: 16px; margin-bottom: 18px;
+}
+.dv-role-ic-lg {
+  width: 56px; height: 56px; border-radius: 14px;
+  background: linear-gradient(135deg, rgba(99,102,241,0.15), rgba(168,85,247,0.15));
+  display: flex; align-items: center; justify-content: center;
+  font-size: 28px; flex-shrink: 0;
+}
+.dv-role-ic-lg.dv-role-ic-admin {
+  background: linear-gradient(135deg, rgba(245,158,11,0.15), rgba(239,68,68,0.15));
+}
+.dv-role-card-head strong {
+  display: block; font-size: 17px; font-weight: 700; color: #0F172A; margin-bottom: 2px;
+}
+.dv-role-card-head small { display: block; font-size: 13px; color: #64748B; }
+.dv-role-card-btns { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.dv-gradient-btn.dv-full, .dv-outline-btn.dv-full { width: 100%; justify-content: center; text-align: center; padding: 10px 16px; }
+
+.dv-superadmin-hint {
+  text-align: center; font-size: 13px; color: #64748B; margin-top: 6px;
+}
+.dv-superadmin-hint a {
+  color: #4F46E5; font-weight: 600;
+}
+.dv-superadmin-hint a:hover { text-decoration: underline; }
+
+.dv-footer-simple {
+  border-top: 1px solid var(--dv-border);
+  background: #F8FAFC; padding: 18px 32px;
+}
+.dv-footer-simple-inner {
+  max-width: 1200px; margin: 0 auto;
+  display: flex; justify-content: space-between; align-items: center;
+  font-size: 13px; color: #64748B; gap: 16px; flex-wrap: wrap;
+}
+
+/* Responsive */
+@media (max-width: 900px) {
+  .dv-hero-simple { grid-template-columns: 1fr; gap: 36px; padding: 40px 20px; }
+  .dv-hero-simple-left { max-width: 100%; }
+  .dv-hero-logo-card { width: 180px; margin-left: 0; }
+}
+@media (max-width: 480px) {
+  .dv-role-card-btns { grid-template-columns: 1fr; }
+  .dv-role-card-lg { padding: 20px; }
+}
