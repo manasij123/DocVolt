@@ -124,11 +124,12 @@ export async function createCategory(payload: {
   color?: string;
   icon?: string;
   keywords?: string[];
+  custom_icon_b64?: string | null;
 }): Promise<Category> {
   const r = await api.post<Category>("/categories", payload);
   return r.data;
 }
-export async function updateCategoryApi(id: string, payload: Partial<Pick<Category, "name" | "color" | "icon" | "keywords" | "sort_order">>): Promise<Category> {
+export async function updateCategoryApi(id: string, payload: Partial<Pick<Category, "name" | "color" | "icon" | "keywords" | "sort_order" | "custom_icon_b64">>): Promise<Category> {
   const r = await api.put<Category>(`/categories/${id}`, payload);
   return r.data;
 }

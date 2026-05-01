@@ -118,14 +118,40 @@ export default function ClientCategoryView() {
               onClick={() => setTabId(c.id)}
               style={tabId === c.id ? { borderColor: c.color, color: c.color, background: `${c.color}14` } : undefined}
             >
-              {emojiForIcon(c.icon)} {c.name}
+              {c.custom_icon_b64 ? (
+                <img
+                  src={`data:image/png;base64,${c.custom_icon_b64}`}
+                  alt=""
+                  style={{ width: 18, height: 18, borderRadius: 4, objectFit: "cover", verticalAlign: "middle", marginRight: 6 }}
+                />
+              ) : (
+                <span style={{ marginRight: 4 }}>{emojiForIcon(c.icon)}</span>
+              )}
+              {c.name}
             </button>
           ))}
         </div>
         {activeCat && (
           <div className="cat-hero" style={{ background: `linear-gradient(135deg, ${activeCat.color}1a, ${activeCat.color}08)`, borderColor: `${activeCat.color}33` }}>
             <div className="cat-hero-top">
-              <div className="cat-hero-icon" style={{ background: activeCat.color }}>{emojiForIcon(activeCat.icon)}</div>
+              <div
+                className="cat-hero-icon"
+                style={{
+                  background: activeCat.custom_icon_b64 ? "#fff" : activeCat.color,
+                  padding: activeCat.custom_icon_b64 ? 4 : undefined,
+                  overflow: "hidden",
+                }}
+              >
+                {activeCat.custom_icon_b64 ? (
+                  <img
+                    src={`data:image/png;base64,${activeCat.custom_icon_b64}`}
+                    alt=""
+                    style={{ width: "100%", height: "100%", objectFit: "contain" }}
+                  />
+                ) : (
+                  emojiForIcon(activeCat.icon)
+                )}
+              </div>
               <div className="cat-hero-count">{docs.length} files</div>
             </div>
             <h2>{activeCat.name}</h2>

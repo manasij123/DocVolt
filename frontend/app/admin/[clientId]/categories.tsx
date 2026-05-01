@@ -256,10 +256,16 @@ function CategoryEditorModal({ clientId, existing, onClose, onSaved }: {
           custom_icon_b64: aiPreview || "",
         } as any, token || undefined);
       } else {
-        const created = await createCategory({ client_id: clientId, name: name.trim(), color, icon, keywords }, token || undefined);
-        if (aiPreview) {
-          await updateCategoryApi(created.id, { custom_icon_b64: aiPreview } as any, token || undefined);
-        }
+        // Atomic create — include the AI icon in the POST so the row never
+        // appears with the default preset icon before the custom one loads.
+        await createCategory({
+          client_id: clientId,
+          name: name.trim(),
+          color,
+          icon,
+          keywords,
+          custom_icon_b64: aiPreview || undefined,
+        } as any, token || undefined);
       }
       onSaved();
     } catch (e: any) {

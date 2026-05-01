@@ -770,10 +770,16 @@ function CategoryEditor({ clientId, existing, onClose, onSaved }: {
           custom_icon_b64: aiPreview || "",
         } as any);
       } else {
-        const created = await createCategory({ client_id: clientId, name: name.trim(), color, icon, keywords });
-        if (aiPreview) {
-          await updateCategoryApi(created.id, { custom_icon_b64: aiPreview } as any);
-        }
+        // Atomic create: pass custom_icon_b64 directly in the POST so there is
+        // no visual flash of the default preset icon before the AI icon kicks in.
+        await createCategory({
+          client_id: clientId,
+          name: name.trim(),
+          color,
+          icon,
+          keywords,
+          custom_icon_b64: aiPreview || undefined,
+        });
       }
       onSaved();
     } catch (e: any) {

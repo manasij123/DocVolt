@@ -163,6 +163,7 @@ class CategoryCreate(BaseModel):
     color: Optional[str] = "#3B82F6"
     icon: Optional[str] = "folder"
     keywords: Optional[list[str]] = None
+    custom_icon_b64: Optional[str] = None  # AI-generated PNG (overrides `icon` when present)
 
 
 class CategoryUpdate(BaseModel):
@@ -1012,6 +1013,7 @@ async def create_category(payload: CategoryCreate, current=Depends(get_current_a
         "name": name,
         "color": payload.color or "#3B82F6",
         "icon": payload.icon or "folder",
+        "custom_icon_b64": payload.custom_icon_b64 or None,
         "keywords": [k.strip().lower() for k in (payload.keywords or []) if k and k.strip()],
         "sort_order": sort_order,
         "is_default": False,

@@ -169,6 +169,7 @@ export async function createCategory(payload: {
   color?: string;
   icon?: string;
   keywords?: string[];
+  custom_icon_b64?: string | null;
 }, token?: string): Promise<Category> {
   const r = await api.post<Category>("/categories", payload, {
     headers: token ? { Authorization: `Bearer ${token}` } : undefined,

@@ -419,10 +419,27 @@ metadata:
 
 test_plan:
   current_focus:
-    - "GET /api/categories self-heal for admin with missing connection"
+    - "POST /api/categories atomic custom_icon_b64 persistence"
   stuck_tasks: []
   test_all: false
   test_priority: "high_first"
+
+backend:
+  - task: "POST /api/categories atomic custom_icon_b64 persistence"
+    implemented: true
+    working: true
+    file: "/app/backend/server.py"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: false
+    status_history:
+        - working: true
+          agent: "testing"
+          comment: "4/4 review-request tests PASS via /app/backend_test_atomic_icon.py against the public preview host (https://doc-organizer-app.preview.emergentagent.com/api). admin@example.com / client@example.com login + connection used. (T1 ATOMIC CREATE) POST /api/categories {client_id, name:'AI Test Cat', color:'#3B82F6', icon:'folder', keywords:[], custom_icon_b64:'<1x1 red PNG b64>'} → 200 with id, key='AI_TEST_CAT', custom_icon_b64 EXACTLY equal to sent value, color/icon/keywords intact. Subsequent GET /api/categories?client_id=<clientId> returns the row with the same custom_icon_b64 (verified byte-for-byte). (T2 BACKWARD COMPAT) POST /api/categories {client_id, name:'Plain Cat', color:'#10B981', icon:'cash', keywords:['bill']} (no custom_icon_b64 field) → 200 with custom_icon_b64=null and keywords=['bill'], color/icon correct. (T3 PUT STILL WORKS) PUT /api/categories/<cat2_id> {custom_icon_b64:'<same 1x1 red PNG>'} → 200 with custom_icon_b64 set to sent value; GET /api/categories?client_id=<clientId> confirms updated row. (T4 CLEAR VIA PUT) PUT /api/categories/<cat1_id> {custom_icon_b64:''} → 200 with custom_icon_b64=null (empty string correctly clears, contract preserved); GET confirms null. CLEANUP: DELETE /api/categories/<cat1_id> → 200, DELETE /api/categories/<cat2_id> → 200 (test DB returned to original state). The new field flows correctly through CategoryCreate → insert document → cat_to_meta serializer → both POST response and GET listing — atomic single-POST AI icon save works end-to-end."
+
+agent_communication:
+    - agent: "testing"
+      message: "Atomic POST /api/categories with custom_icon_b64 — 4/4 PASS. (T1) POST with custom_icon_b64 → 200, response + GET listing both return the exact base64 string sent. (T2) POST without custom_icon_b64 → 200, custom_icon_b64=null, no regression. (T3) PUT can still set custom_icon_b64 on an existing category created without one → 200, GET shows updated value. (T4) PUT with empty string clears it back to null per existing contract → 200, GET confirms null. Cleanup done — both test categories deleted, DB back to original state. The visual flash of the default preset icon before AI icon kicks in should now be eliminated since the frontend can write both `icon` and `custom_icon_b64` in the same atomic POST. No issues found; main agent can summarise and finish."
 
 agent_communication:
     - agent: "testing"
