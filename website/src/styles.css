@@ -1505,9 +1505,11 @@ main {
 
 /* Middle column — static headline + pill below it */
 .dv-hero-headline-mid {
-  display: flex; flex-direction: column; align-items: flex-start; justify-content: center;
+  display: flex; flex-direction: column; align-items: flex-start; justify-content: flex-start;
   padding: 0 8px;
   gap: 18px;
+  align-self: start;
+  margin-top: 20px;
 }
 .dv-pill-under-head {
   margin: 0;
