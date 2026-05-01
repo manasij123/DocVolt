@@ -1249,21 +1249,24 @@ main {
 .dv-nav-links { display: flex; gap: 28px; font-size: 15px; font-weight: 500; color: #475569; flex: 1; justify-content: center; }
 .dv-nav-links a:hover { color: #0F172A; }
 .dv-nav-cta { display: flex; align-items: center; gap: 16px; }
-.dv-nav-superadmin {
-  display: inline-flex; align-items: center; gap: 7px;
-  padding: 8px 16px;
-  border-radius: 999px;
-  background: linear-gradient(90deg, #F59E0B 0%, #EF4444 100%);
-  color: #FFF !important;
-  font-size: 13px; font-weight: 700;
-  box-shadow: 0 6px 16px rgba(239,68,68,0.25);
-  transition: transform 0.15s ease, box-shadow 0.2s ease;
+.dv-nav-superadmin-img {
+  display: inline-flex; align-items: center;
+  padding: 4px 8px;
+  border-radius: 12px;
+  transition: transform 0.15s ease, filter 0.2s ease;
+  background: transparent;
 }
-.dv-nav-superadmin:hover {
-  transform: translateY(-1px);
-  box-shadow: 0 10px 24px rgba(239,68,68,0.35);
+.dv-nav-superadmin-img img {
+  height: 44px; width: auto; display: block;
+  object-fit: contain;
+  filter: drop-shadow(0 6px 16px rgba(59,130,246,0.35));
 }
-.dv-nav-superadmin > span { font-size: 14px; }
+.dv-nav-superadmin-img:hover {
+  transform: translateY(-2px) scale(1.05);
+}
+.dv-nav-superadmin-img:hover img {
+  filter: drop-shadow(0 10px 24px rgba(99,102,241,0.55));
+}
 
 /* Konami toast — celebratory unlock banner */
 .dv-konami-toast {

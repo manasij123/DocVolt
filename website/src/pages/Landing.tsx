@@ -66,8 +66,8 @@ export default function Landing() {
             <img src="/api/web/wordmark.png" alt="DocVault" className="dv-brand-wordmark" />
           </Link>
           {superUnlocked && (
-            <Link to="/superadmin/login" className="dv-nav-superadmin">
-              <span>👑</span> Super Admin
+            <Link to="/superadmin/login" className="dv-nav-superadmin-img" aria-label="Super Admin Login">
+              <img src="/api/web/super-admin-btn.svg" alt="SUPER ADMIN" />
             </Link>
           )}
         </div>
