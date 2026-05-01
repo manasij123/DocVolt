@@ -101,13 +101,9 @@ export default function Landing() {
             <Text style={styles.headline}>Organised PDF storage.</Text>
             <Text style={styles.headline}>Per-client privacy.</Text>
             <Text style={[styles.headline, styles.headlineGreen]}>Real-time sync.</Text>
-          </View>
-        </View>
-
-        {/* ─────── PILL ─────── */}
-        <View style={styles.pillRow}>
-          <View style={styles.pill}>
-            <Text style={styles.pillText}>Secure. Organised. Always Accessible.</Text>
+            <View style={styles.pillInline}>
+              <Text style={styles.pillText}>Secure. Organised. Always Accessible.</Text>
+            </View>
           </View>
         </View>
 
@@ -251,14 +247,15 @@ const styles = StyleSheet.create({
   },
   headlineGreen: { color: "#08C488" },
 
-  // Pill
-  pillRow: { alignItems: "center", marginBottom: 14 },
-  pill: {
-    paddingHorizontal: 14, paddingVertical: 6, borderRadius: 999,
+  // Pill — inline, sits directly under "Real-time sync."
+  pillInline: {
+    alignSelf: "flex-start",
+    marginTop: 8,
+    paddingHorizontal: 10, paddingVertical: 4, borderRadius: 999,
     backgroundColor: "rgba(99,102,241,0.10)",
     borderWidth: 1, borderColor: "rgba(99,102,241,0.22)",
   },
-  pillText: { fontSize: 12, fontWeight: "600", color: "#4F46E5" },
+  pillText: { fontSize: 11, fontWeight: "600", color: "#4F46E5" },
 
   // Feature pills
   featurePills: {
