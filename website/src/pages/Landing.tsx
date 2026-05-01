@@ -41,7 +41,6 @@ export default function Landing() {
       {/* ─────── HERO — 3 columns: logo (L) + headline (M) + role cards (R) ─────── */}
       <section className="dv-hero-simple">
         <div className="dv-hero-simple-left">
-          <span className="dv-pill">Secure. Organised. Always Accessible.</span>
           <img src="/api/web/logo.png" alt="" className="dv-hero-logo-card" />
           <p className="dv-hero-sub">
             DocVault helps teams and professionals securely store, organise and share PDFs
@@ -58,6 +57,9 @@ export default function Landing() {
             <span>Per-client privacy.</span>
             <span className="dv-grad-text">Real-time sync.</span>
           </h1>
+          <span className="dv-pill dv-pill-under-head">
+            Secure. Organised. Always Accessible.
+          </span>
         </div>
 
         <div className="dv-hero-simple-right">
