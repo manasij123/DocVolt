@@ -34,8 +34,7 @@ export default function Landing() {
               width: "clamp(140px, 20vw, 180px)",
               height: "auto",
               objectFit: "contain",
-              filter:
-                "drop-shadow(0 18px 48px rgba(168,85,247,0.45)) drop-shadow(0 6px 18px rgba(15,23,42,0.55))",
+              filter: "drop-shadow(0 22px 60px rgba(0,0,0,0.35))",
               marginBottom: 8,
             }}
           />
