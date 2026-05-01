@@ -1492,31 +1492,25 @@ main {
   line-height: 1.22;
   letter-spacing: -0.8px;
   text-align: left;
-  /* Continuous 90deg gradient across all 3 lines — blue → purple → green */
-  background: linear-gradient(
-    90deg,
-    #3B82F6 0%,
-    #6366F1 30%,
-    #A855F7 55%,
-    #08C488 85%,
-    #06BB89 100%
-  );
+  color: #0F172A;
+}
+.dv-headline-static > span {
+  display: block;
+  white-space: nowrap;
+  /* Lines 1 & 2 — blue → indigo → purple gradient (90deg) */
+  background: linear-gradient(90deg, #3B82F6 0%, #6366F1 50%, #A855F7 100%);
   -webkit-background-clip: text;
   background-clip: text;
   -webkit-text-fill-color: transparent;
   color: transparent;
 }
-.dv-headline-static > span {
-  display: block;
-  white-space: nowrap;
-}
-/* No per-line overrides — whole headline uses the parent gradient */
+/* Line 3 — green gradient (90deg), overrides default above */
 .dv-headline-static .dv-grad-text {
-  background: none !important;
-  -webkit-background-clip: unset !important;
-  background-clip: unset !important;
-  -webkit-text-fill-color: inherit !important;
-  color: inherit !important;
+  background: linear-gradient(90deg, #08C488 0%, #06BB89 100%) !important;
+  -webkit-background-clip: text !important;
+  background-clip: text !important;
+  -webkit-text-fill-color: transparent !important;
+  color: transparent !important;
 }
 
 .dv-hero-simple-left .dv-hero-sub {
