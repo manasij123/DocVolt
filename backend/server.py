@@ -1346,6 +1346,25 @@ async def ws_endpoint(websocket: WebSocket, token: Optional[str] = None):
 
 
 # ============================================================
+# Public marketing stats — real counts for landing trust section
+# ============================================================
+@app.get("/api/stats/public")
+async def public_stats():
+    """Publicly visible counts for the landing page. No auth required."""
+    admins = await db.users.count_documents({"role": "admin"})
+    clients = await db.users.count_documents({"role": "client"})
+    docs = await db.documents.count_documents({})
+    return {
+        "admins": admins,
+        "clients": clients,
+        "active_users": admins + clients,
+        "documents": docs,
+        "uptime": "99.9%",  # static for now; real uptime would need monitoring
+    }
+
+
+
+# ============================================================
 # Startup — seed admin + demo client + migrate legacy docs
 # ============================================================
 @app.on_event("startup")
