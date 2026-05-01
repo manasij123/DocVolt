@@ -92,6 +92,20 @@ export default function Landing() {
               <Image source={{ uri: SUPER_ADMIN_BTN_URL }} style={styles.superBtn} resizeMode="contain" />
             </TouchableOpacity>
           )}
+          {/* Watch on browser hyperlink — right side of navbar */}
+          <TouchableOpacity
+            style={styles.navBrowserLink}
+            activeOpacity={0.7}
+            onPress={() => Linking.openURL(WEB_URL)}
+            hitSlop={8}
+          >
+            <Image
+              source={CHROME_ICON}
+              style={styles.navChromeIcon}
+              resizeMode="contain"
+            />
+            <Text style={styles.navBrowserLinkText}>Watch on browser</Text>
+          </TouchableOpacity>
         </View>
 
         {/* ─────── HERO LOGO + HEADLINE (side by side) ─────── */}
@@ -124,20 +138,6 @@ export default function Landing() {
           DocVault helps teams and professionals securely store, organise and share PDFs
           with complete control and peace of mind.
         </Text>
-
-        {/* ─────── WATCH ON BROWSER LINK ─────── */}
-        <TouchableOpacity
-          style={styles.browserLink}
-          activeOpacity={0.7}
-          onPress={() => Linking.openURL(WEB_URL)}
-        >
-          <Image
-            source={CHROME_ICON}
-            style={styles.chromeIcon}
-            resizeMode="contain"
-          />
-          <Text style={styles.browserLinkText}>Watch on browser</Text>
-        </TouchableOpacity>
 
         {/* ─────── ROLE CARDS ─────── */}
         <View style={styles.roleCard}>
@@ -304,21 +304,19 @@ const styles = StyleSheet.create({
     paddingHorizontal: 24, marginBottom: 18, textAlign: "center",
   },
 
-  // Watch on browser hyperlink (Chrome icon + underlined text)
-  browserLink: {
-    alignSelf: "center",
+  // Watch on browser hyperlink — compact for navbar placement
+  navBrowserLink: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 8,
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-    marginBottom: 28,
+    gap: 6,
+    paddingVertical: 4,
+    paddingHorizontal: 4,
   },
-  chromeIcon: { width: 22, height: 22 },
-  browserLinkText: {
+  navChromeIcon: { width: 18, height: 18 },
+  navBrowserLinkText: {
     color: "#2563EB",
     fontWeight: "700",
-    fontSize: 15,
+    fontSize: 13,
     textDecorationLine: "underline",
     textDecorationColor: "#2563EB",
   },
