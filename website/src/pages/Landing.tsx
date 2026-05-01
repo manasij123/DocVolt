@@ -20,20 +20,26 @@ export default function Landing() {
 
   return (
     <div className="dv-landing-light">
-      {/* ─────── HEADER (simplified — brand + login/get started only) ─────── */}
+      {/* ─────── HEADER (brand + feature pills) ─────── */}
       <header className="dv-nav">
         <div className="dv-nav-inner">
           <Link to="/" className="dv-brand">
             <img src="/api/web/logo.png" alt="" className="dv-brand-mark" />
             <img src="/api/web/wordmark.png" alt="DocVault" className="dv-brand-wordmark" />
           </Link>
-          <div className="dv-nav-cta">
-            <button className="dv-link-btn" onClick={() => setShowRoleModal(true)}>
-              Login
-            </button>
-            <Link to="/client/register" className="dv-gradient-btn">
-              Get Started
-            </Link>
+          <div className="dv-nav-pills">
+            <span className="dv-nav-pill dv-pill-yellow">
+              <span className="dv-np-ic">⚡</span> Auto-categorise
+            </span>
+            <span className="dv-nav-pill dv-pill-blue">
+              <span className="dv-np-ic">🔗</span> One-tap share
+            </span>
+            <span className="dv-nav-pill dv-pill-red">
+              <span className="dv-np-ic">🔴</span> Real-time sync
+            </span>
+            <span className="dv-nav-pill dv-pill-purple">
+              <span className="dv-np-ic">🔒</span> Per-client privacy
+            </span>
           </div>
         </div>
       </header>
