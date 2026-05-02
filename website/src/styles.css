@@ -1780,11 +1780,16 @@ main {
     display: inline-flex;
     align-items: center;
     gap: 6px;
-    color: #2563EB;
-    font-size: 13px;
+    color: #0F172A;
+    background: #FFFFFF;
+    border: 1.5px solid #CBD5E1;
+    font-size: 12px;
     font-weight: 700;
-    text-decoration: underline;
-    padding: 4px 8px;
+    text-decoration: none;
+    padding: 6px 10px;
+    border-radius: 10px;
+    box-shadow: 0 2px 6px rgba(15,23,42,0.05);
+    letter-spacing: 0.05px;
   }
   .dv-nav-watch-mobile img { width: 18px; height: 18px; }
   .dv-nav-inner { gap: 10px; padding: 12px 14px; }

@@ -71,10 +71,17 @@ export default function Landing() {
                 <img src="/api/web/super-admin-btn.svg" alt="SUPER ADMIN" />
               </Link>
             )}
-            {/* Mobile-only "Watch on browser" hyperlink — desktop hides via CSS */}
-            <a href="#hero" className="dv-nav-watch-mobile" aria-label="Watch on browser">
-              <img src="/api/web/logo.png" alt="" />
-              <span>Watch on browser</span>
+            {/* Mobile-only "Download mobile app" hyperlink — desktop hides via CSS */}
+            <a
+              href={APK_URL}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="dv-nav-watch-mobile"
+              aria-label="Download mobile app"
+              download
+            >
+              <img src="/api/web/android-icon.png" alt="" />
+              <span>Download mobile app</span>
             </a>
           </div>
         </div>
