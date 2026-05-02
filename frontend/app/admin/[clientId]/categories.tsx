@@ -183,7 +183,7 @@ export default function CategoriesScreen() {
         />
       </View>
 
-      {(creating || editingCat) && (
+      {(creating || editingCat) && clientId && (
         <CategoryEditorModal
           clientId={String(clientId)}
           existing={editingCat}

@@ -80,7 +80,7 @@ export default function Landing() {
               aria-label="Download mobile app"
               download
             >
-              <img src="/api/web/android-icon.png" alt="" />
+              <img src="/api/web/apk-icon.png" alt="" />
               <span>Download mobile app</span>
             </a>
           </div>
@@ -102,8 +102,9 @@ export default function Landing() {
             DocVault helps teams and professionals securely store, organise and share PDFs
             with complete control and peace of mind.
           </p>
-          <a href={APK_URL} target="_blank" rel="noopener noreferrer" className="dv-apk-inline">
-            📱 Download Android App (.apk)
+          <a href={APK_URL} target="_blank" rel="noopener noreferrer" className="dv-apk-inline" download>
+            <img src="/api/web/apk-icon.png" alt="" className="dv-apk-inline-icon" />
+            <span>Download Android App (.apk)</span>
           </a>
         </div>
 
