@@ -410,15 +410,23 @@ function CategoryEditorModal({ clientId, existing, onClose, onSaved }: {
             )}
 
             <Text style={s.fieldLabel}>{aiPreview ? "Fallback icon" : "Icon"}</Text>
-            <View style={s.iconGrid}>
-              {CATEGORY_ICON_PRESETS.map((p) => (
-                <PressableScale key={p.name} onPress={() => setIcon(p.name)}>
-                  <View style={[s.iconChoice, icon === p.name && { borderColor: color, backgroundColor: `${color}1a` }]}>
-                    <Ionicons name={p.name as any} size={20} color={icon === p.name ? color : "#475569"} />
-                  </View>
-                </PressableScale>
-              ))}
+            <View style={[s.iconGrid, aiPreview && { opacity: 0.5 }]}>
+              {CATEGORY_ICON_PRESETS.map((p) => {
+                const active = !aiPreview && icon === p.name;
+                return (
+                  <PressableScale key={p.name} onPress={() => setIcon(p.name)}>
+                    <View style={[s.iconChoice, active && { borderColor: color, backgroundColor: `${color}1a` }]}>
+                      <Ionicons name={p.name as any} size={20} color={active ? color : "#475569"} />
+                    </View>
+                  </PressableScale>
+                );
+              })}
             </View>
+            {aiPreview && (
+              <Text style={[s.helperText, { color: "#10B981", marginTop: 4 }]}>
+                ✓ AI-generated icon is active. The preset icon is only used if you remove the custom icon.
+              </Text>
+            )}
 
             <Text style={s.fieldLabel}>Keywords</Text>
             <Text style={s.helperText}>

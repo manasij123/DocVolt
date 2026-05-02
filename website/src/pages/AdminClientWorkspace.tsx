@@ -13,6 +13,22 @@ import ModernColorPicker from "../ModernColorPicker";
 import { suggestColorFromText } from "../colorTheme";
 
 const MONTHS = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+
+/** Inline category icon — renders the AI-generated PNG when present, otherwise
+ * falls back to the emoji of the saved Ionicons preset. Used in chips,
+ * section heads, and anywhere we show the category mark next to its name. */
+function CatIcon({ c, size = 16 }: { c: { custom_icon_b64?: string | null; icon: string }; size?: number }) {
+  if (c.custom_icon_b64) {
+    return (
+      <img
+        src={`data:image/png;base64,${c.custom_icon_b64}`}
+        alt=""
+        style={{ width: size, height: size, borderRadius: 4, objectFit: "cover", verticalAlign: "middle", marginRight: 6 }}
+      />
+    );
+  }
+  return <span style={{ marginRight: 4 }}>{emojiForIcon(c.icon)}</span>;
+}
 const MONTH_MAP: Record<string, number> = {
   jan:1,january:1,feb:2,february:2,mar:3,march:3,apr:4,april:4,may:5,jun:6,june:6,
   jul:7,july:7,aug:8,august:8,sep:9,sept:9,september:9,oct:10,october:10,nov:11,november:11,dec:12,december:12,
@@ -325,7 +341,7 @@ function UploadPanel({ clientId, cats, onUploaded }: { clientId: string; cats: C
           <div className="muted" style={{ fontSize: 11, fontWeight: 800, textTransform: "uppercase", letterSpacing: 0.8, marginTop: 12, marginBottom: 8 }}>Category</div>
           <div className="chip-row">{cats.map((c) => (
             <button key={c.id} className={`chip ${catId === c.id ? "active" : ""}`} onClick={() => setCatId(c.id)} style={catId === c.id ? { borderColor: c.color, background: `${c.color}1a`, color: c.color } : undefined}>
-              {emojiForIcon(c.icon)} {c.name}
+              <CatIcon c={c} /> {c.name}
             </button>
           ))}</div>
           <div className="muted" style={{ fontSize: 11, fontWeight: 800, textTransform: "uppercase", letterSpacing: 0.8, marginTop: 12, marginBottom: 8 }}>Year</div>
@@ -606,7 +622,7 @@ function ManagePanel({ docs, cats, setDocs, filter, setFilter, setEditing }: {
             onClick={() => setFilter(c.id)}
             style={filter === c.id ? { borderColor: c.color, color: c.color, background: `${c.color}14` } : undefined}
           >
-            {emojiForIcon(c.icon)} {c.name}
+            <CatIcon c={c} /> {c.name}
           </button>
         ))}
       </div>
@@ -617,7 +633,7 @@ function ManagePanel({ docs, cats, setDocs, filter, setFilter, setEditing }: {
           const items = grouped.byId[c.id]; if (!items || !items.length) return null;
           return (
             <section key={c.id}>
-              <div className="section-head"><span className="section-dot" style={{ background: c.color }} /><span className="section-title">{emojiForIcon(c.icon)} {c.name}</span><span className="section-count">· {items.length}</span></div>
+              <div className="section-head"><span className="section-dot" style={{ background: c.color }} /><span className="section-title"><CatIcon c={c} /> {c.name}</span><span className="section-count">· {items.length}</span></div>
               <div className="doc-grid">{items.map((d, i) => renderCard(d, i))}</div>
             </section>
           );
@@ -864,12 +880,24 @@ function CategoryEditor({ clientId, existing, onClose, onSaved }: {
 
         <div className="field">
           <label>{aiPreview ? "Fallback emoji icon (used if custom icon is removed)" : "Icon"}</label>
-          <div className="chip-row">
+          <div className="chip-row" style={aiPreview ? { opacity: 0.5 } : undefined}>
             {CATEGORY_ICON_PRESETS.map((p) => (
-              <button key={p.name} className={`chip ${icon === p.name ? "active" : ""}`} onClick={() => setIcon(p.name)}
-                style={{ fontSize: 18, minWidth: 40, justifyContent: "center" }} title={p.name}>{p.emoji}</button>
+              <button
+                key={p.name}
+                className={`chip ${!aiPreview && icon === p.name ? "active" : ""}`}
+                onClick={() => setIcon(p.name)}
+                style={{ fontSize: 18, minWidth: 40, justifyContent: "center" }}
+                title={aiPreview ? `${p.name} (fallback only)` : p.name}
+              >
+                {p.emoji}
+              </button>
             ))}
           </div>
+          {aiPreview && (
+            <div className="muted" style={{ fontSize: 11, marginTop: 6 }}>
+              ✓ AI-generated icon is active. The preset emoji is only used if you remove the custom icon.
+            </div>
+          )}
         </div>
 
         <div className="field">
