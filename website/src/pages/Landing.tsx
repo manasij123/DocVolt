@@ -65,11 +65,18 @@ export default function Landing() {
             <img src="/api/web/logo.png" alt="" className="dv-brand-mark" />
             <img src="/api/web/wordmark.png" alt="DocVault" className="dv-brand-wordmark" />
           </Link>
-          {superUnlocked && (
-            <Link to="/superadmin/login" className="dv-nav-superadmin-img" aria-label="Super Admin Login">
-              <img src="/api/web/super-admin-btn.svg" alt="SUPER ADMIN" />
-            </Link>
-          )}
+          <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+            {superUnlocked && (
+              <Link to="/superadmin/login" className="dv-nav-superadmin-img" aria-label="Super Admin Login">
+                <img src="/api/web/super-admin-btn.svg" alt="SUPER ADMIN" />
+              </Link>
+            )}
+            {/* Mobile-only "Watch on browser" hyperlink — desktop hides via CSS */}
+            <a href="#hero" className="dv-nav-watch-mobile" aria-label="Watch on browser">
+              <img src="/api/web/logo.png" alt="" />
+              <span>Watch on browser</span>
+            </a>
+          </div>
         </div>
       </header>
 
@@ -81,7 +88,7 @@ export default function Landing() {
       )}
 
       {/* ─────── HERO — 3 columns: logo (L) + headline (M) + role cards (R) ─────── */}
-      <section className="dv-hero-simple">
+      <section className="dv-hero-simple" id="hero">
         <div className="dv-hero-simple-left">
           <img src="/api/web/logo.png" alt="" className="dv-hero-logo-card" />
           <p className="dv-hero-sub">
@@ -117,6 +124,27 @@ export default function Landing() {
             </span>
           </div>
         </div>
+
+        {/* Mobile-only: full-width feature pills row + centered sub text — sits between
+            the logo+headline row and the role cards. Hidden on desktop via CSS. */}
+        <div className="dv-feature-pills-mobile">
+          <span className="dv-nav-pill dv-pill-yellow">
+            <span className="dv-np-ic">⚡</span> Auto-categorise
+          </span>
+          <span className="dv-nav-pill dv-pill-blue">
+            <span className="dv-np-ic">🔗</span> One-tap share
+          </span>
+          <span className="dv-nav-pill dv-pill-red">
+            <span className="dv-np-ic">🔴</span> Real-time sync
+          </span>
+          <span className="dv-nav-pill dv-pill-purple">
+            <span className="dv-np-ic">🔒</span> Per-client privacy
+          </span>
+        </div>
+        <p className="dv-hero-sub-mobile">
+          DocVault helps teams and professionals securely store, organise and share PDFs
+          with complete control and peace of mind.
+        </p>
 
         <div className="dv-hero-simple-right">
           <div className="dv-role-grid-lg">

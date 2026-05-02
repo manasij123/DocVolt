@@ -1,7 +1,7 @@
 import React, { useEffect, useRef, useState } from "react";
 import {
   View, Text, StyleSheet, ScrollView, TouchableOpacity,
-  Linking, Image, Pressable,
+  Linking, Image, Pressable, Dimensions,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useRouter } from "expo-router";
@@ -24,6 +24,10 @@ export default function Landing() {
   const router = useRouter();
   const { user, loading } = useAuth();
   const [ready, setReady] = useState(false);
+
+  // Responsive hero logo size — tracks the screenshot reference (~140-180px)
+  const { width: screenW } = Dimensions.get("window");
+  const logoSize = Math.min(Math.max(screenW * 0.36, 120), 180);
 
   // Super-admin reveal: persistent flag OR specific email match,
   // plus a hidden gesture (tap brand mark 5× quickly) to unlock.
@@ -63,7 +67,7 @@ export default function Landing() {
   return (
     <SafeAreaView style={styles.root} edges={["top", "left", "right"]}>
       <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
-        {/* ─────── HEADER (sticky-style: brand + APK download CTA on right) ─────── */}
+        {/* ─────── NAV ─────── */}
         <View style={styles.nav}>
           <Pressable onPress={handleSecretTap} style={styles.brand} hitSlop={6}>
             <Image
@@ -88,7 +92,7 @@ export default function Landing() {
                 <Image source={{ uri: SUPER_ADMIN_BTN_URL }} style={styles.superBtn} resizeMode="contain" />
               </TouchableOpacity>
             )}
-            {/* Download APK button (replaces "Watch on browser") */}
+            {/* Download APK — green pill (replaces "Watch on browser" on mobile app) */}
             <TouchableOpacity
               style={styles.apkBtn}
               activeOpacity={0.85}
@@ -101,100 +105,95 @@ export default function Landing() {
           </View>
         </View>
 
-        {/* ─────── HERO (web mobile-responsive: headline first, then logo+sub, then role cards) ─────── */}
-        <View style={styles.hero}>
-          {/* Middle column on web — headline + pill + feature pills (order: -1 on mobile) */}
-          <View style={styles.headlineMid}>
-            <Text style={styles.headlineLine} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.6}>
+        {/* ─────── HERO ROW: Logo (left) + Headline (right) — SIDE-BY-SIDE ─────── */}
+        <View style={styles.heroRow}>
+          <Image
+            source={require("../assets/images/brand-logo.png")}
+            style={[styles.heroLogo, { width: logoSize, height: logoSize }]}
+            resizeMode="contain"
+          />
+          <View style={styles.headlineCol}>
+            <Text style={styles.headlineLine} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.55}>
               Organised PDF storage.
             </Text>
-            <Text style={styles.headlineLine} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.6}>
+            <Text style={styles.headlineLine} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.55}>
               Per-client privacy.
             </Text>
-            <Text style={[styles.headlineLine, styles.headlineGreen]} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.6}>
+            <Text style={[styles.headlineLine, styles.headlineGreen]} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.55}>
               Real-time sync.
             </Text>
-
             <View style={styles.pillUnderHead}>
-              <Text style={styles.pillUnderHeadText}>
+              <Text style={styles.pillUnderHeadText} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.7}>
                 Secure. Organised. Always Accessible.
               </Text>
             </View>
+          </View>
+        </View>
 
-            <View style={styles.featurePills}>
-              <FeaturePill icon="⚡" label="Auto-categorise"     bg="#FEFCE8" border="rgba(234,179,8,0.35)" />
-              <FeaturePill icon="🔗" label="One-tap share"       bg="#EFF6FF" border="rgba(59,130,246,0.35)" />
-              <FeaturePill icon="🔴" label="Real-time sync"      bg="#FEF2F2" border="rgba(239,68,68,0.35)" />
-              <FeaturePill icon="🔒" label="Per-client privacy"  bg="#FAF5FF" border="rgba(168,85,247,0.35)" />
+        {/* ─────── FEATURE PILLS — single horizontal row, 4 pills fit ─────── */}
+        <View style={styles.featurePills}>
+          <FeaturePill icon="⚡" label="Auto-categorise"     bg="#FEFCE8" border="rgba(234,179,8,0.35)" />
+          <FeaturePill icon="🔗" label="One-tap share"       bg="#EFF6FF" border="rgba(59,130,246,0.35)" />
+          <FeaturePill icon="🔴" label="Real-time sync"      bg="#FEF2F2" border="rgba(239,68,68,0.35)" />
+          <FeaturePill icon="🔒" label="Per-client privacy"  bg="#FAF5FF" border="rgba(168,85,247,0.35)" />
+        </View>
+
+        {/* ─────── SUB TEXT — centered ─────── */}
+        <Text style={styles.subText}>
+          DocVault helps teams and professionals securely store, organise and share PDFs
+          with complete control and peace of mind.
+        </Text>
+
+        {/* ─────── ROLE CARDS ─────── */}
+        <View style={styles.roleCard}>
+          <View style={styles.roleCardHead}>
+            <View style={styles.roleIc}><Text style={styles.roleIcEmoji}>👤</Text></View>
+            <View style={{ flex: 1 }}>
+              <Text style={styles.roleCardTitle}>I'm a Client</Text>
+              <Text style={styles.roleCardSub}>Access documents shared with you</Text>
             </View>
           </View>
-
-          {/* Left column on web — 3D hero logo + sub-text. (No inline APK button — moved to navbar) */}
-          <View style={styles.heroLeft}>
-            <Image
-              source={require("../assets/images/brand-logo.png")}
-              style={styles.heroLogoCard}
-              resizeMode="contain"
-            />
-            <Text style={styles.heroSub}>
-              DocVault helps teams and professionals securely store, organise and share PDFs
-              with complete control and peace of mind.
-            </Text>
+          <View style={styles.roleBtnRow}>
+            <TouchableOpacity
+              style={styles.gradBtn}
+              activeOpacity={0.85}
+              onPress={() => router.push("/client/login" as any)}
+            >
+              <Text style={styles.gradBtnText}>Login</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={styles.outlineBtn}
+              activeOpacity={0.85}
+              onPress={() => router.push("/client/register" as any)}
+            >
+              <Text style={styles.outlineBtnText}>Register</Text>
+            </TouchableOpacity>
           </View>
+        </View>
 
-          {/* Right column on web — role cards stack */}
-          <View style={styles.heroRight}>
-            <View style={styles.roleCard}>
-              <View style={styles.roleCardHead}>
-                <View style={styles.roleIc}><Text style={styles.roleIcEmoji}>👤</Text></View>
-                <View style={{ flex: 1 }}>
-                  <Text style={styles.roleCardTitle}>I'm a Client</Text>
-                  <Text style={styles.roleCardSub}>Access documents shared with you</Text>
-                </View>
-              </View>
-              <View style={styles.roleBtnRow}>
-                <TouchableOpacity
-                  style={styles.gradBtn}
-                  activeOpacity={0.85}
-                  onPress={() => router.push("/client/login" as any)}
-                >
-                  <Text style={styles.gradBtnText}>Login</Text>
-                </TouchableOpacity>
-                <TouchableOpacity
-                  style={styles.outlineBtn}
-                  activeOpacity={0.85}
-                  onPress={() => router.push("/client/register" as any)}
-                >
-                  <Text style={styles.outlineBtnText}>Register</Text>
-                </TouchableOpacity>
-              </View>
+        <View style={styles.roleCard}>
+          <View style={styles.roleCardHead}>
+            <View style={[styles.roleIc, styles.roleIcAdmin]}><Text style={styles.roleIcEmoji}>🛡️</Text></View>
+            <View style={{ flex: 1 }}>
+              <Text style={styles.roleCardTitle}>I'm an Admin</Text>
+              <Text style={styles.roleCardSub}>Manage clients & documents</Text>
             </View>
-
-            <View style={styles.roleCard}>
-              <View style={styles.roleCardHead}>
-                <View style={[styles.roleIc, styles.roleIcAdmin]}><Text style={styles.roleIcEmoji}>🛡️</Text></View>
-                <View style={{ flex: 1 }}>
-                  <Text style={styles.roleCardTitle}>I'm an Admin</Text>
-                  <Text style={styles.roleCardSub}>Manage clients & documents</Text>
-                </View>
-              </View>
-              <View style={styles.roleBtnRow}>
-                <TouchableOpacity
-                  style={styles.gradBtn}
-                  activeOpacity={0.85}
-                  onPress={() => router.push("/admin/login" as any)}
-                >
-                  <Text style={styles.gradBtnText}>Login</Text>
-                </TouchableOpacity>
-                <TouchableOpacity
-                  style={styles.outlineBtn}
-                  activeOpacity={0.85}
-                  onPress={() => router.push("/admin/register" as any)}
-                >
-                  <Text style={styles.outlineBtnText}>Register</Text>
-                </TouchableOpacity>
-              </View>
-            </View>
+          </View>
+          <View style={styles.roleBtnRow}>
+            <TouchableOpacity
+              style={styles.gradBtn}
+              activeOpacity={0.85}
+              onPress={() => router.push("/admin/login" as any)}
+            >
+              <Text style={styles.gradBtnText}>Login</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={styles.outlineBtn}
+              activeOpacity={0.85}
+              onPress={() => router.push("/admin/register" as any)}
+            >
+              <Text style={styles.outlineBtnText}>Register</Text>
+            </TouchableOpacity>
           </View>
         </View>
 
@@ -214,17 +213,16 @@ function FeaturePill({ icon, label, bg, border }: { icon: string; label: string;
   return (
     <View style={[styles.fpill, { backgroundColor: bg, borderColor: border }]}>
       <Text style={styles.fpillIcon}>{icon}</Text>
-      <Text style={styles.fpillText} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.7}>{label}</Text>
+      <Text style={styles.fpillText} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.6}>{label}</Text>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  // matches .dv-landing-light — pure white background
   root: { flex: 1, backgroundColor: "#FFFFFF" },
   scroll: { paddingBottom: 32 },
 
-  // ── Header (.dv-nav / .dv-nav-inner) ──
+  // Header
   nav: {
     flexDirection: "row", alignItems: "center", justifyContent: "space-between",
     paddingHorizontal: 16, paddingVertical: 12,
@@ -249,77 +247,78 @@ const styles = StyleSheet.create({
   apkBtnIcon: { fontSize: 13 },
   apkBtnText: { color: "#FFFFFF", fontWeight: "700", fontSize: 13, letterSpacing: 0.1 },
 
-  // ── Hero (.dv-hero-simple at <760px → single column with order: -1 on headline) ──
-  hero: {
-    paddingHorizontal: 20, paddingTop: 24, paddingBottom: 12,
-    gap: 28,
-  },
-
-  // Headline-mid block (.dv-hero-headline-mid) — comes FIRST on mobile
-  headlineMid: { gap: 14, alignItems: "flex-start" },
-  // .dv-headline-static — clamp(26..38px), letter-spacing -0.8, line-height 1.22, weight 800
-  headlineLine: {
-    fontSize: 30,
-    fontWeight: "800",
-    letterSpacing: -0.8,
-    lineHeight: 36,
-    textAlign: "left",
-    // Blue → indigo → purple gradient on web; RN can't do gradient text inline,
-    // so we use the dominant indigo color #6366F1 for lines 1 & 2.
-    color: "#6366F1",
-  },
-  // Line 3 — green (.dv-grad-text inside .dv-headline-static)
-  headlineGreen: { color: "#08C488" },
-
-  // Pill under headline (.dv-pill-under-head) — gradient soft pill
-  pillUnderHead: {
-    alignSelf: "flex-start",
-    paddingHorizontal: 12, paddingVertical: 5, borderRadius: 999,
-    backgroundColor: "rgba(99,102,241,0.12)",
-    borderWidth: 1, borderColor: "rgba(99,102,241,0.22)",
-  },
-  pillUnderHeadText: { fontSize: 12, fontWeight: "600", color: "#4F46E5", letterSpacing: 0.2 },
-
-  // Feature pills (.dv-feature-pills .dv-nav-pill, all 4 in one wrapped row)
-  featurePills: {
+  // Hero — logo (left) + headline (right) side-by-side
+  heroRow: {
     flexDirection: "row",
-    flexWrap: "wrap",
-    gap: 6,
-    width: "100%",
+    alignItems: "center",
+    paddingHorizontal: 14,
+    paddingTop: 22,
+    paddingBottom: 14,
+    gap: 12,
   },
-  fpill: {
-    flexDirection: "row", alignItems: "center",
-    paddingHorizontal: 10, paddingVertical: 5,
-    borderRadius: 999, borderWidth: 1,
-  },
-  fpillIcon: { fontSize: 11, marginRight: 4 },
-  fpillText: { fontSize: 11.5, fontWeight: "600", color: "#334155", letterSpacing: -0.1 },
-
-  // Hero left (.dv-hero-simple-left) — logo card (140px on mobile per CSS @media 760)
-  heroLeft: { alignItems: "flex-start", gap: 14 },
-  heroLogoCard: {
-    width: 140, height: 140,
-    // simulate web's drop-shadow filter via RN shadow + elevation
+  heroLogo: {
     shadowColor: "#6366F1", shadowOpacity: 0.28, shadowRadius: 22, shadowOffset: { width: 0, height: 22 },
     elevation: 6,
   },
-  heroSub: {
+  headlineCol: { flex: 1, alignItems: "flex-start" },
+  headlineLine: {
+    fontSize: 18,
+    fontWeight: "800",
+    letterSpacing: -0.5,
+    lineHeight: 23,
+    color: "#3B82F6",
+    textAlign: "left",
+  },
+  headlineGreen: { color: "#08C488" },
+
+  // Pill under headline
+  pillUnderHead: {
+    alignSelf: "flex-start",
+    marginTop: 10,
+    paddingHorizontal: 10, paddingVertical: 5, borderRadius: 999,
+    backgroundColor: "rgba(99,102,241,0.10)",
+    borderWidth: 1, borderColor: "rgba(99,102,241,0.22)",
+    maxWidth: "100%",
+  },
+  pillUnderHeadText: { fontSize: 11, fontWeight: "600", color: "#4F46E5", letterSpacing: 0.1 },
+
+  // Feature pills — single line row, 4 pills equal-width
+  featurePills: {
+    flexDirection: "row",
+    flexWrap: "nowrap",
+    gap: 5,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    marginBottom: 14,
+    width: "100%",
+  },
+  fpill: {
+    flex: 1,
+    flexBasis: 0,
+    minWidth: 0,
+    flexDirection: "row", alignItems: "center", justifyContent: "center",
+    paddingHorizontal: 4, paddingVertical: 5,
+    borderRadius: 999, borderWidth: 1,
+    overflow: "hidden",
+  },
+  fpillIcon: { fontSize: 9, marginRight: 3 },
+  fpillText: { fontSize: 9, fontWeight: "600", color: "#334155", letterSpacing: -0.2 },
+
+  // Sub-text — centered
+  subText: {
     fontSize: 14, lineHeight: 21, color: "#475569",
-    fontWeight: "400",
+    paddingHorizontal: 24, marginBottom: 18, textAlign: "center",
   },
 
-  // Hero right (.dv-hero-simple-right / .dv-role-grid-lg) — stack of 2 role cards
-  heroRight: { gap: 16 },
-
-  // Role card (.dv-role-card-lg)
+  // Role cards
   roleCard: {
+    marginHorizontal: 16, marginBottom: 14,
     backgroundColor: "#FFFFFF", borderWidth: 1.5, borderColor: "#E2E8F0",
-    borderRadius: 18, padding: 20,
+    borderRadius: 18, padding: 18,
     shadowColor: "#0F172A", shadowOpacity: 0.04, shadowRadius: 8, shadowOffset: { width: 0, height: 2 },
     elevation: 1,
   },
-  roleCardHead: { flexDirection: "row", alignItems: "center", gap: 14, marginBottom: 16 },
-  // .dv-role-ic-lg — 56×56 with soft indigo→purple gradient (we use a tinted bg)
+  roleCardHead: { flexDirection: "row", alignItems: "center", gap: 14, marginBottom: 14 },
   roleIc: {
     width: 52, height: 52, borderRadius: 13,
     backgroundColor: "rgba(99,102,241,0.15)",
@@ -331,7 +330,6 @@ const styles = StyleSheet.create({
   roleCardSub: { fontSize: 13, color: "#64748B", marginTop: 2 },
   roleBtnRow: { flexDirection: "row", gap: 10 },
 
-  // Buttons (.dv-gradient-btn / .dv-outline-btn) — at <480px the row stays 1fr 1fr per CSS
   gradBtn: {
     flex: 1, paddingVertical: 11, borderRadius: 10,
     alignItems: "center", justifyContent: "center",
@@ -347,9 +345,8 @@ const styles = StyleSheet.create({
   },
   outlineBtnText: { color: "#0F172A", fontWeight: "600", fontSize: 14 },
 
-  // Footer (.dv-footer-simple)
   footer: {
-    alignItems: "center", marginTop: 24, paddingTop: 18, paddingBottom: 4,
+    alignItems: "center", marginTop: 18, paddingTop: 18, paddingBottom: 4,
     paddingHorizontal: 24,
     borderTopWidth: 1, borderTopColor: "#E2E8F0",
     backgroundColor: "#F8FAFC",

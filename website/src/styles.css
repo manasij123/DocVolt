@@ -1661,13 +1661,133 @@ main {
   .dv-hero-headline-mid { grid-column: 1 / -1; order: -1; justify-content: flex-start; }
   .dv-headline-static { font-size: clamp(24px, 3.8vw, 34px); }
 }
+/* Default (desktop) — these mobile-only nodes are hidden.
+   IMPORTANT: this rule must come BEFORE the @media (max-width: 760px) block
+   below, otherwise it overrides the mobile `display: flex` declaration. */
+.dv-feature-pills-mobile { display: none; }
+.dv-hero-sub-mobile { display: none; }
+
 @media (max-width: 760px) {
-  .dv-hero-simple { grid-template-columns: 1fr; gap: 28px; }
-  .dv-hero-simple-left { max-width: 100%; }
-  .dv-hero-logo-card { width: 140px; }
+  /* Mobile = recreate the mobile-app landing layout exactly:
+     - Row 1: Logo (left, 140px) + Headline (right, 1fr) — SIDE BY SIDE
+     - Row 2: Full-width feature pills strip
+     - Row 3: Centered sub text
+     - Row 4: Stacked role cards
+     - Sticky-style navbar with brand-left and Watch on browser CTA right
+  */
+  .dv-hero-simple {
+    display: grid;
+    grid-template-columns: 140px 1fr;
+    grid-template-areas:
+      "logo head"
+      "pills pills"
+      "sub sub"
+      "right right";
+    gap: 14px;
+    padding: 16px 14px 24px;
+    align-items: start;
+  }
+  .dv-hero-simple-left {
+    grid-area: logo;
+    display: flex !important;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 0;
+    margin: 0;
+    padding: 0;
+    max-width: 140px;
+  }
+  .dv-hero-logo-card {
+    width: 140px; height: 140px;
+    margin: 0;
+    flex-shrink: 0;
+  }
+  /* Hide the desktop-positioned sub-text + APK button inside hero-simple-left */
+  .dv-hero-simple-left .dv-hero-sub,
+  .dv-hero-simple-left .dv-apk-inline { display: none !important; }
+
+  .dv-hero-headline-mid {
+    grid-area: head;
+    margin: 0;
+    padding: 0;
+    gap: 8px;
+    align-items: flex-start;
+    align-self: start;
+    min-width: 0;
+  }
+  .dv-headline-static {
+    font-size: 17px;
+    line-height: 1.28;
+    letter-spacing: -0.5px;
+  }
   .dv-headline-static > span { white-space: normal; }
+  .dv-pill-under-head {
+    margin-top: 4px;
+    font-size: 11px;
+    padding: 5px 10px;
+  }
+  .dv-hero-headline-mid .dv-feature-pills { display: none; }
+
+  .dv-feature-pills-mobile {
+    grid-area: pills;
+    display: flex;
+    flex-wrap: nowrap;
+    gap: 5px;
+    padding: 0;
+    margin: 4px 0 0;
+    width: 100%;
+  }
+  .dv-feature-pills-mobile .dv-nav-pill {
+    flex: 1 1 0;
+    min-width: 0;
+    padding: 5px 6px;
+    font-size: 9.5px;
+    justify-content: center;
+    white-space: nowrap;
+    overflow: hidden;
+  }
+  .dv-feature-pills-mobile .dv-np-ic { font-size: 10px; }
+
+  .dv-hero-sub-mobile {
+    grid-area: sub;
+    display: block;
+    width: 100%;
+    margin: 0 0 8px;
+    padding: 0 8px;
+    text-align: center;
+    color: #475569;
+    font-size: 14px;
+    line-height: 1.5;
+  }
+
+  .dv-hero-simple-right {
+    grid-area: right;
+    width: 100%;
+    margin-top: 4px;
+    gap: 14px;
+  }
+  .dv-role-card-lg { padding: 18px; }
 }
 @media (max-width: 480px) {
-  .dv-role-card-btns { grid-template-columns: 1fr; }
-  .dv-role-card-lg { padding: 20px; }
+  .dv-role-card-btns { grid-template-columns: 1fr 1fr; }
+  .dv-role-card-lg { padding: 16px; }
+}
+
+/* Mobile-only "Watch on browser" navbar CTA */
+.dv-nav-watch-mobile { display: none; }
+@media (max-width: 760px) {
+  .dv-nav-watch-mobile {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    color: #2563EB;
+    font-size: 13px;
+    font-weight: 700;
+    text-decoration: underline;
+    padding: 4px 8px;
+  }
+  .dv-nav-watch-mobile img { width: 18px; height: 18px; }
+  .dv-nav-inner { gap: 10px; padding: 12px 14px; }
+  .dv-brand-mark { height: 38px; width: 38px; }
+  .dv-brand-wordmark { height: 24px; }
 }
