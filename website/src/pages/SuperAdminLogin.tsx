@@ -29,16 +29,16 @@ export default function SuperAdminLogin() {
   };
 
   return (
-    <div className="login-page" style={{ background: "linear-gradient(135deg, #0F172A 0%, #1E293B 50%, #312E81 100%)" }}>
+    <div className="login-page" style={{ background: "linear-gradient(135deg, #FFFFFF 0%, #F8FAFC 50%, #3801FF14 100%)" }}>
       <div className="login-card">
-        <Link to="/" style={{ color: "#fff", display: "inline-block", marginBottom: 18, opacity: 0.85, fontSize: 14, fontWeight: 600 }}>← Back</Link>
+        <Link to="/" style={{ color: "#0F172A", display: "inline-block", marginBottom: 18, opacity: 0.85, fontSize: 14, fontWeight: 600 }}>← Back</Link>
         <div style={{ textAlign: "center", marginBottom: 18 }}>
-          <div style={{ width: 72, height: 72, borderRadius: 18, background: "linear-gradient(135deg, #FACC15, #F59E0B)", display: "inline-flex", alignItems: "center", justifyContent: "center", boxShadow: "0 8px 28px rgba(245,158,11,0.35)" }}>
+          <div style={{ width: 72, height: 72, borderRadius: 18, background: "linear-gradient(135deg, #3801FF, #5B2DFF)", display: "inline-flex", alignItems: "center", justifyContent: "center", boxShadow: "0 8px 28px rgba(56,1,255,0.35)" }}>
             <span style={{ fontSize: 36 }}>🛡️</span>
           </div>
         </div>
-        <h2 className="login-title" style={{ color: "#fff" }}>System Owner</h2>
-        <p className="login-sub" style={{ color: "#CBD5E1" }}>Restricted access — global system overview</p>
+        <h2 className="login-title" style={{ color: "#0F172A" }}>System Owner</h2>
+        <p className="login-sub" style={{ color: "#475569" }}>Restricted access — global system overview</p>
         <div className="card card-md">
           {err && <div className="banner error">⚠ {err}</div>}
           <form onSubmit={submit}>

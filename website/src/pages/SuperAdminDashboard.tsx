@@ -61,18 +61,19 @@ export default function SuperAdminDashboard() {
     return parts.some((p) => (p || "").toLowerCase().includes(q));
   };
 
-  if (loading) return <div style={{ padding: 40, color: "#fff", background: "#0F172A", minHeight: "100vh" }}>Loading…</div>;
-  if (err || !data) return <div style={{ padding: 40, color: "#fff", background: "#0F172A", minHeight: "100vh" }}>⚠ {err || "No data"}</div>;
+  if (loading) return <div style={{ padding: 40, color: "#0F172A", background: "#FFFFFF", minHeight: "100vh" }}>Loading…</div>;
+  if (err || !data) return <div style={{ padding: 40, color: "#0F172A", background: "#FFFFFF", minHeight: "100vh" }}>⚠ {err || "No data"}</div>;
 
   const { stats } = data;
 
   return (
-    <div style={{ minHeight: "100vh", background: "#0F172A", color: "#E2E8F0" }}>
+    <div style={{ minHeight: "100vh", background: "#FFFFFF", color: "#0F172A" }}>
       {/* Top Bar */}
       <div style={{
-        background: "linear-gradient(135deg, #1E293B 0%, #312E81 100%)",
+        background: "linear-gradient(135deg, #FFFFFF 0%, #3801FF14 100%)",
         padding: "14px 24px", display: "flex", alignItems: "center", gap: 14,
-        borderBottom: "1px solid #334155", position: "sticky", top: 0, zIndex: 10,
+        borderBottom: "1px solid #E2E8F0", position: "sticky", top: 0, zIndex: 10,
+        boxShadow: "0 1px 3px rgba(15,23,42,0.04)",
       }}>
         <img
           src="https://img.icons8.com/3d-fluency/94/user-shield.png"
@@ -82,7 +83,7 @@ export default function SuperAdminDashboard() {
           style={{ filter: "drop-shadow(0 4px 14px rgba(96,165,250,0.45))" }}
         />
         <div style={{ flex: 1, minWidth: 0 }}>
-          <div style={{ fontSize: 16, fontWeight: 800, color: "#fff" }}>System Owner Console</div>
+          <div style={{ fontSize: 16, fontWeight: 800, color: "#0F172A" }}>System Owner Console</div>
           <div style={{ fontSize: 12, color: "#94A3B8" }}>Read-only · Live database snapshot</div>
         </div>
         <input
@@ -90,17 +91,17 @@ export default function SuperAdminDashboard() {
           value={search}
           onChange={(e) => setSearch(e.target.value)}
           placeholder="🔎 Search name / email…"
-          style={{ width: 240, background: "#0F172A", color: "#fff", borderColor: "#475569" }}
+          style={{ width: 240, background: "#FFFFFF", color: "#0F172A", borderColor: "#CBD5E1" }}
         />
         <button
           onClick={logout}
           style={{
             display: "flex", alignItems: "center", gap: 6,
-            background: "#000", color: "#FACC15",
+            background: "#FFFFFF", color: "#3801FF",
             fontWeight: 800, fontSize: 13, letterSpacing: 0.4,
             padding: "9px 16px", borderRadius: 10,
-            border: "1px solid #FACC15", cursor: "pointer",
-            boxShadow: "0 4px 14px rgba(250,204,21,0.18)",
+            border: "1.5px solid #3801FF", cursor: "pointer",
+            boxShadow: "0 4px 14px rgba(56,1,255,0.18)",
           }}
         >
           <Ic kind="logout" size={18} alt="Logout" /> Logout
@@ -112,7 +113,7 @@ export default function SuperAdminDashboard() {
         <StatCard label="Total Users"  value={stats.users}       color="#60A5FA" />
         <StatCard label="Admins"       value={stats.admins}      color="#A78BFA" />
         <StatCard label="Clients"      value={stats.clients}     color="#34D399" />
-        <StatCard label="Connections"  value={stats.connections} color="#FBBF24" />
+        <StatCard label="Connections"  value={stats.connections} color="#3801FF" />
         <StatCard label="Documents"    value={stats.documents}   color="#F472B6" />
       </div>
 
@@ -201,7 +202,7 @@ function ConnectionsView({ data, search, filterText }: {
           head={["Admin", "→", "Client", "Initiated by", "Docs", "Linked at"]}
           rows={visible.map((cn) => [
             <span><strong>{cn.admin_name}</strong> <span style={{ color: "#94A3B8" }}>({cn.admin_email})</span></span>,
-            <span style={{ color: "#FBBF24" }}>→</span>,
+            <span style={{ color: "#3801FF" }}>→</span>,
             <span><strong>{cn.client_name}</strong> <span style={{ color: "#94A3B8" }}>({cn.client_email})</span></span>,
             <span style={{ fontSize: 11, color: "#94A3B8" }}>{cn.initiated_by === cn.admin_id ? "Admin" : cn.initiated_by === cn.client_id ? "Client" : "—"}</span>,
             <strong>{cn.doc_count}</strong>,
@@ -258,11 +259,11 @@ function NetworkGraph({ data, visible, highlight }: {
     || visible.some((c) => (c.admin_id === id && c.client_id === hoverId) || (c.client_id === id && c.admin_id === hoverId));
 
   if (visible.length === 0) {
-    return <div style={{ padding: 40, textAlign: "center", color: "#64748B", background: "#1E293B", borderRadius: 12, border: "1px solid #334155" }}>No connections match your search.</div>;
+    return <div style={{ padding: 40, textAlign: "center", color: "#64748B", background: "#F8FAFC", borderRadius: 12, border: "1px solid #334155" }}>No connections match your search.</div>;
   }
 
   return (
-    <div style={{ background: "#0B1220", border: "1px solid #334155", borderRadius: 14, padding: 16, position: "relative" }}>
+    <div style={{ background: "#FFFFFF", border: "1px solid #334155", borderRadius: 14, padding: 16, position: "relative" }}>
       <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 8, padding: "0 4px" }}>
         <div style={{ fontSize: 12, fontWeight: 800, color: "#A78BFA", textTransform: "uppercase", letterSpacing: 0.6 }}>Admins ({adminIds.length})</div>
         <div style={{ fontSize: 12, fontWeight: 800, color: "#34D399", textTransform: "uppercase", letterSpacing: 0.6 }}>Clients ({clientIds.length})</div>
@@ -299,7 +300,7 @@ function NetworkGraph({ data, visible, highlight }: {
               (cn.admin_email || "").toLowerCase().includes(highlight) ||
               (cn.client_email || "").toLowerCase().includes(highlight)
             );
-            const stroke = matchHL ? "#FACC15" : "url(#linkGrad)";
+            const stroke = matchHL ? "#3801FF" : "url(#linkGrad)";
             return (
               <path
                 key={cn.id}
@@ -325,8 +326,8 @@ function NetworkGraph({ data, visible, highlight }: {
             const active = isLinkActive(cn);
             return (
               <g key={`b_${cn.id}`} opacity={active ? 1 : 0.25}>
-                <circle cx={mx} cy={my} r={11} fill="#0B1220" stroke="#FBBF24" strokeWidth={1.5} />
-                <text x={mx} y={my + 4} textAnchor="middle" fontSize={10} fontWeight={800} fill="#FBBF24">{cn.doc_count}</text>
+                <circle cx={mx} cy={my} r={11} fill="#FFFFFF" stroke="#3801FF" strokeWidth={1.5} />
+                <text x={mx} y={my + 4} textAnchor="middle" fontSize={10} fontWeight={800} fill="#3801FF">{cn.doc_count}</text>
               </g>
             );
           })}
@@ -347,7 +348,7 @@ function NetworkGraph({ data, visible, highlight }: {
                 <text x={adminX + 22} y={y + nodeH / 2 + 5} textAnchor="middle" fill="#A78BFA" fontWeight={800} fontSize={14}>{a.name?.[0]?.toUpperCase() || "?"}</text>
                 <text x={adminX + 46} y={y + 19} fill="#fff" fontWeight={800} fontSize={13}>{trunc(a.name, 22)}</text>
                 <text x={adminX + 46} y={y + 35} fill="#94A3B8" fontSize={10}>{trunc(a.email || "", 30)}</text>
-                <text x={adminX + colW - 14} y={y + 19} textAnchor="end" fill="#FBBF24" fontWeight={800} fontSize={12}>{a.client_count}</text>
+                <text x={adminX + colW - 14} y={y + 19} textAnchor="end" fill="#3801FF" fontWeight={800} fontSize={12}>{a.client_count}</text>
                 <text x={adminX + colW - 14} y={y + 35} textAnchor="end" fill="#34D399" fontWeight={700} fontSize={10}>{a.doc_count} docs</text>
               </g>
             );
@@ -369,7 +370,7 @@ function NetworkGraph({ data, visible, highlight }: {
                 <text x={clientX + 22} y={y + nodeH / 2 + 5} textAnchor="middle" fill="#34D399" fontWeight={800} fontSize={14}>{c.name?.[0]?.toUpperCase() || "?"}</text>
                 <text x={clientX + 46} y={y + 19} fill="#fff" fontWeight={800} fontSize={13}>{trunc(c.name, 22)}</text>
                 <text x={clientX + 46} y={y + 35} fill="#94A3B8" fontSize={10}>{trunc(c.email || "", 30)}</text>
-                <text x={clientX + colW - 14} y={y + 19} textAnchor="end" fill="#FBBF24" fontWeight={800} fontSize={12}>{c.admin_count}</text>
+                <text x={clientX + colW - 14} y={y + 19} textAnchor="end" fill="#3801FF" fontWeight={800} fontSize={12}>{c.admin_count}</text>
                 <text x={clientX + colW - 14} y={y + 35} textAnchor="end" fill="#34D399" fontWeight={700} fontSize={10}>{c.doc_count} docs</text>
               </g>
             );
@@ -432,17 +433,17 @@ function DocumentsTable({ docs, connections, filterText }: {
       {/* Header bar */}
       <div style={{
         display: "flex", justifyContent: "space-between", alignItems: "center",
-        background: "#1E293B", border: "1px solid #334155", borderRadius: 12,
+        background: "#F8FAFC", border: "1px solid #334155", borderRadius: 12,
         padding: "12px 16px", marginBottom: 14,
       }}>
         <span style={{ fontSize: 12, color: "#94A3B8" }}>📄 Read-only document log — grouped by admin↔client connection (oldest first)</span>
         <span style={{ fontSize: 12, color: "#94A3B8" }}>
-          <strong style={{ color: "#fff" }}>{visibleGroups.length}</strong> connections · <strong style={{ color: "#fff" }}>{totalDocs}</strong> docs
+          <strong style={{ color: "#0F172A" }}>{visibleGroups.length}</strong> connections · <strong style={{ color: "#0F172A" }}>{totalDocs}</strong> docs
         </span>
       </div>
 
       {visibleGroups.length === 0 ? (
-        <div style={{ padding: 40, textAlign: "center", color: "#64748B", background: "#1E293B", borderRadius: 12, border: "1px solid #334155" }}>
+        <div style={{ padding: 40, textAlign: "center", color: "#64748B", background: "#F8FAFC", borderRadius: 12, border: "1px solid #334155" }}>
           No connections / documents match your search.
         </div>
       ) : (
@@ -471,20 +472,20 @@ function ConnectionGroup({ index, group }: {
 
   return (
     <div style={{
-      background: "linear-gradient(180deg, #1E293B 0%, #1E293B 100%)",
+      background: "linear-gradient(180deg, #F8FAFC 0%, #FFFFFF 100%)",
       border: "1px solid #334155", borderRadius: 16, overflow: "hidden",
       boxShadow: "0 4px 16px rgba(0,0,0,0.25)",
     }}>
       {/* Section header: serial + admin → client */}
       <div style={{
         display: "flex", alignItems: "center", gap: 14, padding: "16px 18px",
-        background: "linear-gradient(90deg, rgba(167,139,250,0.10) 0%, rgba(52,211,153,0.10) 100%)",
+        background: "linear-gradient(90deg, #3801FF14 0%, rgba(52,211,153,0.10) 100%)",
         borderBottom: "1px solid #334155",
       }}>
         {/* Serial number badge */}
         <div style={{
           width: 36, height: 36, borderRadius: 10,
-          background: "linear-gradient(135deg, #FACC15, #F59E0B)",
+          background: "linear-gradient(135deg, #3801FF, #5B2DFF)",
           color: "#0F172A", fontWeight: 900, fontSize: 14,
           display: "flex", alignItems: "center", justifyContent: "center",
           boxShadow: "0 4px 14px rgba(245,158,11,0.35)",
@@ -508,7 +509,7 @@ function ConnectionGroup({ index, group }: {
         {/* Animated arrow connector */}
         <div style={{
           display: "flex", alignItems: "center", gap: 4,
-          color: "#FBBF24", fontSize: 18, fontWeight: 800,
+          color: "#3801FF", fontSize: 18, fontWeight: 800,
           padding: "0 8px",
         }}>
           <span style={{ borderTop: "2px dashed #FBBF24", width: 20, height: 0 }} />
@@ -536,7 +537,7 @@ function ConnectionGroup({ index, group }: {
           minWidth: 110,
         }}>
           <div style={{ fontSize: 11, color: "#94A3B8", fontWeight: 700, letterSpacing: 0.4, textTransform: "uppercase" }}>Connected</div>
-          <div style={{ fontSize: 11, color: "#E2E8F0", fontWeight: 700 }}>{fmtDate(cn?.created_at)}</div>
+          <div style={{ fontSize: 11, color: "#0F172A", fontWeight: 700 }}>{fmtDate(cn?.created_at)}</div>
           <div style={{
             marginTop: 2, fontSize: 10, fontWeight: 800,
             background: docCount > 0 ? "#F472B622" : "#64748B22",
@@ -556,7 +557,7 @@ function ConnectionGroup({ index, group }: {
           {/* Vertical timeline rail */}
           <div style={{
             position: "absolute", left: 30, top: 16, bottom: 16, width: 2,
-            background: "linear-gradient(180deg, #A78BFA 0%, #34D399 100%)",
+            background: "linear-gradient(180deg, #3801FF 0%, #34D399 100%)",
             opacity: 0.25, borderRadius: 2,
           }} />
           {group.docs.map((d, i) => (
@@ -569,21 +570,21 @@ function ConnectionGroup({ index, group }: {
               {/* Timeline node */}
               <div style={{
                 width: 24, height: 24, borderRadius: "50%",
-                background: "#0F172A", border: "2px solid #FBBF24",
+                background: "#FFFFFF", border: "2px solid #FBBF24",
                 display: "flex", alignItems: "center", justifyContent: "center",
-                fontSize: 10, fontWeight: 800, color: "#FBBF24",
+                fontSize: 10, fontWeight: 800, color: "#3801FF",
                 flexShrink: 0, marginTop: 2, zIndex: 1,
                 boxShadow: "0 0 0 4px #1E293B",
               }}>{i + 1}</div>
               {/* Filename + meta */}
               <div style={{ flex: 1, minWidth: 0 }}>
-                <div style={{ fontSize: 14, fontWeight: 700, color: "#fff", display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
+                <div style={{ fontSize: 14, fontWeight: 700, color: "#0F172A", display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
                   <span style={{ fontSize: 14 }}>📎</span>
                   <span style={{ wordBreak: "break-word" }}>{d.filename}</span>
                   {d.category && (
                     <span style={{
                       fontSize: 10, fontWeight: 800,
-                      background: "#FBBF2422", color: "#FBBF24",
+                      background: "#3801FF22", color: "#3801FF",
                       padding: "2px 8px", borderRadius: 6,
                     }}>{d.category}</span>
                   )}
@@ -592,7 +593,7 @@ function ConnectionGroup({ index, group }: {
                   <span style={{ display: "flex", alignItems: "center", gap: 4 }}>
                     <span style={{ fontSize: 10 }}>🕐</span>{fmtDateLong(d.uploaded_at)}
                   </span>
-                  <span style={{ color: "#475569" }}>·</span>
+                  <span style={{ color: "#CBD5E1" }}>·</span>
                   <span>{fmtSize(d.size_bytes)}</span>
                 </div>
               </div>
@@ -617,7 +618,7 @@ function fmtDateLong(iso?: string) {
 
 function StatCard({ label, value, color }: { label: string; value: number; color: string }) {
   return (
-    <div style={{ background: "#1E293B", border: `1px solid ${color}33`, borderRadius: 14, padding: 16 }}>
+    <div style={{ background: "#F8FAFC", border: `1px solid ${color}33`, borderRadius: 14, padding: 16 }}>
       <div style={{ fontSize: 11, fontWeight: 700, color: "#94A3B8", textTransform: "uppercase", letterSpacing: 0.6 }}>{label}</div>
       <div style={{ fontSize: 30, fontWeight: 800, color, marginTop: 4 }}>{value}</div>
     </div>
@@ -630,8 +631,8 @@ function TabBtn({ active, children, onClick }: { active: boolean; children: any;
       padding: "10px 16px", borderRadius: "10px 10px 0 0",
       border: "1px solid #1E293B",
       borderBottom: active ? "2px solid #FACC15" : "1px solid #1E293B",
-      background: active ? "#1E293B" : "transparent",
-      color: active ? "#FACC15" : "#94A3B8",
+      background: active ? "#F8FAFC" : "transparent",
+      color: active ? "#3801FF" : "#94A3B8",
       fontWeight: 700, fontSize: 13, cursor: "pointer",
     }}>{children}</button>
   );
@@ -641,9 +642,9 @@ function SegBtn({ active, children, onClick }: { active: boolean; children: any;
   return (
     <button onClick={onClick} style={{
       padding: "8px 14px", borderRadius: 8,
-      border: "1px solid " + (active ? "#FACC15" : "#334155"),
-      background: active ? "#FACC1522" : "transparent",
-      color: active ? "#FACC15" : "#94A3B8",
+      border: "1px solid " + (active ? "#3801FF" : "#E2E8F0"),
+      background: active ? "#3801FF22" : "transparent",
+      color: active ? "#3801FF" : "#94A3B8",
       fontWeight: 700, fontSize: 12, cursor: "pointer",
     }}>{children}</button>
   );
@@ -651,7 +652,7 @@ function SegBtn({ active, children, onClick }: { active: boolean; children: any;
 
 function RoleBadge({ role }: { role: string }) {
   const map: Record<string, { bg: string; fg: string; label: string }> = {
-    superadmin: { bg: "#FBBF2433", fg: "#FBBF24", label: "Super Admin" },
+    superadmin: { bg: "#FBBF2433", fg: "#3801FF", label: "Super Admin" },
     admin:      { bg: "#A78BFA33", fg: "#A78BFA", label: "Admin" },
     client:     { bg: "#34D39933", fg: "#34D399", label: "Client" },
   };
@@ -675,11 +676,11 @@ function ClientChips({ items, kind = "client" }: { items: { id: string; name: st
 
 function Table({ head, rows }: { head: any[]; rows: any[][] }) {
   return (
-    <div style={{ background: "#1E293B", border: "1px solid #334155", borderRadius: 12, overflow: "hidden" }}>
+    <div style={{ background: "#F8FAFC", border: "1px solid #334155", borderRadius: 12, overflow: "hidden" }}>
       <div style={{ overflowX: "auto" }}>
         <table style={{ width: "100%", borderCollapse: "collapse", minWidth: 720 }}>
           <thead>
-            <tr style={{ background: "#0F172A" }}>
+            <tr style={{ background: "#FFFFFF" }}>
               {head.map((h, i) => (
                 <th key={i} style={{ textAlign: "left", padding: "12px 16px", fontSize: 11, color: "#94A3B8", textTransform: "uppercase", letterSpacing: 0.6, borderBottom: "1px solid #334155" }}>{h}</th>
               ))}
@@ -691,7 +692,7 @@ function Table({ head, rows }: { head: any[]; rows: any[][] }) {
             ) : rows.map((r, i) => (
               <tr key={i} style={{ borderBottom: "1px solid #334155" }}>
                 {r.map((c, j) => (
-                  <td key={j} style={{ padding: "12px 16px", fontSize: 13, color: "#E2E8F0", verticalAlign: "top" }}>{c}</td>
+                  <td key={j} style={{ padding: "12px 16px", fontSize: 13, color: "#0F172A", verticalAlign: "top" }}>{c}</td>
                 ))}
               </tr>
             ))}
@@ -708,14 +709,14 @@ function Overview({ data }: { data: SADashboard }) {
   const topC = [...clients].sort((a, b) => b.doc_count - a.doc_count).slice(0, 5);
   return (
     <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(320px, 1fr))", gap: 16 }}>
-      <div style={{ background: "#1E293B", border: "1px solid #334155", borderRadius: 12, padding: 18 }}>
-        <h3 style={{ fontSize: 14, color: "#FBBF24", margin: 0 }}>🏆 Top Admins (by activity)</h3>
+      <div style={{ background: "#F8FAFC", border: "1px solid #334155", borderRadius: 12, padding: 18 }}>
+        <h3 style={{ fontSize: 14, color: "#3801FF", margin: 0 }}>🏆 Top Admins (by activity)</h3>
         <div style={{ marginTop: 12, display: "flex", flexDirection: "column", gap: 10 }}>
           {topA.length === 0 ? <div style={{ color: "#64748B" }}>None</div> : topA.map((a) => (
             <div key={a.id} style={{ display: "flex", alignItems: "center", gap: 10 }}>
               <div style={{ width: 30, height: 30, borderRadius: 8, background: "#A78BFA22", color: "#A78BFA", display: "flex", alignItems: "center", justifyContent: "center", fontWeight: 800 }}>{a.name?.[0]?.toUpperCase() || "?"}</div>
               <div style={{ flex: 1, minWidth: 0 }}>
-                <div style={{ fontWeight: 700, color: "#fff" }}>{a.name}</div>
+                <div style={{ fontWeight: 700, color: "#0F172A" }}>{a.name}</div>
                 <div style={{ fontSize: 11, color: "#94A3B8", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{a.email}</div>
               </div>
               <div style={{ fontSize: 11, color: "#94A3B8" }}><strong style={{ color: "#A78BFA" }}>{a.client_count}</strong> clients</div>
@@ -724,14 +725,14 @@ function Overview({ data }: { data: SADashboard }) {
           ))}
         </div>
       </div>
-      <div style={{ background: "#1E293B", border: "1px solid #334155", borderRadius: 12, padding: 18 }}>
+      <div style={{ background: "#F8FAFC", border: "1px solid #334155", borderRadius: 12, padding: 18 }}>
         <h3 style={{ fontSize: 14, color: "#34D399", margin: 0 }}>📥 Top Clients (by docs received)</h3>
         <div style={{ marginTop: 12, display: "flex", flexDirection: "column", gap: 10 }}>
           {topC.length === 0 ? <div style={{ color: "#64748B" }}>None</div> : topC.map((c) => (
             <div key={c.id} style={{ display: "flex", alignItems: "center", gap: 10 }}>
               <div style={{ width: 30, height: 30, borderRadius: 8, background: "#34D39922", color: "#34D399", display: "flex", alignItems: "center", justifyContent: "center", fontWeight: 800 }}>{c.name?.[0]?.toUpperCase() || "?"}</div>
               <div style={{ flex: 1, minWidth: 0 }}>
-                <div style={{ fontWeight: 700, color: "#fff" }}>{c.name}</div>
+                <div style={{ fontWeight: 700, color: "#0F172A" }}>{c.name}</div>
                 <div style={{ fontSize: 11, color: "#94A3B8", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{c.email}</div>
               </div>
               <div style={{ fontSize: 11, color: "#94A3B8" }}><strong style={{ color: "#A78BFA" }}>{c.admin_count}</strong> admins</div>
@@ -740,13 +741,13 @@ function Overview({ data }: { data: SADashboard }) {
           ))}
         </div>
       </div>
-      <div style={{ background: "#1E293B", border: "1px solid #334155", borderRadius: 12, padding: 18, gridColumn: "1 / -1" }}>
+      <div style={{ background: "#F8FAFC", border: "1px solid #334155", borderRadius: 12, padding: 18, gridColumn: "1 / -1" }}>
         <h3 style={{ fontSize: 14, color: "#60A5FA", margin: 0 }}>🕒 Recent Connections (last 5)</h3>
         <div style={{ marginTop: 12, display: "flex", flexDirection: "column", gap: 10 }}>
           {connections.slice(0, 5).map((cn) => (
             <div key={cn.id} style={{ display: "flex", alignItems: "center", gap: 10, fontSize: 13 }}>
               <strong style={{ color: "#A78BFA" }}>{cn.admin_name}</strong>
-              <span style={{ color: "#FBBF24" }}>→</span>
+              <span style={{ color: "#3801FF" }}>→</span>
               <strong style={{ color: "#34D399" }}>{cn.client_name}</strong>
               <span style={{ flex: 1, color: "#64748B", fontSize: 11 }}>{cn.doc_count} docs</span>
               <span style={{ color: "#94A3B8", fontSize: 11 }}>{fmtDate(cn.created_at)}</span>
