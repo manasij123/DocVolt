@@ -179,11 +179,20 @@ export default function CategoriesScreen() {
         <GradientButton
           icon="add-circle"
           title="New Category"
-          onPress={() => setCreating(true)}
+          onPress={() => {
+            if (!clientId || String(clientId) === "undefined") {
+              toast?.show?.(
+                "Client ID missing — please go back to the client list and re-open this client.",
+                { kind: "error", icon: "alert-circle" }
+              );
+              return;
+            }
+            setCreating(true);
+          }}
         />
       </View>
 
-      {(creating || editingCat) && clientId && (
+      {(creating || editingCat) && clientId && String(clientId) !== "undefined" && (
         <CategoryEditorModal
           clientId={String(clientId)}
           existing={editingCat}
