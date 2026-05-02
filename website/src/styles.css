@@ -1365,7 +1365,7 @@ main {
 .dv-b-ic { font-size: 15px; }
 .dv-apk-inline {
   display: inline-flex; align-items: center; gap: 10px;
-  padding: 8px 16px 8px 10px; border-radius: 12px;
+  padding: 4px 14px 4px 6px; border-radius: 12px;
   background: #FFFFFF;
   border: 1.5px solid #CBD5E1;
   color: #0F172A; font-weight: 700; font-size: 14px;
@@ -1378,8 +1378,12 @@ main {
   border-color: #6366F1;
   box-shadow: 0 6px 18px rgba(99,102,241,0.18);
 }
+/* APK source PNG is wide (≈1.98:1). Lock by HEIGHT and let width auto-scale,
+   so we can grow the icon visually while keeping the button height tight. */
 .dv-apk-inline-icon {
-  width: 32px; height: 32px;
+  height: 44px;
+  width: auto;
+  max-width: 100px;
   object-fit: contain;
   display: block;
 }
@@ -1797,12 +1801,20 @@ main {
     font-size: 12px;
     font-weight: 700;
     text-decoration: none;
-    padding: 6px 10px;
+    padding: 4px 10px 4px 6px;
     border-radius: 10px;
     box-shadow: 0 2px 6px rgba(15,23,42,0.05);
     letter-spacing: 0.05px;
   }
-  .dv-nav-watch-mobile img { width: 18px; height: 18px; }
+  /* APK source PNG is wide (≈1.98:1). Lock by HEIGHT, let width auto-scale,
+     so the icon shows in its natural aspect ratio (no horizontal squish). */
+  .dv-nav-watch-mobile img {
+    height: 28px;
+    width: auto;
+    max-width: 60px;
+    object-fit: contain;
+    display: block;
+  }
   .dv-nav-inner { gap: 10px; padding: 12px 14px; }
   .dv-brand-mark { height: 38px; width: 38px; }
   .dv-brand-wordmark { height: 24px; }
