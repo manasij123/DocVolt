@@ -180,31 +180,30 @@ export default function CategoriesScreen() {
           icon="add-circle"
           title="New Category"
           onPress={() => {
-            if (!clientId || String(clientId) === "undefined") {
-              toast?.show?.(
-                "Client ID missing — please go back to the client list and re-open this client.",
-                { kind: "error", icon: "alert-circle" }
-              );
-              return;
-            }
+            console.log("[categories] New Category tapped, clientId=", clientId);
             setCreating(true);
           }}
         />
       </View>
 
-      {(creating || editingCat) && clientId && String(clientId) !== "undefined" && (
-        <CategoryEditorModal
-          clientId={String(clientId)}
-          existing={editingCat}
-          onClose={() => { setCreating(false); setEditingCat(null); }}
-          onSaved={() => { setCreating(false); setEditingCat(null); reload(); toast?.show?.(editingCat ? "Saved" : "Created", { kind: "success", icon: "checkmark-circle" }); }}
-        />
-      )}
+      {/* Modal is ALWAYS mounted and controlled by `visible` prop — this is the
+          standard React Native pattern and avoids any cases where a conditional
+          render could cause the Modal not to appear. `key` forces a fresh
+          mount per open, so form state (name/color/icon) resets reliably. */}
+      <CategoryEditorModal
+        key={editingCat?.id || (creating ? "new" : "idle")}
+        visible={creating || !!editingCat}
+        clientId={clientId ? String(clientId) : ""}
+        existing={editingCat}
+        onClose={() => { setCreating(false); setEditingCat(null); }}
+        onSaved={() => { setCreating(false); setEditingCat(null); reload(); toast?.show?.(editingCat ? "Saved" : "Created", { kind: "success", icon: "checkmark-circle" }); }}
+      />
     </View>
   );
 }
 
-function CategoryEditorModal({ clientId, existing, onClose, onSaved }: {
+function CategoryEditorModal({ visible, clientId, existing, onClose, onSaved }: {
+  visible: boolean;
   clientId: string;
   existing: Category | null;
   onClose: () => void;
@@ -254,6 +253,10 @@ function CategoryEditorModal({ clientId, existing, onClose, onSaved }: {
       setErr("Name is required");
       return;
     }
+    if (!clientId || clientId === "undefined") {
+      setErr("Client ID missing. Please close this dialog, go back to the client list and re-open this client.");
+      return;
+    }
     setSaving(true);
     setErr(null);
     const keywords = keywordsRaw.split(",").map((k) => k.trim()).filter(Boolean);
@@ -284,7 +287,7 @@ function CategoryEditorModal({ clientId, existing, onClose, onSaved }: {
   };
 
   return (
-    <Modal visible animationType="slide" transparent onRequestClose={onClose}>
+    <Modal visible={visible} animationType="slide" transparent onRequestClose={onClose}>
       <KeyboardAvoidingView
         behavior={Platform.OS === "ios" ? "padding" : "height"}
         style={s.modalBack}
