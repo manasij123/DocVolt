@@ -1584,13 +1584,29 @@ WEBSITE_DIR = next((p for p in WEBSITE_DIR_CANDIDATES if p.exists()), None)
 class SPAStaticFiles(StaticFiles):
     async def get_response(self, path: str, scope):
         try:
-            return await super().get_response(path, scope)
+            response = await super().get_response(path, scope)
         except StarletteHTTPException as ex:
             if ex.status_code == 404:
                 index_file = Path(self.directory) / "index.html"
                 if index_file.exists():
-                    return FileResponse(index_file)
-            raise
+                    response = FileResponse(index_file)
+                else:
+                    raise
+            else:
+                raise
+        # Never cache the HTML shell so browsers always pick up the latest
+        # hashed asset references after a new build. Hashed assets under
+        # /assets/* keep their default long-lived cache (their filename
+        # changes when contents change).
+        is_html = path.endswith(".html") or path in ("", "/") or "/" not in path.rstrip("/")
+        try:
+            if is_html and hasattr(response, "headers"):
+                response.headers["Cache-Control"] = "no-store, no-cache, must-revalidate, max-age=0"
+                response.headers["Pragma"] = "no-cache"
+                response.headers["Expires"] = "0"
+        except Exception:
+            pass
+        return response
 
 
 if WEBSITE_DIR is not None:
