@@ -14,7 +14,7 @@ import {
   Image,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
-import { useLocalSearchParams } from "expo-router";
+import { useLocalSearchParams, useGlobalSearchParams } from "expo-router";
 import {
   Category,
   listCategories,
@@ -34,7 +34,13 @@ import GradientButton from "../../../src/GradientButton";
 import PressableScale from "../../../src/PressableScale";
 
 export default function CategoriesScreen() {
-  const { clientId } = useLocalSearchParams<{ clientId: string }>();
+  const localParams = useLocalSearchParams<{ clientId: string }>();
+  const globalParams = useGlobalSearchParams<{ clientId: string }>();
+  // On Expo Router web, useLocalSearchParams in nested tab screens can return
+  // `undefined` even though the URL clearly contains [clientId]. useGlobalSearchParams
+  // is more reliable. Fall back from local -> global.
+  const rawClientId = (localParams.clientId ?? globalParams.clientId) as string | string[] | undefined;
+  const clientId = Array.isArray(rawClientId) ? rawClientId[0] : rawClientId;
   const [cats, setCats] = useState<Category[]>([]);
   const [loading, setLoading] = useState(true);
   const [editingCat, setEditingCat] = useState<Category | null>(null);

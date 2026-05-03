@@ -22,7 +22,7 @@ import { LinearGradient } from "expo-linear-gradient";
 import PressableScale from "../../../src/PressableScale";
 import GradientButton from "../../../src/GradientButton";
 import { useDocsSocket } from "../../../src/useDocsSocket";
-import { useLocalSearchParams } from "expo-router";
+import { useLocalSearchParams, useGlobalSearchParams } from "expo-router";
 
 const MONTHS = [
   { v: 1, l: "Jan" }, { v: 2, l: "Feb" }, { v: 3, l: "Mar" }, { v: 4, l: "Apr" },
@@ -31,7 +31,10 @@ const MONTHS = [
 ];
 
 export default function ManageScreen() {
-  const { clientId } = useLocalSearchParams<{ clientId: string }>();
+  const localParams = useLocalSearchParams<{ clientId: string }>();
+  const globalParams = useGlobalSearchParams<{ clientId: string }>();
+  const rawClientId = (localParams.clientId ?? globalParams.clientId) as string | string[] | undefined;
+  const clientId = Array.isArray(rawClientId) ? rawClientId[0] : rawClientId;
   const [docs, setDocs] = useState<DocumentMeta[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
