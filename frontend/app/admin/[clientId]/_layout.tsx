@@ -6,6 +6,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import api, { ClientRow, initials, colorFromString } from "../../../src/api";
 import { colors } from "../../../src/theme";
 import MobileDrawer, { DrawerItem } from "../../../src/MobileDrawer";
+import { SelectionProvider } from "../../../src/Selection";
 
 function Header({ onMenu }: { onMenu: () => void }) {
   const router = useRouter();
@@ -79,36 +80,38 @@ export default function PerClientLayout() {
   ];
 
   return (
-    <View style={{ flex: 1, backgroundColor: "#F7F8FC" }}>
-      <Header onMenu={() => setOpen(true)} />
-      <Tabs
-        screenOptions={{
-          headerShown: false,
-          tabBarActiveTintColor: colors.primary,
-          tabBarInactiveTintColor: "#64748B",
-          tabBarStyle: {
-            backgroundColor: "#fff",
-            borderTopColor: "#EDEEF2",
-            height: 70,
-            paddingTop: 8,
-            paddingBottom: 10,
-          },
-          tabBarLabelStyle: { fontSize: 11, fontWeight: "700" },
-        }}
-      >
-        <Tabs.Screen name="upload" options={{ title: "Upload", tabBarIcon: ({ color, focused }) => <Ionicons name={focused ? "cloud-upload" : "cloud-upload-outline"} size={22} color={color} /> }} />
-        <Tabs.Screen name="manage" options={{ title: "Manage", tabBarIcon: ({ color, focused }) => <Ionicons name={focused ? "settings" : "settings-outline"} size={22} color={color} /> }} />
-        <Tabs.Screen name="categories" options={{ title: "Categories", tabBarIcon: ({ color, focused }) => <Ionicons name={focused ? "pricetags" : "pricetags-outline"} size={22} color={color} /> }} />
-        <Tabs.Screen name="bulk-upload" options={{ href: null }} />
-      </Tabs>
-      <MobileDrawer
-        open={open}
-        onClose={() => setOpen(false)}
-        title="Admin Console"
-        subtitle={client?.name ? `Viewing ${client.name}` : undefined}
-        items={items}
-      />
-    </View>
+    <SelectionProvider>
+      <View style={{ flex: 1, backgroundColor: "#F7F8FC" }}>
+        <Header onMenu={() => setOpen(true)} />
+        <Tabs
+          screenOptions={{
+            headerShown: false,
+            tabBarActiveTintColor: colors.primary,
+            tabBarInactiveTintColor: "#64748B",
+            tabBarStyle: {
+              backgroundColor: "#fff",
+              borderTopColor: "#EDEEF2",
+              height: 70,
+              paddingTop: 8,
+              paddingBottom: 10,
+            },
+            tabBarLabelStyle: { fontSize: 11, fontWeight: "700" },
+          }}
+        >
+          <Tabs.Screen name="index" options={{ href: null }} />
+          <Tabs.Screen name="upload" options={{ title: "Upload", tabBarIcon: ({ color, focused }) => <Ionicons name={focused ? "cloud-upload" : "cloud-upload-outline"} size={22} color={color} /> }} />
+          <Tabs.Screen name="manage" options={{ title: "Manage", tabBarIcon: ({ color, focused }) => <Ionicons name={focused ? "settings" : "settings-outline"} size={22} color={color} /> }} />
+          <Tabs.Screen name="categories" options={{ title: "Categories", tabBarIcon: ({ color, focused }) => <Ionicons name={focused ? "pricetags" : "pricetags-outline"} size={22} color={color} /> }} />
+          <Tabs.Screen name="bulk-upload" options={{ href: null }} />
+        </Tabs>
+        <MobileDrawer
+          open={open}
+          onClose={() => setOpen(false)}
+          title="Admin Console"
+          items={items}
+        />
+      </View>
+    </SelectionProvider>
   );
 }
 

@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useRef, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   View,
   Text,
@@ -18,6 +18,7 @@ import PressableScale from "./PressableScale";
 import { useDocsSocket } from "./useDocsSocket";
 import { useResponsive } from "./useResponsive";
 import { useToast } from "./Toast";
+import { useSelection } from "./Selection";
 
 type LegacyKey = "MONTHLY_RETURN" | "FORWARDING_LETTER" | "IFA_REPORT" | "OTHERS";
 
@@ -166,14 +167,23 @@ export default function CategoryView({ category, cat, adminId }: Props) {
   const [activeYear, setActiveYear] = useState<number | null>(null);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
-  // Multi-select state for "Select multiple → Share as separate PDFs"
-  const [selecting, setSelecting] = useState(false);
-  const [selected, setSelected] = useState<Set<string>>(new Set());
+  // Multi-select state — now shared across categories via the global
+  // SelectionProvider (see src/Selection.tsx). Falls back to a no-op
+  // stub when no provider is present (admin screens still use local
+  // selection for now).
+  const selection = useSelection();
+  const selecting = selection.mode === "selecting";
+  const selected = useMemo(() => {
+    const s = new Set<string>();
+    selection.picks.forEach((_, id) => s.add(id));
+    return s;
+  }, [selection.picks]);
   const [sharing, setSharing] = useState(false);
   const toast = useToast();
-  const exitSelection = () => { setSelecting(false); setSelected(new Set()); };
+  const exitSelection = () => selection.exitSelecting();
   const toggleId = (id: string) => {
-    setSelected((p) => { const n = new Set(p); n.has(id) ? n.delete(id) : n.add(id); return n; });
+    const doc = documents.find((d) => d.id === id);
+    if (doc) selection.toggle(doc);
   };
 
   const { isDesktop, docColumns, listMaxWidth } = useResponsive();
@@ -338,8 +348,8 @@ export default function CategoryView({ category, cat, adminId }: Props) {
                   selected={selected.has(item.id)}
                   onToggle={() => toggleId(item.id)}
                   onLongPress={() => {
-                    if (!selecting) setSelecting(true);
-                    setSelected((p) => new Set(p).add(item.id));
+                    if (!selecting) selection.enterSelecting();
+                    selection.select(item);
                   }}
                 />
               </View>
@@ -351,7 +361,7 @@ export default function CategoryView({ category, cat, adminId }: Props) {
                 {!selecting ? (
                   <PressableScale
                     haptic="light"
-                    onPress={() => setSelecting(true)}
+                    onPress={() => selection.enterSelecting()}
                     testID="btn-select-multi"
                   >
                     <View style={styles.selectBtn}>
@@ -364,12 +374,14 @@ export default function CategoryView({ category, cat, adminId }: Props) {
                     <PressableScale
                       haptic="light"
                       onPress={() => {
+                        // "Select all in this category" should only apply
+                        // to visible docs (current year filter). Respects
+                        // the cross-category selection from other tabs.
                         const allSel = filtered.length > 0 && filtered.every((d) => selected.has(d.id));
-                        setSelected((p) => {
-                          const n = new Set(p);
-                          for (const d of filtered) allSel ? n.delete(d.id) : n.add(d.id);
-                          return n;
-                        });
+                        for (const d of filtered) {
+                          if (allSel) selection.unselect(d.id);
+                          else selection.select(d);
+                        }
                       }}
                     >
                       <View style={styles.selectBtn}>
@@ -383,16 +395,17 @@ export default function CategoryView({ category, cat, adminId }: Props) {
                     <PressableScale
                       haptic="medium"
                       onPress={async () => {
-                        if (selected.size === 0 || sharing) return;
+                        // Share ALL picks — not just the ones in the
+                        // currently-active category. This is what gives
+                        // the user the "select across categories, then
+                        // share once" flow they asked for.
+                        const allPicks = selection.list;
+                        if (allPicks.length === 0 || sharing) return;
                         setSharing(true);
                         try {
                           const tk = await getToken();
-                          // Pass full DocumentMeta for each selected id so the
-                          // receiving app (WhatsApp / Mail / Drive) shows the
-                          // original PDF name instead of the raw UUID.
-                          const selectedDocs = documents.filter((d) => selected.has(d.id));
-                          await shareDocumentsBulk(selectedDocs, tk);
-                          toast.show(`Shared ${selected.size} document${selected.size !== 1 ? "s" : ""}`, { kind: "success", icon: "share-social" });
+                          await shareDocumentsBulk(allPicks, tk);
+                          toast.show(`Shared ${allPicks.length} document${allPicks.length !== 1 ? "s" : ""}`, { kind: "success", icon: "share-social" });
                           exitSelection();
                         } catch (e: any) {
                           toast.show(e?.message || "Share failed", { kind: "error" });
@@ -400,18 +413,18 @@ export default function CategoryView({ category, cat, adminId }: Props) {
                           setSharing(false);
                         }
                       }}
-                      disabled={selected.size === 0 || sharing}
+                      disabled={selection.count === 0 || sharing}
                       testID="btn-share-multi"
                     >
                       <LinearGradient
-                        colors={selected.size === 0 ? ["#94A3B8", "#94A3B8"] : ["#3B82F6", "#8B5CF6"]}
+                        colors={selection.count === 0 ? ["#94A3B8", "#94A3B8"] : ["#3B82F6", "#8B5CF6"]}
                         start={{ x: 0, y: 0 }}
                         end={{ x: 1, y: 1 }}
                         style={styles.shareMultiBtn}
                       >
                         <Ionicons name={sharing ? "hourglass" : "share-social"} size={16} color="#fff" />
                         <Text style={styles.shareMultiText}>
-                          {sharing ? "Preparing…" : `Share (${selected.size})`}
+                          {sharing ? "Preparing…" : `Share (${selection.count})`}
                         </Text>
                       </LinearGradient>
                     </PressableScale>

@@ -6,6 +6,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import api, { ConnectedAdmin, initials, colorFromString } from "../../../src/api";
 import { colors } from "../../../src/theme";
 import MobileDrawer, { DrawerItem } from "../../../src/MobileDrawer";
+import { SelectionProvider } from "../../../src/Selection";
 
 function Header({ onMenu }: { onMenu: () => void }) {
   const router = useRouter();
@@ -67,16 +68,18 @@ export default function PerAdminLayout() {
   ];
 
   return (
-    <View style={{ flex: 1, backgroundColor: "#F7F8FC" }}>
-      <Header onMenu={() => setOpen(true)} />
-      <Stack screenOptions={{ headerShown: false }} />
-      <MobileDrawer
-        open={open}
-        onClose={() => setOpen(false)}
-        title="Client Console"
-        items={items}
-      />
-    </View>
+    <SelectionProvider>
+      <View style={{ flex: 1, backgroundColor: "#F7F8FC" }}>
+        <Header onMenu={() => setOpen(true)} />
+        <Stack screenOptions={{ headerShown: false }} />
+        <MobileDrawer
+          open={open}
+          onClose={() => setOpen(false)}
+          title="Client Console"
+          items={items}
+        />
+      </View>
+    </SelectionProvider>
   );
 }
 

@@ -71,12 +71,21 @@ export default function AdminHome() {
 
   useEffect(() => {
     if (authLoading) return;
-    if (!user || user.role !== "admin") {
+    if (!user) {
+      // User just logged out — go straight to landing so we don't briefly
+      // render this screen with null user (which was crashing on native).
+      router.replace("/");
+      return;
+    }
+    if (user.role !== "admin") {
       router.replace("/admin/login");
     }
   }, [authLoading, user]);
 
   const reload = async () => {
+    // Skip API calls when the user is gone (logout in flight) — /clients
+    // would 401 and cause extra errors mid-unmount.
+    if (!user) { setLoading(false); setRefreshing(false); return; }
     try {
       const r = await api.get<ClientRow[]>("/clients");
       setClients(r.data);
