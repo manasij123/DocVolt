@@ -1,10 +1,9 @@
 import { useEffect, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
-import api, { ConnectedAdmin, getToken, getUser, logout, initials, colorFromString } from "../api";
-import { Ic } from "../Icons";
+import api, { ConnectedAdmin, getToken, getUser, initials, colorFromString } from "../api";
 import { useDocsSocket } from "../useDocsSocket";
-import LiveBadge from "../LiveBadge";
 import ConnectModal from "../ConnectModal";
+import DashboardShell, { NavItem } from "../layout/DashboardShell";
 
 type Toast = { id: string; title: string; sub?: string; leaving?: boolean };
 
@@ -18,14 +17,22 @@ export default function ClientHome() {
   const [highlightId, setHighlightId] = useState<string | null>(null);
 
   useEffect(() => {
-    if (!getToken() || me?.role !== "client") { nav("/client/login", { replace: true }); return; }
+    if (!getToken() || me?.role !== "client") {
+      nav("/client/login", { replace: true });
+      return;
+    }
     reload();
+    // eslint-disable-next-line
   }, []);
 
   const reload = async () => {
     setLoading(true);
-    try { const r = await api.get<ConnectedAdmin[]>("/admins/connected"); setAdmins(r.data); }
-    finally { setLoading(false); }
+    try {
+      const r = await api.get<ConnectedAdmin[]>("/admins/connected");
+      setAdmins(r.data);
+    } finally {
+      setLoading(false);
+    }
   };
 
   const pushToast = (t: Omit<Toast, "id">) => {
@@ -40,7 +47,8 @@ export default function ClientHome() {
   const removeConnection = async (e: React.MouseEvent, a: ConnectedAdmin) => {
     e.preventDefault();
     e.stopPropagation();
-    if (!window.confirm(`Disconnect from ${a.name}?\n\nYou will no longer see their workspace.\nExisting documents are not deleted.`)) return;
+    if (!window.confirm(`Disconnect from ${a.name}?\n\nYou will no longer see their workspace.\nExisting documents are not deleted.`))
+      return;
     setAdmins((prev) => prev.filter((x) => x.id !== a.id));
     try {
       await api.delete(`/connections/${a.id}`);
@@ -65,79 +73,109 @@ export default function ClientHome() {
     }
   });
 
-  const onLogout = () => { logout(); nav("/", { replace: true }); };
+  const navItems: NavItem[] = [
+    {
+      to: "/client",
+      label: "My Admins",
+      icon: (
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" />
+          <circle cx="9" cy="7" r="4" />
+          <path d="M23 21v-2a4 4 0 0 0-3-3.87" />
+          <path d="M16 3.13a4 4 0 0 1 0 7.75" />
+        </svg>
+      ),
+      badge: admins.length || undefined,
+    },
+    {
+      to: "#connect",
+      label: "Connect with Admin",
+      onPress: () => setShowConnect(true),
+      icon: (
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          <circle cx="12" cy="12" r="10" />
+          <line x1="12" y1="8" x2="12" y2="16" />
+          <line x1="8" y1="12" x2="16" y2="12" />
+        </svg>
+      ),
+    },
+  ];
 
   return (
-    <div className="app-shell">
-      <header className="topbar">
-        <div className="container topbar-inner">
-          <div className="brand"><img src="/api/web/favicon.png" alt="DocVault" style={{ width: 32, height: 32, borderRadius: 8, objectFit: "cover", marginRight: 8 }} /> DocVault</div>
-          <div className="topbar-actions">
-            <LiveBadge />
-            <span className="who-pill light">{me?.name}</span>
-            <button className="icon-btn" title="Logout" onClick={onLogout} style={{ display: "inline-flex", alignItems: "center", justifyContent: "center" }}><Ic kind="logout" size={18} /></button>
-          </div>
+    <DashboardShell
+      role="client"
+      title="Client Console"
+      nav={navItems}
+      pageTitle={`Hello, ${me?.name?.split(" ")[0] || "there"}!`}
+      pageSubtitle={
+        admins.length === 0
+          ? "You're not connected with any admin yet. Tap 'Connect with Admin' on the left."
+          : `Connected with ${admins.length} admin${admins.length === 1 ? "" : "s"}. Tap any to open their documents.`
+      }
+      headerAction={
+        <button className="btn btn-primary btn-lg" onClick={() => setShowConnect(true)}>
+          ＋ Connect with Admin
+        </button>
+      }
+    >
+      {loading ? (
+        <div style={{ marginTop: 8 }}>
+          <div className="skeleton" />
+          <div className="skeleton" />
         </div>
-      </header>
-
-      <main className="container page-anim" style={{ padding: "24px 24px 60px" }}>
-        <div className="head-row">
-          <div>
-            <h1 style={{ fontSize: 28, fontWeight: 800, margin: "0 0 4px", letterSpacing: -0.5 }}>Hello, {me?.name?.split(" ")[0] || "there"}!</h1>
-            <p className="muted" style={{ marginTop: 0, marginBottom: 0 }}>
-              {admins.length === 0
-                ? "You're not connected with any admin yet. Tap '+ Connect with Admin' below."
-                : `Connected with ${admins.length} admin${admins.length === 1 ? "" : "s"}. Tap any to open their documents.`}
-            </p>
-          </div>
-          <button className="btn btn-primary btn-lg" onClick={() => setShowConnect(true)}>
+      ) : admins.length === 0 ? (
+        <div className="empty">
+          <div className="empty-icon">🔗</div>
+          <h3>Connect with your first admin</h3>
+          <p style={{ marginBottom: 14 }}>
+            Ask your admin for their email, then tap below to connect — you can be linked to multiple admins.
+          </p>
+          <button className="btn btn-primary" onClick={() => setShowConnect(true)}>
             ＋ Connect with Admin
           </button>
         </div>
-
-        {loading ? (
-          <div style={{ marginTop: 22 }}><div className="skeleton" /><div className="skeleton" /></div>
-        ) : admins.length === 0 ? (
-          <div className="empty">
-            <div className="empty-icon">🔗</div>
-            <h3>Connect with your first admin</h3>
-            <p style={{ marginBottom: 14 }}>Ask your admin for their email, then tap below to connect — you can be linked to multiple admins.</p>
-            <button className="btn btn-primary" onClick={() => setShowConnect(true)}>＋ Connect with Admin</button>
-          </div>
-        ) : (
-          <div className="client-grid" style={{ marginTop: 18 }}>
-            {admins.map((a) => (
-              <Link key={a.id} to={`/client/a/${a.id}`} className={`client-row admin-row ${highlightId === a.id ? "highlight" : ""}`}>
-                <div className="avatar admin" style={{ background: colorFromString(a.id) }}>{initials(a.name)}</div>
-                <div className="client-meta">
-                  <div className="client-name">{a.name}</div>
-                  <div className="client-email">Admin · {a.email}</div>
-                </div>
-                <div className="client-stats">
-                  <div className="stat-num">{a.doc_count}</div>
-                  <div className="stat-lbl">{a.doc_count === 1 ? "file" : "files"}</div>
-                </div>
-                <button
-                  type="button"
-                  className="row-remove-btn"
-                  onClick={(e) => removeConnection(e, a)}
-                  aria-label={`Disconnect from ${a.name}`}
-                  title="Disconnect"
-                >
-                  ×
-                </button>
-                <span className="client-arrow">→</span>
-              </Link>
-            ))}
-          </div>
-        )}
-      </main>
+      ) : (
+        <div className="client-grid">
+          {admins.map((a) => (
+            <Link
+              key={a.id}
+              to={`/client/a/${a.id}`}
+              className={`client-row admin-row ${highlightId === a.id ? "highlight" : ""}`}
+            >
+              <div className="avatar admin" style={{ background: colorFromString(a.id) }}>
+                {initials(a.name)}
+              </div>
+              <div className="client-meta">
+                <div className="client-name">{a.name}</div>
+                <div className="client-email">Admin · {a.email}</div>
+              </div>
+              <div className="client-stats">
+                <div className="stat-num">{a.doc_count}</div>
+                <div className="stat-lbl">{a.doc_count === 1 ? "file" : "files"}</div>
+              </div>
+              <button
+                type="button"
+                className="row-remove-btn"
+                onClick={(e) => removeConnection(e, a)}
+                aria-label={`Disconnect from ${a.name}`}
+                title="Disconnect"
+              >
+                ×
+              </button>
+              <span className="client-arrow">→</span>
+            </Link>
+          ))}
+        </div>
+      )}
 
       {showConnect && (
         <ConnectModal
           peerRole="admin"
           onClose={() => setShowConnect(false)}
-          onConnected={() => { setShowConnect(false); reload(); }}
+          onConnected={() => {
+            setShowConnect(false);
+            reload();
+          }}
         />
       )}
 
@@ -145,10 +183,13 @@ export default function ClientHome() {
         {toasts.map((t) => (
           <div key={t.id} className={`toast created ${t.leaving ? "leaving" : ""}`}>
             <span className="dot" />
-            <div className="body"><strong>{t.title}</strong>{t.sub && <small>{t.sub}</small>}</div>
+            <div className="body">
+              <strong>{t.title}</strong>
+              {t.sub && <small>{t.sub}</small>}
+            </div>
           </div>
         ))}
       </div>
-    </div>
+    </DashboardShell>
   );
 }
