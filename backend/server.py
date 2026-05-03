@@ -390,20 +390,54 @@ async def _learn_keywords(admin_id: str, client_id: str, category_id: str, filen
         },
     )
 
+def _token_idf(cats: List[dict]) -> Dict[str, float]:
+    """
+    Compute Inverse-Document-Frequency weight per token across categories.
+
+    A token that appears in MANY categories (e.g. "monthly", "report",
+    "statement" when most categories have these in their learned/manual
+    keywords) has LOW discrimination power — its IDF should be ≈ 0. A
+    token that appears in only 1 category has HIGH IDF (≈ log N).
+
+    This prevents the classic bug:
+        File "Monthly_IFA_Report.pdf" getting mis-routed to "Monthly Return"
+        simply because "monthly" was learned for that category — when in
+        reality "monthly" is also learned for many other categories and
+        carries no real signal.
+    """
+    import math as _m
+    N = max(1, len(cats))
+    df: Dict[str, int] = {}
+    for c in cats:
+        tokens = set()
+        tokens.update((c.get("keyword_weights") or {}).keys())
+        for k in (c.get("keywords") or []):
+            if isinstance(k, str):
+                tokens.add(k.lower())
+        for t in tokens:
+            df[t] = df.get(t, 0) + 1
+    idf: Dict[str, float] = {}
+    for t, d in df.items():
+        # smoothed IDF — never below 0.15 so common-but-not-universal tokens
+        # still contribute a tiny bit; drops to 0 only when d == N
+        idf[t] = max(0.0, _m.log((N + 1) / (d + 0.5)))
+    return idf
+
+
 async def _suggest_combined(
     admin_id: str, client_id: str, filename: str, file_path: Optional[str] = None,
 ) -> Optional[Tuple[dict, Dict[str, Any]]]:
     """
     Unified scoring that fuses two independent learning signals:
-      1. Filename-token score — learned `keyword_weights` + manual `keywords`
+      1. Filename-token score — learned `keyword_weights` + manual `keywords`,
+         IDF-weighted so common cross-category words are discounted.
       2. Content-template score — Jaccard similarity with stored
          `content_signatures` of past uploads to each category.
 
-    The filename & content signals complement each other — sometimes the
-    filename tells us "this is an invoice" even if the PDF text is mostly
-    numbers; other times the filename is garbage ("Scan001.pdf") but the
-    content is clearly a tax statement. By combining them we always pick the
-    *strongest available* signal.
+    The filename & content signals complement each other. When content is
+    successfully extracted but doesn't meaningfully match ANY category, we
+    apply a penalty so a lone weak filename match can't hijack the routing
+    (→ the caller falls back to Others).
 
     Returns (best_category, debug_info) or None if nothing scored.
     """
@@ -414,6 +448,7 @@ async def _suggest_combined(
         return None
 
     tokens = tokenize_filename(filename)
+    idf = _token_idf(cats)
 
     # Content signature (only if a file path was given)
     content_sig: List[str] = []
@@ -424,30 +459,38 @@ async def _suggest_combined(
         except Exception as e:
             logger.warning(f"content_sig extraction failed: {e}")
 
+    # Was enough content extracted to make the content signal meaningful?
+    # (Below this we treat content as "unavailable" rather than "mismatched".)
+    content_available = len(content_sig) >= 8
+
     best: Optional[dict] = None
     best_score = 0.0
     best_detail: Dict[str, Any] = {}
+    max_ct_score_any = 0.0  # track max content score across all cats
+
+    per_cat: List[Tuple[dict, float, float, List[str], int]] = []
 
     for c in cats:
-        # --- Filename score (0..∞)
+        # --- Filename score (IDF-weighted)
         fn_score = 0.0
         fn_matched: List[str] = []
         weights: Dict[str, int] = c.get("keyword_weights", {}) or {}
         manual = [k.lower() for k in (c.get("keywords") or []) if isinstance(k, str)]
         for t in tokens:
+            w = idf.get(t, 1.0)  # unseen tokens get full weight
             if t in weights:
-                fn_score += 1.0 + (weights[t] ** 0.5)
+                fn_score += (1.0 + (weights[t] ** 0.5)) * w
                 fn_matched.append(t)
             elif t in manual:
-                fn_score += 1.2
+                fn_score += 1.2 * w
                 fn_matched.append(t)
             else:
                 for mk in manual:
                     if len(mk) >= 4 and (mk in t or t in mk):
-                        fn_score += 0.5
+                        fn_score += 0.5 * w
                         break
 
-        # --- Content score (0..1 Jaccard, boosted by template popularity)
+        # --- Content score (0..1+ Jaccard, boosted by template popularity)
         ct_score = 0.0
         ct_templates = 0
         if content_sig:
@@ -457,25 +500,39 @@ async def _suggest_combined(
                 if j > 0:
                     ct_score = max(ct_score, j * (1.0 + 0.15 * min(5, int(s.get("count", 1)))))
                     ct_templates += int(s.get("count", 1))
+        if ct_score > max_ct_score_any:
+            max_ct_score_any = ct_score
 
-        # --- Fusion
-        # Filename weight 1.0, content weight 4.0 (content is more reliable
-        # when available, because it reflects the actual document template).
-        combined = fn_score * 1.0 + ct_score * 4.0
+        per_cat.append((c, fn_score, ct_score, fn_matched, ct_templates))
 
+    # If content is available but no category clears a minimal template
+    # similarity (0.12 Jaccard) then the document is probably a *new kind*.
+    # We penalize filename-only matches in that case so the caller routes
+    # to Others rather than mis-trusting a shared filename word.
+    content_says_unknown = content_available and max_ct_score_any < 0.12
+    fn_penalty = 0.35 if content_says_unknown else 1.0
+
+    for c, fn_score, ct_score, fn_matched, ct_templates in per_cat:
+        combined = fn_score * 1.0 * fn_penalty + ct_score * 4.0
         if combined > best_score:
             best_score = combined
             best = c
             best_detail = {
                 "filename_score": round(fn_score, 2),
+                "filename_score_penalised": round(fn_score * fn_penalty, 2),
                 "filename_matched": fn_matched,
                 "content_score": round(ct_score, 2),
                 "content_templates": ct_templates,
+                "content_available": content_available,
+                "content_says_unknown": content_says_unknown,
                 "combined_score": round(combined, 2),
             }
 
-    # Threshold — require meaningful combined signal
-    if not best or best_score < 0.8:
+    # Threshold — require meaningful combined signal.
+    # When content says "unknown", require an even stronger filename signal
+    # (effectively forcing Others fallback for ambiguous cases).
+    threshold = 1.5 if content_says_unknown else 0.8
+    if not best or best_score < threshold:
         return None
     return best, best_detail
 
@@ -513,12 +570,17 @@ _STRIP_PATTERNS = [
     re.compile(r"https?://\S+"),                                    # urls
 ]
 
-def extract_pdf_text(path: str, max_chars: int = 5000, max_pages: int = 2) -> str:
-    """Extract up to `max_chars` characters of text from the first `max_pages`."""
+def extract_pdf_text(path_or_bytes, max_chars: int = 5000, max_pages: int = 2) -> str:
+    """Extract up to `max_chars` characters of text from the first `max_pages`.
+    Accepts either a filesystem path (str) or the raw PDF bytes."""
     if not _PYPDF_OK:
         return ""
     try:
-        reader = PdfReader(path)
+        if isinstance(path_or_bytes, (bytes, bytearray)):
+            import io as _io
+            reader = PdfReader(_io.BytesIO(path_or_bytes))
+        else:
+            reader = PdfReader(path_or_bytes)
         chunks: List[str] = []
         total = 0
         for i, page in enumerate(reader.pages[:max_pages]):
@@ -529,7 +591,7 @@ def extract_pdf_text(path: str, max_chars: int = 5000, max_pages: int = 2) -> st
                 break
         return "\n".join(chunks)[:max_chars]
     except Exception as e:
-        logger.warning(f"extract_pdf_text failed for {path}: {e}")
+        logger.warning(f"extract_pdf_text failed: {e}")
         return ""
 
 def content_signature(text: str, max_tokens: int = 48) -> List[str]:
@@ -567,14 +629,16 @@ def _jaccard(a: List[str], b: List[str]) -> float:
     union = len(sa | sb)
     return inter / union if union else 0.0
 
-async def _learn_content(admin_id: str, client_id: str, category_id: str, file_path: str):
+async def _learn_content(admin_id: str, client_id: str, category_id: str, file_ref):
     """
     Extract content signature from the uploaded file and either merge it into
     an existing signature for this category (if highly similar) or append a
     brand-new signature (a new template).
+
+    `file_ref` may be a filesystem path OR raw bytes.
     """
     try:
-        text = extract_pdf_text(file_path)
+        text = extract_pdf_text(file_ref)
         sig = content_signature(text)
         if len(sig) < 8:   # not enough content to be useful
             return
@@ -700,12 +764,16 @@ async def _resolve_category_for_upload(
     filename: str,
     override_id: Optional[str],
     override_key: Optional[str],
+    file_bytes: Optional[bytes] = None,
 ) -> dict:
     """Pick the right category for an uploaded document.
     Priority:
       1. explicit category_id (validated belongs to the admin+client pair)
       2. explicit category_override legacy key (MONTHLY_RETURN, ...)
-      3. keyword match against the pair's categories
+      3. Combined ML scoring (filename IDF + PDF content Jaccard) — only
+         if the confidence is high enough. This is the only auto-routing
+         that considers the actual file contents, so it correctly handles
+         ambiguous filenames that share words like "monthly".
       4. fallback to OTHERS category (seeded if missing)
     Returns the category dict.
     """
@@ -719,18 +787,18 @@ async def _resolve_category_for_upload(
         for c in cats:
             if (c.get("key") or "").upper() == k:
                 return c
-    # keyword-based auto detect
-    lower = (filename or "").lower()
-    best: Optional[dict] = None
-    for c in cats:
-        for kw in (c.get("keywords") or []):
-            if kw and kw.lower() in lower:
-                best = c
-                break
-        if best:
-            break
-    if best:
-        return best
+
+    # ML-based auto-routing (filename + content). The suggester internally
+    # uses IDF-weighted filename scoring + Jaccard content matching, and
+    # enforces a confidence threshold — it returns None when the signal is
+    # weak or the content says "I haven't seen this kind of doc before".
+    try:
+        r = await _suggest_combined(admin_id, client_id, filename, file_bytes)
+        if r:
+            return r[0]
+    except Exception as e:
+        logger.warning(f"_resolve_category_for_upload ML step failed: {e}")
+
     # fallback OTHERS
     for c in cats:
         if c.get("key") == "OTHERS":
@@ -976,15 +1044,18 @@ async def upload_document(
         metadata={"content_type": "application/pdf", "doc_id": file_id},
     )
 
-    # Resolve category via the new per-client categories system (falls back to
-    # legacy keyword auto-detect + OTHERS). Also keeps the legacy `category`
-    # string populated for backward compatibility.
+    # Resolve category via the new per-client categories system — now
+    # content-aware: the resolver runs the ML combined scoring (filename
+    # IDF + PDF content Jaccard) and routes to OTHERS when confidence is
+    # low. This prevents the "Monthly_IFA Report" → wrongly placed into
+    # "Monthly Return" class of bugs.
     resolved_cat = await _resolve_category_for_upload(
         admin_id=current["id"],
         client_id=client_id,
         filename=file.filename,
         override_id=category_id,
         override_key=category_override,
+        file_bytes=contents,
     )
     detected_month, detected_year = extract_month_year(file.filename)
 
@@ -1020,7 +1091,7 @@ async def upload_document(
         # 🧠 Also learn the PDF's content fingerprint so next month's
         # similar-template upload auto-routes here.
         try:
-            await _learn_content(current["id"], client_id, doc["category_id"], str(abs_path))
+            await _learn_content(current["id"], client_id, doc["category_id"], contents)
         except Exception as e:
             logger.warning(f"learn_content failed: {e}")
 
@@ -1030,7 +1101,7 @@ async def upload_document(
     # content & filename both agree with the admin's choice.
     try:
         combined = await _suggest_combined(
-            current["id"], client_id, file.filename, str(abs_path),
+            current["id"], client_id, file.filename, contents,
         )
         if combined:
             best_cat, detail = combined
