@@ -94,12 +94,9 @@ export default function DashboardShell({
     <>
       <div className="ds-brand">
         <img
-          src="/api/web/logo.svg"
+          src="/api/web/favicon.png"
           alt="DocVault"
           className="ds-brand-logo"
-          width={40}
-          height={40}
-          decoding="async"
         />
         <div className="ds-brand-text">
           <div className="ds-brand-name">DocVault</div>

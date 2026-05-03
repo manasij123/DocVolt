@@ -62,7 +62,7 @@ export default function Landing() {
       <header className="dv-nav">
         <div className="dv-nav-inner">
           <Link to="/" className="dv-brand">
-            <img src="/api/web/logo.svg" alt="" className="dv-brand-mark" width={44} height={44} decoding="async" />
+            <img src="/api/web/logo.png" alt="" className="dv-brand-mark" />
             <img src="/api/web/wordmark.png" alt="DocVault" className="dv-brand-wordmark" />
           </Link>
           <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
@@ -97,7 +97,7 @@ export default function Landing() {
       {/* ─────── HERO — 3 columns: logo (L) + headline (M) + role cards (R) ─────── */}
       <section className="dv-hero-simple" id="hero">
         <div className="dv-hero-simple-left">
-          <img src="/api/web/logo.svg" alt="" className="dv-hero-logo-card" width={340} height={340} decoding="async" />
+          <img src="/api/web/logo.png" alt="" className="dv-hero-logo-card" />
           <p className="dv-hero-sub">
             DocVault helps teams and professionals securely store, organise and share PDFs
             with complete control and peace of mind.
