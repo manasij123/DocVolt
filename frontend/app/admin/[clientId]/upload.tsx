@@ -14,7 +14,7 @@ import * as DocumentPicker from "expo-document-picker";
 import { Ionicons } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
 import { colors, radius, shadow, categoryGradients } from "../../../src/theme";
-import { CATEGORY_LABELS, Category, listCategories, autoDetectCategoryId } from "../../../src/api";
+import { CATEGORY_LABELS, Category, listCategories, autoDetectCategoryId, suggestCategory } from "../../../src/api";
 import api, { getToken } from "../../../src/api";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import PressableScale from "../../../src/PressableScale";
@@ -84,6 +84,8 @@ export default function UploadScreen() {
 
   const [uploading, setUploading] = useState(false);
   const [lastUpload, setLastUpload] = useState<string | null>(null);
+  // 🧠 Learning-based suggestion info for the UI hint
+  const [suggestionInfo, setSuggestionInfo] = useState<{ source: "learned" | "local" | "none"; learnedCount?: number; matchedTokens?: string[] }>({ source: "none" });
 
   const cardFade = useRef(new Animated.Value(0)).current;
   const cardSlide = useRef(new Animated.Value(20)).current;
@@ -120,6 +122,7 @@ export default function UploadScreen() {
     setCategoryId("");
     setYear(new Date().getFullYear());
     setMonth(null);
+    setSuggestionInfo({ source: "none" });
   };
 
   const pick = async () => {
@@ -138,13 +141,36 @@ export default function UploadScreen() {
       mimeType: file.mimeType || "application/pdf",
     });
 
-    const cId = autoDetectCategoryId(name, cats);
+    // 🧠 Try learning-based suggestion first (server-side, includes learned
+    // weights from past uploads). Fall back to local heuristics.
+    let chosen = "";
+    let info: typeof suggestionInfo = { source: "none" };
+    try {
+      const tok = await getToken();
+      const r = await suggestCategory(String(clientId), name, tok || undefined);
+      if (r.suggested?.id) {
+        chosen = r.suggested.id;
+        info = {
+          source: (r.learned_count || 0) > 0 ? "learned" : "local",
+          learnedCount: r.learned_count || 0,
+          matchedTokens: r.matched_tokens || [],
+        };
+      }
+    } catch {
+      // server unreachable — ignore, use local fallback below
+    }
+    if (!chosen) {
+      chosen = autoDetectCategoryId(name, cats);
+      info = chosen ? { source: "local" } : { source: "none" };
+    }
+
     const my = detectMonthYear(name);
-    setDetectedCategoryId(cId);
+    setDetectedCategoryId(chosen);
     setDetectedYear(my.year);
     setDetectedMonth(my.month);
+    setSuggestionInfo(info);
 
-    setCategoryId(cId);
+    setCategoryId(chosen);
     if (my.year) setYear(my.year);
     setMonth(my.month);
 
@@ -304,6 +330,26 @@ export default function UploadScreen() {
               </Text>
             </View>
           </View>
+
+          {suggestionInfo.source === "learned" && (suggestionInfo.learnedCount || 0) > 0 && (
+            <View style={styles.learnedHint}>
+              <View style={styles.learnedBadge}>
+                <Text style={styles.learnedBadgeTxt}>🧠 AI</Text>
+              </View>
+              <Text style={styles.learnedTxt}>
+                Suggested by learning from{" "}
+                <Text style={styles.learnedTxtBold}>
+                  {suggestionInfo.learnedCount} past upload{suggestionInfo.learnedCount === 1 ? "" : "s"}
+                </Text>
+                {suggestionInfo.matchedTokens && suggestionInfo.matchedTokens.length > 0 && (
+                  <>
+                    {" · matched "}
+                    <Text style={styles.learnedTxtBold}>"{suggestionInfo.matchedTokens.slice(0, 3).join(", ")}"</Text>
+                  </>
+                )}
+              </Text>
+            </View>
+          )}
 
           <View style={styles.detectBody}>
             <View style={styles.detectRow}>
@@ -591,6 +637,28 @@ const styles = StyleSheet.create({
   },
   detectTitle: { fontSize: 15, fontWeight: "800", color: colors.textPrimary, letterSpacing: -0.2 },
   detectHint: { fontSize: 12, color: colors.textSecondary, marginTop: 2 },
+
+  // 🧠 AI-learned suggestion hint
+  learnedHint: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+    marginTop: 10,
+    padding: 10,
+    borderRadius: 10,
+    backgroundColor: "#F5F1FF",
+    borderWidth: 1,
+    borderColor: "#D6C8FF",
+  },
+  learnedBadge: {
+    paddingVertical: 4,
+    paddingHorizontal: 8,
+    borderRadius: 6,
+    backgroundColor: colors.primary,
+  },
+  learnedBadgeTxt: { color: "#fff", fontWeight: "800", fontSize: 10, letterSpacing: 0.3 },
+  learnedTxt: { flex: 1, color: "#1E1B4B", fontSize: 12, lineHeight: 16 },
+  learnedTxtBold: { fontWeight: "800", color: colors.primary },
 
   detectBody: {
     backgroundColor: colors.inputBg,

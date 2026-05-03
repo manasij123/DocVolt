@@ -18,7 +18,7 @@ import jwt
 from datetime import datetime, timezone, timedelta
 from typing import List, Optional
 
-from fastapi import FastAPI, APIRouter, UploadFile, File, Form, HTTPException, Depends, Request, WebSocket, WebSocketDisconnect
+from fastapi import FastAPI, APIRouter, UploadFile, File, Form, HTTPException, Depends, Request, WebSocket, WebSocketDisconnect, Query
 from fastapi.responses import StreamingResponse, FileResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from starlette.exceptions import HTTPException as StarletteHTTPException
@@ -332,7 +332,102 @@ def cat_to_meta(c: dict) -> dict:
         "sort_order": c.get("sort_order", 999),
         "is_default": bool(c.get("is_default", False)),
         "created_at": c.get("created_at"),
+        "learned_count": int(c.get("learned_count", 0)),
     }
+
+
+# ============================================================
+# Auto-categorize — Learning from admin's past category choices
+# ============================================================
+STOPWORDS = {
+    "a", "an", "the", "and", "or", "of", "for", "to", "in", "on", "at", "by",
+    "with", "from", "as", "is", "it", "this", "that", "these", "those",
+    "pdf", "doc", "docx", "scan", "copy", "final", "v1", "v2", "v3",
+    "jan", "feb", "mar", "apr", "may", "jun", "jul", "aug", "sep", "oct",
+    "nov", "dec", "january", "february", "march", "april", "june", "july",
+    "august", "september", "october", "november", "december",
+    "2020", "2021", "2022", "2023", "2024", "2025", "2026", "2027", "2028",
+    "mr", "mrs", "ms", "dr",
+}
+
+def tokenize_filename(name: str) -> List[str]:
+    """Split a filename into meaningful lowercase tokens for keyword matching."""
+    # drop extension & path
+    base = re.split(r"[\\/]", name or "")[-1]
+    base = re.sub(r"\.[a-zA-Z0-9]{1,5}$", "", base)
+    # replace separators with spaces
+    base = re.sub(r"[_\-\.\(\)\[\]\{\}]", " ", base)
+    # camelCase → camel Case
+    base = re.sub(r"([a-z])([A-Z])", r"\1 \2", base)
+    # split on whitespace / non-alphanumerics
+    parts = re.split(r"\s+", base.lower())
+    out: List[str] = []
+    for p in parts:
+        p = re.sub(r"[^a-z0-9]", "", p)
+        if len(p) < 2:       # drop single-char tokens
+            continue
+        if p.isdigit():      # drop pure numbers
+            continue
+        if p in STOPWORDS:
+            continue
+        out.append(p)
+    return out
+
+async def _learn_keywords(admin_id: str, client_id: str, category_id: str, filename: str):
+    """
+    Update keyword_weights for the given category based on filename tokens.
+    Called every time an admin assigns (or re-assigns) a category to a doc.
+    """
+    tokens = tokenize_filename(filename)
+    if not tokens:
+        return
+    inc = {f"keyword_weights.{t}": 1 for t in set(tokens)}
+    await db.categories.update_one(
+        {"id": category_id, "admin_id": admin_id, "client_id": client_id},
+        {
+            "$inc": {**inc, "learned_count": 1},
+            "$set": {"updated_at": datetime.now(timezone.utc)},
+        },
+    )
+
+async def _suggest_category(admin_id: str, client_id: str, filename: str) -> Optional[dict]:
+    """
+    Score every category for this (admin, client) against tokens in the
+    filename. Returns the best-matching category dict (or None if no match).
+    """
+    tokens = tokenize_filename(filename)
+    if not tokens:
+        return None
+    cats: List[dict] = []
+    async for c in db.categories.find({"admin_id": admin_id, "client_id": client_id}):
+        cats.append(c)
+    if not cats:
+        return None
+
+    best = None
+    best_score = 0.0
+    for c in cats:
+        weights: Dict[str, int] = c.get("keyword_weights", {}) or {}
+        manual = [k.lower() for k in (c.get("keywords") or []) if isinstance(k, str)]
+        score = 0.0
+        for t in tokens:
+            if t in weights:
+                # Learned token — weight by sqrt(count) so one-offs don't overwhelm
+                score += 1.0 + (weights[t] ** 0.5)
+            elif t in manual:
+                score += 1.2  # manual keyword slightly beats a single-use learn
+            else:
+                # Substring match against manual keywords (for phrases like "monthly return")
+                for mk in manual:
+                    if len(mk) >= 4 and (mk in t or t in mk):
+                        score += 0.5
+                        break
+        if score > best_score:
+            best_score = score
+            best = c
+    if not best or best_score < 0.8:
+        return None
+    return best
 
 
 def _slugify_cat(name: str) -> str:
@@ -689,6 +784,14 @@ async def upload_document(
     doc.pop("_id", None)
     meta = doc_to_meta(doc)
 
+    # 🧠 Auto-learn: record filename tokens under the chosen category so next
+    # time the admin uploads something similar we can suggest it.
+    if doc.get("category_id"):
+        try:
+            await _learn_keywords(current["id"], client_id, doc["category_id"], file.filename)
+        except Exception as e:
+            logger.warning(f"learn_keywords failed: {e}")
+
     # Live updates: send to the admin (any of their open consoles) and the receiving client
     payload = {"type": "doc:created", "doc": meta}
     await manager.send_to_user(current["id"], payload)
@@ -913,6 +1016,18 @@ async def update_document(doc_id: str, payload: DocumentUpdate, current=Depends(
     if update:
         await db.documents.update_one({"id": doc_id}, {"$set": update})
     new_doc = await db.documents.find_one({"id": doc_id}, {"_id": 0})
+
+    # 🧠 Auto-learn: if the admin changed the category, update keyword weights
+    # for the NEW category based on this doc's filename.
+    if "category_id" in update and new_doc.get("category_id"):
+        try:
+            await _learn_keywords(
+                current["id"], new_doc.get("client_id"),
+                new_doc["category_id"], new_doc.get("original_name", ""),
+            )
+        except Exception as e:
+            logger.warning(f"learn_keywords on update failed: {e}")
+
     meta = doc_to_meta(new_doc)
     payload2 = {"type": "doc:updated", "doc": meta}
     await manager.send_to_user(meta["admin_id"], payload2)
@@ -965,6 +1080,37 @@ async def list_categories(
     else:
         raise HTTPException(status_code=403, detail="Forbidden")
     return [cat_to_meta(c) for c in cats]
+
+
+@api_router.get("/categories/suggest")
+async def suggest_category(
+    client_id: str = Query(...),
+    filename: str = Query(...),
+    current=Depends(get_current_admin),
+):
+    """
+    Given a filename the admin is about to upload, suggest the best-matching
+    category for THIS (admin, client) pair based on manual keywords AND
+    auto-learned weights from past uploads.
+    """
+    conn = await db.connections.find_one({"admin_id": current["id"], "client_id": client_id})
+    if not conn:
+        raise HTTPException(status_code=403, detail="Not connected to this client")
+    # Make sure defaults exist so a brand-new admin still gets a meaningful
+    # set of categories to score against.
+    await _ensure_default_categories(current["id"], client_id)
+
+    best = await _suggest_category(current["id"], client_id, filename)
+    if not best:
+        return {"suggested": None, "reason": "no-match"}
+    tokens = tokenize_filename(filename)
+    weights = best.get("keyword_weights", {}) or {}
+    matched = [t for t in tokens if t in weights]
+    return {
+        "suggested": cat_to_meta(best),
+        "matched_tokens": matched,
+        "learned_count": int(best.get("learned_count", 0)),
+    }
 
 
 @api_router.post("/categories")

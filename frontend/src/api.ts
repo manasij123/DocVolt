@@ -188,6 +188,24 @@ export async function deleteCategoryApi(id: string, token?: string): Promise<{ o
   });
   return r.data;
 }
+
+export type CategorySuggestion = {
+  suggested: Category | null;
+  matched_tokens?: string[];
+  learned_count?: number;
+  reason?: string;
+};
+export async function suggestCategory(
+  client_id: string,
+  filename: string,
+  token?: string,
+): Promise<CategorySuggestion> {
+  const r = await api.get<CategorySuggestion>("/categories/suggest", {
+    params: { client_id, filename },
+    headers: token ? { Authorization: `Bearer ${token}` } : undefined,
+  });
+  return r.data;
+}
 export async function generateCategoryIcon(payload: { description: string; style_hint?: string }, token?: string): Promise<{ image_base64: string; prompt_used: string }> {
   // gpt-image-1 can take 30-90s; bump axios timeout for this call.
   const r = await api.post("/categories/generate-icon", payload, {

@@ -2493,3 +2493,29 @@ main {
   height: 10px;
   border-radius: 3px;
 }
+
+/* 🧠 AI learned hint (shown in the Upload detect-card) */
+.ai-hint {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 10px 0 4px;
+  padding: 10px 12px;
+  border-radius: 10px;
+  background: #F5F1FF;
+  border: 1px solid #D6C8FF;
+  font-size: 12px;
+  color: #1E1B4B;
+  line-height: 1.45;
+}
+.ai-hint-badge {
+  background: #3801FF;
+  color: #fff;
+  font-weight: 800;
+  font-size: 10px;
+  letter-spacing: 0.3px;
+  padding: 4px 8px;
+  border-radius: 6px;
+  flex-shrink: 0;
+}
+.ai-hint strong { color: #3801FF; }

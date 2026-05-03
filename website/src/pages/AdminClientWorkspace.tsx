@@ -4,7 +4,7 @@ import api, {
   CATEGORY_LABELS, CATEGORY_ICONS, DocumentMeta, fileUrl, bulkDownloadDocs,
   getToken, getUser, logout, UserInfo, initials, colorFromString,
   Category, listCategories, createCategory, updateCategoryApi, deleteCategoryApi,
-  generateCategoryIcon,
+  generateCategoryIcon, suggestCategory,
   CATEGORY_COLOR_PRESETS, CATEGORY_ICON_PRESETS, emojiForIcon, categoryDisplay,
 } from "../api";
 import { useDocsSocket } from "../useDocsSocket";
@@ -240,6 +240,8 @@ function UploadPanel({ clientId, cats, onUploaded }: { clientId: string; cats: C
   const [uploading, setUploading] = useState(false);
   const [done, setDone] = useState<string | null>(null);
   const [err, setErr] = useState<string | null>(null);
+  // 🧠 Learning-based suggestion info for UI hint
+  const [aiHint, setAiHint] = useState<{ source: "learned" | "local" | "none"; learnedCount?: number; matched?: string[] }>({ source: "none" });
 
   // ---- Bulk-upload state ----
   type BulkRow = {
@@ -260,13 +262,33 @@ function UploadPanel({ clientId, cats, onUploaded }: { clientId: string; cats: C
     setPicked(null); setStage("idle"); setErr(null); setDone(null);
     if (fileInputRef.current) fileInputRef.current.value = "";
   };
-  const acceptFile = (f: File) => {
+  const acceptFile = async (f: File) => {
     if (!f.name.toLowerCase().endsWith(".pdf")) { setErr("Please choose a PDF file."); return; }
     setPicked(f);
-    const cId = autoDetectCategoryId(f.name, cats);
+
+    // 🧠 Server-side learning-based suggestion first; fall back to local heuristic
+    let chosen = "";
+    let hint: typeof aiHint = { source: "none" };
+    try {
+      const tok = getToken();
+      const r = await suggestCategory(clientId, f.name, tok || undefined);
+      if (r.suggested?.id) {
+        chosen = r.suggested.id;
+        hint = {
+          source: (r.learned_count || 0) > 0 ? "learned" : "local",
+          learnedCount: r.learned_count || 0,
+          matched: r.matched_tokens || [],
+        };
+      }
+    } catch { /* fall through to local heuristic */ }
+    if (!chosen) {
+      chosen = autoDetectCategoryId(f.name, cats);
+      hint = chosen ? { source: "local" } : { source: "none" };
+    }
     const my = detectMonthYear(f.name);
-    setDetCatId(cId); setDetYear(my.year); setDetMonth(my.month);
-    setCatId(cId); if (my.year) setYear(my.year); setMonth(my.month);
+    setDetCatId(chosen); setDetYear(my.year); setDetMonth(my.month);
+    setCatId(chosen); if (my.year) setYear(my.year); setMonth(my.month);
+    setAiHint(hint);
     setStage("scanned"); setDone(null); setErr(null);
   };
   const send = async (cIdTo: string, yTo: number, mTo: number | null) => {
@@ -377,6 +399,17 @@ function UploadPanel({ clientId, cats, onUploaded }: { clientId: string; cats: C
               <div className="muted">{looksGood ? "Auto-detected from filename" : "Some details missing"}</div>
             </div>
           </div>
+          {aiHint.source === "learned" && (aiHint.learnedCount || 0) > 0 && (
+            <div className="ai-hint">
+              <span className="ai-hint-badge">🧠 AI</span>
+              <span>
+                Suggested by learning from <strong>{aiHint.learnedCount} past upload{aiHint.learnedCount === 1 ? "" : "s"}</strong>
+                {aiHint.matched && aiHint.matched.length > 0 && (
+                  <> · matched <strong>"{aiHint.matched.slice(0, 3).join(", ")}"</strong></>
+                )}
+              </span>
+            </div>
+          )}
           <div className="detect-table">
             <div className="detect-row"><span className="lbl">Tab</span><span className={`val ${detCat?.key === "OTHERS" ? "warn" : ""}`}>{detCat ? `${emojiForIcon(detCat.icon)} ${detCat.name}` : "—"}</span></div>
             <div className="detect-row"><span className="lbl">Year</span><span className={`val ${!detYear ? "warn" : ""}`}>{detYear ?? "—"}</span></div>
