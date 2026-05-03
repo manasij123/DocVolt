@@ -166,7 +166,7 @@ export default function CategoryView({ category, cat, adminId }: Props) {
   const [activeYear, setActiveYear] = useState<number | null>(null);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
-  // Multi-select state for "Select multiple → Share as ZIP"
+  // Multi-select state for "Select multiple → Share as separate PDFs"
   const [selecting, setSelecting] = useState(false);
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [sharing, setSharing] = useState(false);
@@ -387,7 +387,11 @@ export default function CategoryView({ category, cat, adminId }: Props) {
                         setSharing(true);
                         try {
                           const tk = await getToken();
-                          await shareDocumentsBulk(Array.from(selected), tk);
+                          // Pass full DocumentMeta for each selected id so the
+                          // receiving app (WhatsApp / Mail / Drive) shows the
+                          // original PDF name instead of the raw UUID.
+                          const selectedDocs = documents.filter((d) => selected.has(d.id));
+                          await shareDocumentsBulk(selectedDocs, tk);
                           toast.show(`Shared ${selected.size} document${selected.size !== 1 ? "s" : ""}`, { kind: "success", icon: "share-social" });
                           exitSelection();
                         } catch (e: any) {
