@@ -8,9 +8,9 @@ import api, {
   CATEGORY_COLOR_PRESETS, CATEGORY_ICON_PRESETS, emojiForIcon, categoryDisplay,
 } from "../api";
 import { useDocsSocket } from "../useDocsSocket";
-import LiveBadge from "../LiveBadge";
 import ModernColorPicker from "../ModernColorPicker";
 import { suggestColorFromText } from "../colorTheme";
+import DashboardShell, { NavItem } from "../layout/DashboardShell";
 
 const MONTHS = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
 
@@ -121,52 +121,107 @@ export default function AdminClientWorkspace() {
     }
   });
 
-  const onLogout = () => { logout(); nav("/", { replace: true }); };
+  // Logout is now handled in DashboardShell footer.
+
+  const navItems: NavItem[] = [
+    {
+      to: "#upload",
+      label: "Upload",
+      onPress: () => setTab("upload"),
+      matches: () => tab === "upload",
+      icon: (
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+          <polyline points="17 8 12 3 7 8" />
+          <line x1="12" y1="3" x2="12" y2="15" />
+        </svg>
+      ),
+    },
+    {
+      to: "#manage",
+      label: "Manage Documents",
+      onPress: () => { setTab("manage"); reload(); },
+      matches: () => tab === "manage",
+      badge: docs.length || undefined,
+      icon: (
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+          <polyline points="14 2 14 8 20 8" />
+          <line x1="16" y1="13" x2="8" y2="13" />
+          <line x1="16" y1="17" x2="8" y2="17" />
+          <polyline points="10 9 9 9 8 9" />
+        </svg>
+      ),
+    },
+    {
+      to: "#categories",
+      label: "Categories",
+      onPress: () => { setTab("categories"); reloadCategories(); },
+      matches: () => tab === "categories",
+      badge: cats.length || undefined,
+      icon: (
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          <path d="M20.59 13.41 13.42 20.58a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z" />
+          <line x1="7" y1="7" x2="7.01" y2="7" />
+        </svg>
+      ),
+    },
+    {
+      to: "/admin",
+      label: "← All Clients",
+      icon: (
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          <line x1="19" y1="12" x2="5" y2="12" />
+          <polyline points="12 19 5 12 12 5" />
+        </svg>
+      ),
+    },
+  ];
+
+  const pageTitleMap = {
+    upload: "Upload PDFs",
+    manage: "Manage Documents",
+    categories: "Categories",
+  };
 
   return (
-    <div className="app-shell">
-      <header className="topbar admin-bar">
-        <div className="container topbar-inner">
-          <div className="brand"><div className="brand-mark">DV</div> Admin Console</div>
-          <div className="topbar-actions">
-            <LiveBadge />
-            <span className="who-pill">{me?.name}</span>
-            <button className="btn btn-sm" style={{ background: "rgba(255,255,255,0.10)", color: "#fff", borderRadius: 9, padding: "8px 14px" }} onClick={onLogout}>Logout ↪</button>
+    <DashboardShell
+      role="admin"
+      title="Admin Console"
+      nav={navItems}
+      pageTitle={pageTitleMap[tab]}
+      pageSubtitle={client ? `${client.name} · ${client.email}` : "Loading client…"}
+      headerAction={
+        <div className="ds-client-badge">
+          <div
+            className="avatar"
+            style={{ background: client ? colorFromString(client.id) : "#3801FF", width: 36, height: 36 }}
+          >
+            {client ? initials(client.name) : "?"}
           </div>
-        </div>
-      </header>
-
-      <div className="container" style={{ paddingTop: 18 }}>
-        <Link to="/admin" className="crumb-link">← All clients</Link>
-        <div className="client-banner">
-          <div className="avatar lg" style={{ background: client ? colorFromString(client.id) : "#1A73E8" }}>{client ? initials(client.name) : "?"}</div>
           <div>
-            <div className="client-banner-name">{client?.name || "Loading…"}</div>
-            <div className="client-banner-email">{client?.email}</div>
+            <div style={{ fontWeight: 800, fontSize: 13, color: "#0F172A" }}>
+              {client?.name || "Loading…"}
+            </div>
+            <div style={{ fontSize: 11, color: "#64748B" }}>{client?.email}</div>
           </div>
         </div>
-
-        <div className="admin-tabs">
-          <button className={`admin-tab ${tab === "upload" ? "active" : ""}`} onClick={() => setTab("upload")}>📤 Upload</button>
-          <button className={`admin-tab ${tab === "manage" ? "active" : ""}`} onClick={() => { setTab("manage"); reload(); }}>⚙️ Manage</button>
-          <button className={`admin-tab ${tab === "categories" ? "active" : ""}`} onClick={() => { setTab("categories"); reloadCategories(); }}>🏷️ Categories</button>
-        </div>
-      </div>
-
-      <main className="container page-anim" style={{ padding: "20px 24px 60px" }} key={tab}>
+      }
+    >
+      <div key={tab}>
         {tab === "upload"
           ? <UploadPanel clientId={clientId!} cats={cats} onUploaded={reload} />
           : tab === "manage"
             ? <ManagePanel docs={docs} cats={cats} setDocs={setDocs} filter={filter} setFilter={setFilter} setEditing={setEditing} />
             : <CategoriesPanel clientId={clientId!} cats={cats} reload={reloadCategories} />}
-      </main>
+      </div>
 
       {editing && (
         <EditModal doc={editing} cats={cats} onClose={() => setEditing(null)} onSaved={(d) => {
           setDocs((p) => p.map((x) => (x.id === d.id ? d : x))); setEditing(null);
         }} />
       )}
-    </div>
+    </DashboardShell>
   );
 }
 

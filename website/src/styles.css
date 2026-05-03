@@ -2079,3 +2079,32 @@ main {
   .ds-topbar { padding: 0 14px; }
   .ds-page { padding: 14px 12px 24px; }
 }
+
+/* Admin Workspace specific — client-info pill shown in the topbar action slot */
+.ds-client-badge {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  background: #fff;
+  border: 1px solid var(--ds-sidebar-border);
+  padding: 6px 14px 6px 6px;
+  border-radius: 999px;
+  box-shadow: 0 2px 6px rgba(15, 23, 42, 0.04);
+}
+.ds-client-badge .avatar {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #fff;
+  font-weight: 800;
+  font-size: 12px;
+}
+
+/* Legacy admin-tabs — no longer used (sidebar nav replaces them) but keep
+   the CSS around; individual pages also hide any stray .admin-tabs. */
+.ds-shell .admin-tabs { display: none; }
+.ds-shell .client-banner { display: none; }
+.ds-shell .crumb-link { display: none; }
