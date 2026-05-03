@@ -370,7 +370,7 @@ async def _ensure_default_categories(admin_id: str, client_id: str) -> list[dict
     if to_insert:
         await db.categories.insert_many(to_insert)
         existing.extend(to_insert)
-    existing.sort(key=lambda x: (x.get("sort_order", 999), x.get("created_at", "")))
+    existing.sort(key=lambda x: (x.get("sort_order", 999), str(x.get("created_at", ""))))
     return existing
 
 

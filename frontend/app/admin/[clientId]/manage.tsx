@@ -45,6 +45,17 @@ export default function ManageScreen() {
   const [editMonth, setEditMonth] = useState<number | null>(null);
   const [saving, setSaving] = useState(false);
 
+  const loadCats = useCallback(async () => {
+    if (!clientId) return;
+    try {
+      const tok = await getToken();
+      const list = await listCategories({ client_id: String(clientId) }, tok || undefined);
+      setCats(list);
+    } catch (e: any) {
+      console.warn("[manage] listCategories failed", e?.response?.status, e?.response?.data);
+    }
+  }, [clientId]);
+
   const load = useCallback(async () => {
     try {
       const res = await api.get<DocumentMeta[]>("/documents", { params: { client_id: clientId } });
@@ -55,24 +66,14 @@ export default function ManageScreen() {
       setLoading(false);
       setRefreshing(false);
     }
-  }, [clientId]);
+    // Always refresh categories too so the filter chips / edit modal reflect
+    // anything the admin created on web or mobile.
+    loadCats();
+  }, [clientId, loadCats]);
 
   useEffect(() => {
     load();
   }, [load]);
-
-  // Load per-client categories so the filter chips reflect the admin's
-  // customised tab labels (and any new ones they create).
-  useEffect(() => {
-    if (!clientId) return;
-    (async () => {
-      try {
-        const tok = await getToken();
-        const list = await listCategories({ client_id: String(clientId) }, tok || undefined);
-        setCats(list);
-      } catch { /* ignore */ }
-    })();
-  }, [clientId]);
 
   const onRefresh = () => {
     setRefreshing(true);
@@ -81,13 +82,20 @@ export default function ManageScreen() {
 
   // 🔴 Real-time sync (WhatsApp-Web style) — keeps the manage list in sync
   // with the website / other devices without needing pull-to-refresh.
-  useDocsSocket((e) => {
+  useDocsSocket((e: any) => {
+    if (!e) return;
     if (e.type === "doc:created") {
       setDocs((prev) => (prev.some((d) => d.id === e.doc.id) ? prev : [e.doc, ...prev]));
     } else if (e.type === "doc:updated") {
       setDocs((prev) => prev.map((d) => (d.id === e.doc.id ? e.doc : d)));
     } else if (e.type === "doc:deleted") {
       setDocs((prev) => prev.filter((d) => d.id !== e.id));
+    } else if (e.type === "category:created" && e.category?.client_id === clientId) {
+      setCats((p) => p.some((c) => c.id === e.category.id) ? p : [...p, e.category].sort((a, b) => (a.sort_order ?? 999) - (b.sort_order ?? 999)));
+    } else if (e.type === "category:updated" && e.category?.client_id === clientId) {
+      setCats((p) => p.map((c) => (c.id === e.category.id ? e.category : c)));
+    } else if (e.type === "category:deleted" && e.client_id === clientId) {
+      setCats((p) => p.filter((c) => c.id !== e.id));
     }
   });
 
@@ -285,14 +293,35 @@ export default function ManageScreen() {
 
               <Text style={styles.label}>Category</Text>
               <View style={styles.chipRow}>
-                {Object.keys(CATEGORY_LABELS).map((k) => {
-                  const active = k === editCat;
-                  return (
-                    <TouchableOpacity key={k} style={[styles.chip, active && styles.chipActive]} onPress={() => setEditCat(k)}>
-                      <Text style={[styles.chipText, active && styles.chipTextActive]}>{CATEGORY_LABELS[k]}</Text>
-                    </TouchableOpacity>
-                  );
-                })}
+                {cats.length === 0 ? (
+                  // Fallback to static labels only if categories haven't loaded yet
+                  Object.keys(CATEGORY_LABELS).map((k) => {
+                    const active = k === editCat;
+                    return (
+                      <TouchableOpacity key={k} style={[styles.chip, active && styles.chipActive]} onPress={() => setEditCat(k)}>
+                        <Text style={[styles.chipText, active && styles.chipTextActive]}>{CATEGORY_LABELS[k]}</Text>
+                      </TouchableOpacity>
+                    );
+                  })
+                ) : (
+                  cats.map((c) => {
+                    const active = c.key === editCat;
+                    return (
+                      <TouchableOpacity
+                        key={c.id}
+                        style={[
+                          styles.chip,
+                          active && { backgroundColor: `${c.color}1a`, borderColor: c.color },
+                        ]}
+                        onPress={() => setEditCat(c.key)}
+                      >
+                        <Text style={[styles.chipText, active && { color: c.color, fontWeight: "800" }]}>
+                          {c.name}
+                        </Text>
+                      </TouchableOpacity>
+                    );
+                  })
+                )}
               </View>
 
               <Text style={styles.label}>Year</Text>
