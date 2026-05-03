@@ -242,6 +242,23 @@ function UploadPanel({ clientId, cats, onUploaded }: { clientId: string; cats: C
   const [err, setErr] = useState<string | null>(null);
   // 🧠 Learning-based suggestion info for UI hint
   const [aiHint, setAiHint] = useState<{ source: "learned" | "local" | "none"; learnedCount?: number; matched?: string[] }>({ source: "none" });
+  const [contentHint, setContentHint] = useState<null | {
+    docId: string;
+    confirm?: boolean;
+    suggestedId?: string;
+    suggestedName?: string;
+    confidence?: number;
+    matched?: number;
+  }>(null);
+
+  const acceptContentSuggestion = async () => {
+    if (!contentHint?.docId || !contentHint.suggestedId) { setContentHint(null); return; }
+    try {
+      await api.put(`/documents/${contentHint.docId}`, { category_id: contentHint.suggestedId });
+      onUploaded();
+    } catch { /* ignore */ }
+    setContentHint(null);
+  };
 
   // ---- Bulk-upload state ----
   type BulkRow = {
@@ -302,6 +319,19 @@ function UploadPanel({ clientId, cats, onUploaded }: { clientId: string; cats: C
       fd.append("year_override", String(yTo));
       if (mTo !== null) fd.append("month_override", String(mTo));
       const r = await api.post("/documents/upload", fd, { headers: { "Content-Type": "multipart/form-data" } });
+      // 🧠 If backend found a better content match → show "Did you mean …?" toast
+      const hint = r.data?.content_hint;
+      if (hint?.kind === "override" && hint.suggested_category?.id !== cIdTo) {
+        setContentHint({
+          docId: r.data.id,
+          suggestedId: hint.suggested_category.id,
+          suggestedName: hint.suggested_category.name,
+          confidence: hint.confidence,
+          matched: hint.matched_templates,
+        });
+      } else if (hint?.kind === "confirm") {
+        setContentHint({ docId: r.data.id, confirm: true, matched: hint.matched_templates });
+      }
       setDone(r.data.display_name); reset(); onUploaded();
     } catch (e: any) {
       setErr(e?.response?.data?.detail || "Upload failed");
@@ -377,6 +407,34 @@ function UploadPanel({ clientId, cats, onUploaded }: { clientId: string; cats: C
       <p className="muted" style={{ marginTop: 0, marginBottom: 18 }}>Filename will be auto-categorised. Documents go only to this client.</p>
       {done && <div className="banner success">✓ Uploaded: {done}</div>}
       {err && <div className="banner error">⚠ {err}</div>}
+
+      {/* 🧠 Content-based smart hint after upload */}
+      {contentHint && contentHint.suggestedId && !contentHint.confirm && (
+        <div className="content-hint override">
+          <div className="content-hint-icon">🧠</div>
+          <div className="content-hint-body">
+            <strong>Did you mean: {contentHint.suggestedName}?</strong>
+            <span>
+              This PDF's content matches <strong>{contentHint.matched}</strong> past upload(s) to that category
+              ({Math.round((contentHint.confidence || 0) * 100)}% similarity).
+            </span>
+          </div>
+          <div className="content-hint-actions">
+            <button className="btn btn-sm btn-primary" onClick={acceptContentSuggestion}>Move</button>
+            <button className="btn btn-sm" onClick={() => setContentHint(null)}>Keep</button>
+          </div>
+        </div>
+      )}
+      {contentHint && contentHint.confirm && (
+        <div className="content-hint confirm">
+          <div className="content-hint-icon">✅</div>
+          <div className="content-hint-body">
+            <strong>Template matched</strong>
+            <span>This PDF's content matches {contentHint.matched} similar past upload(s) to this category.</span>
+          </div>
+          <button className="btn btn-sm" onClick={() => setContentHint(null)}>Got it</button>
+        </div>
+      )}
       <div className={`dropzone ${drag ? "drag" : ""} ${picked ? "has-file" : ""}`}
         onClick={() => fileInputRef.current?.click()}
         onDragOver={(e) => { e.preventDefault(); setDrag(true); }}

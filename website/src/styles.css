@@ -2519,3 +2519,24 @@ main {
   flex-shrink: 0;
 }
 .ai-hint strong { color: #3801FF; }
+
+/* 🧠 Content-based smart hint (post-upload toast inside UploadPanel) */
+.content-hint {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 14px;
+  margin-top: 10px;
+  border-radius: 12px;
+  border: 1px solid #D6C8FF;
+  background: linear-gradient(135deg, #F5F1FF 0%, #EEE8FF 100%);
+  animation: fadeUp 0.3s var(--ease-out, ease-out);
+}
+.content-hint.override { border-color: #FBBF24; background: linear-gradient(135deg, #FFFBEB 0%, #FEF3C7 100%); }
+.content-hint.confirm  { border-color: #34D399; background: linear-gradient(135deg, #ECFDF5 0%, #D1FAE5 100%); }
+.content-hint-icon { font-size: 26px; flex-shrink: 0; }
+.content-hint-body { flex: 1; display: flex; flex-direction: column; gap: 2px; }
+.content-hint-body strong { color: #0F172A; font-weight: 800; font-size: 13px; }
+.content-hint-body span { color: #475569; font-size: 12px; line-height: 1.45; }
+.content-hint-body strong:nth-child(2) { color: #3801FF; }
+.content-hint-actions { display: flex; gap: 6px; flex-shrink: 0; }

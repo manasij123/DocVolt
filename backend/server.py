@@ -16,7 +16,7 @@ import logging
 import bcrypt
 import jwt
 from datetime import datetime, timezone, timedelta
-from typing import List, Optional
+from typing import List, Optional, Dict, Any, Tuple
 
 from fastapi import FastAPI, APIRouter, UploadFile, File, Form, HTTPException, Depends, Request, WebSocket, WebSocketDisconnect, Query
 from fastapi.responses import StreamingResponse, FileResponse, RedirectResponse
@@ -430,6 +430,172 @@ async def _suggest_category(admin_id: str, client_id: str, filename: str) -> Opt
     return best
 
 
+# ============================================================
+# Content-based learning — read the PDF, build template signatures
+# ============================================================
+try:
+    from pypdf import PdfReader  # type: ignore
+    _PYPDF_OK = True
+except Exception:  # pragma: no cover
+    _PYPDF_OK = False
+
+# Patterns to strip out of content before tokenisation (dates, amounts, ids,
+# emails etc. — these change between invoices but the surrounding template
+# text stays the same).
+_STRIP_PATTERNS = [
+    re.compile(r"\b\d{1,2}[/\-.]\d{1,2}[/\-.]\d{2,4}\b"),            # dates 01/03/2026
+    re.compile(r"\b\d{4}[/\-.]\d{1,2}[/\-.]\d{1,2}\b"),              # 2026-03-01
+    re.compile(r"\b(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*\.?\s+\d{1,2},?\s*\d{2,4}?\b", re.I),  # March 15, 2026
+    re.compile(r"(?:Rs\.?|INR|USD|\$|₹)\s*\d[\d,]*\.?\d*"),           # currency
+    re.compile(r"\b\d[\d,]*\.\d{2}\b"),                              # amounts 12,345.67
+    re.compile(r"\b[A-Z]{2,5}[0-9]{4,}[A-Z0-9]*\b"),                 # ids/PAN/GSTIN-like
+    re.compile(r"\b\d{6,}\b"),                                      # long numbers
+    re.compile(r"\b[\w\.-]+@[\w\.-]+\.\w+\b"),                        # emails
+    re.compile(r"https?://\S+"),                                    # urls
+]
+
+def extract_pdf_text(path: str, max_chars: int = 5000, max_pages: int = 2) -> str:
+    """Extract up to `max_chars` characters of text from the first `max_pages`."""
+    if not _PYPDF_OK:
+        return ""
+    try:
+        reader = PdfReader(path)
+        chunks: List[str] = []
+        total = 0
+        for i, page in enumerate(reader.pages[:max_pages]):
+            t = page.extract_text() or ""
+            chunks.append(t)
+            total += len(t)
+            if total >= max_chars:
+                break
+        return "\n".join(chunks)[:max_chars]
+    except Exception as e:
+        logger.warning(f"extract_pdf_text failed for {path}: {e}")
+        return ""
+
+def content_signature(text: str, max_tokens: int = 48) -> List[str]:
+    """
+    Build a template fingerprint: a set of lowercase tokens that represent the
+    *constant* text in the document. Strips out amounts, dates, ids and ids,
+    then keeps the most common content words (length ≥ 3) — these tend to be
+    the form labels ("invoice", "subtotal", "statement", "department" etc.).
+    """
+    if not text:
+        return []
+    s = text
+    for rx in _STRIP_PATTERNS:
+        s = rx.sub(" ", s)
+    # replace non-alphanumeric with space, keep apostrophes/dashes inside words
+    s = re.sub(r"[^a-zA-Z\s\-']", " ", s)
+    s = re.sub(r"[_\-]+", " ", s)
+    tokens = [t.lower() for t in s.split() if len(t) >= 3 and not t.isdigit()]
+    # drop stopwords
+    tokens = [t for t in tokens if t not in STOPWORDS]
+    # token frequency
+    freq: Dict[str, int] = {}
+    for t in tokens:
+        freq[t] = freq.get(t, 0) + 1
+    # keep the most frequent / most distinctive ones (cap list)
+    ranked = sorted(freq.items(), key=lambda x: (-x[1], x[0]))
+    out = [t for t, _ in ranked[:max_tokens]]
+    return out
+
+def _jaccard(a: List[str], b: List[str]) -> float:
+    if not a or not b:
+        return 0.0
+    sa, sb = set(a), set(b)
+    inter = len(sa & sb)
+    union = len(sa | sb)
+    return inter / union if union else 0.0
+
+async def _learn_content(admin_id: str, client_id: str, category_id: str, file_path: str):
+    """
+    Extract content signature from the uploaded file and either merge it into
+    an existing signature for this category (if highly similar) or append a
+    brand-new signature (a new template).
+    """
+    try:
+        text = extract_pdf_text(file_path)
+        sig = content_signature(text)
+        if len(sig) < 8:   # not enough content to be useful
+            return
+        cat = await db.categories.find_one({
+            "id": category_id, "admin_id": admin_id, "client_id": client_id,
+        })
+        if not cat:
+            return
+        sigs: List[Dict[str, Any]] = cat.get("content_signatures", []) or []
+        # Try to merge with a close template (same kind of document)
+        merged = False
+        for s in sigs:
+            existing = s.get("tokens", [])
+            if _jaccard(sig, existing) >= 0.55:
+                # Merge — union of tokens, bump count
+                merged_tokens = list(dict.fromkeys(existing + sig))[:64]
+                s["tokens"] = merged_tokens
+                s["count"] = int(s.get("count", 1)) + 1
+                s["updated_at"] = datetime.now(timezone.utc).isoformat()
+                merged = True
+                break
+        if not merged:
+            # New template — keep max 10 per category (evict lowest count)
+            sigs.append({
+                "tokens": sig,
+                "count": 1,
+                "updated_at": datetime.now(timezone.utc).isoformat(),
+            })
+            if len(sigs) > 10:
+                sigs.sort(key=lambda s: s.get("count", 1), reverse=True)
+                sigs = sigs[:10]
+        await db.categories.update_one(
+            {"id": category_id},
+            {"$set": {"content_signatures": sigs, "updated_at": datetime.now(timezone.utc)}},
+        )
+    except Exception as e:
+        logger.warning(f"_learn_content failed: {e}")
+
+async def _suggest_by_content(admin_id: str, client_id: str, file_path: str) -> Optional[Tuple[dict, float, int]]:
+    """
+    Extract text from the file, score each category by how well it matches
+    any of the stored content signatures. Return (category, score, matched_template_count).
+    """
+    try:
+        text = extract_pdf_text(file_path)
+        sig = content_signature(text)
+        if len(sig) < 8:
+            return None
+        cats: List[dict] = []
+        async for c in db.categories.find({"admin_id": admin_id, "client_id": client_id}):
+            cats.append(c)
+        if not cats:
+            return None
+        best: Optional[dict] = None
+        best_score = 0.0
+        best_count = 0
+        for c in cats:
+            sigs: List[Dict[str, Any]] = c.get("content_signatures", []) or []
+            if not sigs:
+                continue
+            # Best-template match, weighted by its count
+            sc = 0.0
+            cnt = 0
+            for s in sigs:
+                j = _jaccard(sig, s.get("tokens", []))
+                if j > 0:
+                    sc = max(sc, j * (1.0 + 0.15 * min(5, int(s.get("count", 1)))))
+                    cnt += int(s.get("count", 1))
+            if sc > best_score:
+                best_score = sc
+                best = c
+                best_count = cnt
+        if not best or best_score < 0.30:
+            return None
+        return best, best_score, best_count
+    except Exception as e:
+        logger.warning(f"_suggest_by_content failed: {e}")
+        return None
+
+
 def _slugify_cat(name: str) -> str:
     """Generate an uppercase slug usable as legacy `category` enum."""
     s = re.sub(r"[^A-Za-z0-9]+", "_", name.strip()).strip("_").upper()
@@ -786,11 +952,46 @@ async def upload_document(
 
     # 🧠 Auto-learn: record filename tokens under the chosen category so next
     # time the admin uploads something similar we can suggest it.
+    content_hint: Optional[dict] = None
     if doc.get("category_id"):
         try:
             await _learn_keywords(current["id"], client_id, doc["category_id"], file.filename)
         except Exception as e:
             logger.warning(f"learn_keywords failed: {e}")
+        # 🧠 Also learn the PDF's content fingerprint so next month's
+        # similar-template upload auto-routes here.
+        try:
+            await _learn_content(current["id"], client_id, doc["category_id"], str(abs_path))
+        except Exception as e:
+            logger.warning(f"learn_content failed: {e}")
+
+    # 🧠 Content-based check: does this file's internal text match a DIFFERENT
+    # category better than the one the admin selected? If so, tell the UI so
+    # it can offer "Did you mean …?" reclassification.
+    try:
+        result = await _suggest_by_content(current["id"], client_id, str(abs_path))
+        if result:
+            suggested_cat, score, matched_count = result
+            if suggested_cat["id"] != (doc.get("category_id") or ""):
+                content_hint = {
+                    "suggested_category": cat_to_meta(suggested_cat),
+                    "confidence": round(score, 2),
+                    "matched_templates": matched_count,
+                    "kind": "override",
+                }
+            else:
+                content_hint = {
+                    "suggested_category": cat_to_meta(suggested_cat),
+                    "confidence": round(score, 2),
+                    "matched_templates": matched_count,
+                    "kind": "confirm",
+                }
+    except Exception as e:
+        logger.warning(f"content_hint failed: {e}")
+
+    if content_hint:
+        meta = dict(meta)
+        meta["content_hint"] = content_hint
 
     # Live updates: send to the admin (any of their open consoles) and the receiving client
     payload = {"type": "doc:created", "doc": meta}
