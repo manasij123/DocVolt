@@ -1,12 +1,12 @@
 import { useEffect, useMemo, useState } from "react";
-import { Link, useNavigate, useParams } from "react-router-dom";
+import { useNavigate, useParams } from "react-router-dom";
 import api, {
   DocumentMeta, fileUrl, bulkDownloadDocs,
-  getToken, getUser, logout, UserInfo, initials, colorFromString,
+  getToken, getUser, UserInfo, initials, colorFromString,
   Category, listCategories, emojiForIcon,
 } from "../api";
 import { useDocsSocket } from "../useDocsSocket";
-import LiveBadge from "../LiveBadge";
+import DashboardShell, { NavItem } from "../layout/DashboardShell";
 
 export default function ClientCategoryView() {
   const nav = useNavigate();
@@ -76,7 +76,7 @@ export default function ClientCategoryView() {
   const years = useMemo(() => Array.from(new Set(docs.map((d) => d.year))).sort((a, b) => b - a), [docs]);
   const filtered = useMemo(() => (year ? docs.filter((d) => d.year === year) : []), [docs, year]);
 
-  const onLogout = () => { logout(); nav("/", { replace: true }); };
+  // Logout handled by DashboardShell footer.
   const share = async (d: DocumentMeta) => {
     const url = window.location.origin + fileUrl(d.id);
     try {
@@ -85,52 +85,60 @@ export default function ClientCategoryView() {
     } catch { /* cancelled */ }
   };
 
+  // Build nav items: Back + categories as nav
+  const navItems: NavItem[] = [
+    {
+      to: "/client",
+      label: "← All Admins",
+      icon: (
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          <line x1="19" y1="12" x2="5" y2="12" />
+          <polyline points="12 19 5 12 12 5" />
+        </svg>
+      ),
+    },
+    ...cats.map<NavItem>((c) => ({
+      to: `#cat-${c.id}`,
+      label: c.name,
+      onPress: () => setTabId(c.id),
+      matches: () => tabId === c.id,
+      icon: c.custom_icon_b64 ? (
+        <img
+          src={`data:image/png;base64,${c.custom_icon_b64}`}
+          alt=""
+          style={{ width: 20, height: 20, borderRadius: 5, objectFit: "cover" }}
+        />
+      ) : (
+        <span style={{ fontSize: 18 }}>{emojiForIcon(c.icon)}</span>
+      ),
+    })),
+  ];
+
   return (
-    <div className="app-shell">
-      <header className="topbar">
-        <div className="container topbar-inner">
-          <div className="brand"><div className="brand-mark">DV</div> DocVault</div>
-          <div className="topbar-actions">
-            <LiveBadge />
-            <span className="who-pill light">{me?.name}</span>
-            <button className="icon-btn" title="Logout" onClick={onLogout}>↪</button>
+    <DashboardShell
+      role="client"
+      title="Client Console"
+      nav={navItems}
+      pageTitle={activeCat ? activeCat.name : "Documents"}
+      pageSubtitle={admin ? `${admin.name} · Admin · ${admin.email}` : "Loading admin…"}
+      headerAction={
+        <div className="ds-client-badge">
+          <div
+            className="avatar"
+            style={{ background: admin ? colorFromString(admin.id) : "#3801FF", width: 36, height: 36 }}
+          >
+            {admin ? initials(admin.name) : "?"}
           </div>
-        </div>
-      </header>
-
-      <div className="container" style={{ paddingTop: 18 }}>
-        <Link to="/client" className="crumb-link">← All admins</Link>
-        <div className="client-banner">
-          <div className="avatar lg admin" style={{ background: admin ? colorFromString(admin.id) : "#1A73E8" }}>{admin ? initials(admin.name) : "?"}</div>
           <div>
-            <div className="client-banner-name">{admin?.name || "Loading…"}</div>
-            <div className="client-banner-email">Admin · {admin?.email}</div>
+            <div style={{ fontWeight: 800, fontSize: 13, color: "#0F172A" }}>
+              {admin?.name || "Loading…"}
+            </div>
+            <div style={{ fontSize: 11, color: "#64748B" }}>{admin?.email}</div>
           </div>
         </div>
-      </div>
-
-      <main className="container page-anim" style={{ padding: "18px 24px 60px" }} key={tabId}>
-        <div className="tab-row">
-          {cats.map((c) => (
-            <button
-              key={c.id}
-              className={`tab ${tabId === c.id ? "active" : ""}`}
-              onClick={() => setTabId(c.id)}
-              style={tabId === c.id ? { borderColor: c.color, color: c.color, background: `${c.color}14` } : undefined}
-            >
-              {c.custom_icon_b64 ? (
-                <img
-                  src={`data:image/png;base64,${c.custom_icon_b64}`}
-                  alt=""
-                  style={{ width: 18, height: 18, borderRadius: 4, objectFit: "cover", verticalAlign: "middle", marginRight: 6 }}
-                />
-              ) : (
-                <span style={{ marginRight: 4 }}>{emojiForIcon(c.icon)}</span>
-              )}
-              {c.name}
-            </button>
-          ))}
-        </div>
+      }
+    >
+      <div key={tabId}>
         {activeCat && (
           <div className="cat-hero" style={{ background: `linear-gradient(135deg, ${activeCat.color}1a, ${activeCat.color}08)`, borderColor: `${activeCat.color}33` }}>
             <div className="cat-hero-top">
@@ -270,7 +278,7 @@ export default function ClientCategoryView() {
             )}
           </>
         )}
-      </main>
-    </div>
+      </div>
+    </DashboardShell>
   );
 }
