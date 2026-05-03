@@ -208,13 +208,21 @@ export default function CategoriesScreen() {
   );
 }
 
-function CategoryEditorModal({ visible, clientId, existing, onClose, onSaved }: {
+function CategoryEditorModal({ visible, clientId: clientIdProp, existing, onClose, onSaved }: {
   visible: boolean;
   clientId: string;
   existing: Category | null;
   onClose: () => void;
   onSaved: () => void;
 }) {
+  // Self-heal: if parent passes an empty clientId prop (can happen on Expo
+  // Router web when useLocalSearchParams returns undefined in nested tab
+  // screens), fall back to reading from the URL params directly.
+  const localP = useLocalSearchParams<{ clientId: string }>();
+  const globalP = useGlobalSearchParams<{ clientId: string }>();
+  const fallbackRaw = (localP.clientId ?? globalP.clientId) as string | string[] | undefined;
+  const fallbackClientId = Array.isArray(fallbackRaw) ? fallbackRaw[0] : fallbackRaw;
+  const clientId = (clientIdProp && clientIdProp !== "undefined") ? clientIdProp : (fallbackClientId || "");
   const [name, setName] = useState(existing?.name || "");
   const [color, setColor] = useState(existing?.color || CATEGORY_COLOR_PRESETS[0]);
   const [icon, setIcon] = useState(existing?.icon || "folder-open");
