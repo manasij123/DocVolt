@@ -1,8 +1,11 @@
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import api, { clearAuth, getUser } from "../api";
-import { Ic } from "../Icons";
+import DashboardShell, { NavItem } from "../layout/DashboardShell";
 
+/* ──────────────────────────────────────────────────────────────
+ * Types
+ * ────────────────────────────────────────────────────────────── */
 type SAUser = {
   id: string; email?: string; username?: string; name: string; role: string; created_at?: string;
 };
@@ -25,9 +28,11 @@ type SADashboard = {
   stats: { users: number; admins: number; clients: number; connections: number; documents: number };
   users: SAUser[]; admins: SAAdmin[]; clients: SAClient[]; connections: SAConnection[]; documents: SADocument[];
 };
-
 type Tab = "overview" | "users" | "admins" | "clients" | "connections" | "documents";
 
+/* ──────────────────────────────────────────────────────────────
+ * Main component
+ * ────────────────────────────────────────────────────────────── */
 export default function SuperAdminDashboard() {
   const nav = useNavigate();
   const me = getUser();
@@ -53,82 +58,71 @@ export default function SuperAdminDashboard() {
     // eslint-disable-next-line
   }, []);
 
-  const logout = () => { clearAuth(); nav("/superadmin/login", { replace: true }); };
-
   const filterText = (...parts: (string | undefined)[]) => {
     if (!search.trim()) return true;
     const q = search.trim().toLowerCase();
     return parts.some((p) => (p || "").toLowerCase().includes(q));
   };
 
-  if (loading) return <div style={{ padding: 40, color: "#0F172A", background: "#FFFFFF", minHeight: "100vh" }}>Loading…</div>;
-  if (err || !data) return <div style={{ padding: 40, color: "#0F172A", background: "#FFFFFF", minHeight: "100vh" }}>⚠ {err || "No data"}</div>;
+  // Build sidebar nav items (all tabs + counts live here now)
+  const navItems: NavItem[] = [
+    { to: "#overview",    label: "Overview",    onPress: () => setTab("overview"),    matches: () => tab === "overview",
+      icon: <NavSvg path="M3 3h7v7H3zm11 0h7v7h-7zM3 14h7v7H3zm11 4a3 3 0 106 0 3 3 0 00-6 0z" /> },
+    { to: "#users",       label: "All Users",    onPress: () => setTab("users"),       matches: () => tab === "users",       badge: data?.stats.users,
+      icon: <NavSvg path="M16 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2M8.5 11a4 4 0 100-8 4 4 0 000 8zM23 21v-2a4 4 0 00-3-3.87M16 3.13a4 4 0 010 7.75" /> },
+    { to: "#admins",      label: "Admins",       onPress: () => setTab("admins"),      matches: () => tab === "admins",      badge: data?.stats.admins,
+      icon: <NavSvg path="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" /> },
+    { to: "#clients",     label: "Clients",      onPress: () => setTab("clients"),     matches: () => tab === "clients",     badge: data?.stats.clients,
+      icon: <NavSvg path="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2M12 11a4 4 0 100-8 4 4 0 000 8z" /> },
+    { to: "#connections", label: "Connections",  onPress: () => setTab("connections"), matches: () => tab === "connections", badge: data?.stats.connections,
+      icon: <NavSvg path="M10 13a5 5 0 007.54.54l3-3a5 5 0 00-7.07-7.07l-1.72 1.71M14 11a5 5 0 00-7.54-.54l-3 3a5 5 0 007.07 7.07l1.71-1.71" /> },
+    { to: "#documents",   label: "Documents",    onPress: () => setTab("documents"),   matches: () => tab === "documents",   badge: data?.stats.documents,
+      icon: <NavSvg path="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8zM14 2v6h6M16 13H8M16 17H8M10 9H8" /> },
+  ];
 
-  const { stats } = data;
+  if (loading) {
+    return (
+      <DashboardShell role="superadmin" title="System Owner" nav={navItems} pageTitle="Loading…">
+        <div style={{ padding: 40 }}>Loading the universe…</div>
+      </DashboardShell>
+    );
+  }
+  if (err || !data) {
+    return (
+      <DashboardShell role="superadmin" title="System Owner" nav={navItems} pageTitle="Error">
+        <div className="empty"><div className="empty-icon">⚠️</div><h3>{err || "No data"}</h3></div>
+      </DashboardShell>
+    );
+  }
+
+  const titleMap: Record<Tab, string> = {
+    overview: "Overview",
+    users: "All Users",
+    admins: "Admins",
+    clients: "Clients",
+    connections: "Connections",
+    documents: "Documents",
+  };
 
   return (
-    <div style={{ minHeight: "100vh", background: "#FFFFFF", color: "#0F172A" }}>
-      {/* Top Bar */}
-      <div style={{
-        background: "linear-gradient(135deg, #FFFFFF 0%, #3801FF14 100%)",
-        padding: "14px 24px", display: "flex", alignItems: "center", gap: 14,
-        borderBottom: "1px solid #E2E8F0", position: "sticky", top: 0, zIndex: 10,
-        boxShadow: "0 1px 3px rgba(15,23,42,0.04)",
-      }}>
-        <img
-          src="https://img.icons8.com/3d-fluency/94/user-shield.png"
-          alt="System Owner"
-          width={48}
-          height={48}
-          style={{ filter: "drop-shadow(0 4px 14px rgba(96,165,250,0.45))" }}
-        />
-        <div style={{ flex: 1, minWidth: 0 }}>
-          <div style={{ fontSize: 16, fontWeight: 800, color: "#0F172A" }}>System Owner Console</div>
-          <div style={{ fontSize: 12, color: "#94A3B8" }}>Read-only · Live database snapshot</div>
-        </div>
+    <DashboardShell
+      role="superadmin"
+      title="System Owner"
+      nav={navItems}
+      pageTitle={titleMap[tab]}
+      pageSubtitle={tab === "overview"
+        ? "Live database snapshot across every admin, client, and document in the network."
+        : "Filter with the search bar on the right. Rows update in real time."}
+      toolbar={
         <input
-          className="input"
+          className="sa-search"
+          placeholder="🔎 Search name / email…"
           value={search}
           onChange={(e) => setSearch(e.target.value)}
-          placeholder="🔎 Search name / email…"
-          style={{ width: 240, background: "#FFFFFF", color: "#0F172A", borderColor: "#CBD5E1" }}
         />
-        <button
-          onClick={logout}
-          style={{
-            display: "flex", alignItems: "center", gap: 6,
-            background: "#FFFFFF", color: "#3801FF",
-            fontWeight: 800, fontSize: 13, letterSpacing: 0.4,
-            padding: "9px 16px", borderRadius: 10,
-            border: "1.5px solid #3801FF", cursor: "pointer",
-            boxShadow: "0 4px 14px rgba(56,1,255,0.18)",
-          }}
-        >
-          <Ic kind="logout" size={18} alt="Logout" /> Logout
-        </button>
-      </div>
-
-      {/* Stats cards */}
-      <div style={{ padding: "20px 24px 0", display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(160px, 1fr))", gap: 12 }}>
-        <StatCard label="Total Users"  value={stats.users}       color="#60A5FA" />
-        <StatCard label="Admins"       value={stats.admins}      color="#A78BFA" />
-        <StatCard label="Clients"      value={stats.clients}     color="#34D399" />
-        <StatCard label="Connections"  value={stats.connections} color="#3801FF" />
-        <StatCard label="Documents"    value={stats.documents}   color="#F472B6" />
-      </div>
-
-      {/* Tab Bar */}
-      <div style={{ display: "flex", gap: 6, padding: "20px 24px 0", borderBottom: "1px solid #1E293B", flexWrap: "wrap" }}>
-        <TabBtn active={tab === "overview"}    onClick={() => setTab("overview")}>📊 Overview</TabBtn>
-        <TabBtn active={tab === "users"}       onClick={() => setTab("users")}>👥 All Users ({stats.users})</TabBtn>
-        <TabBtn active={tab === "admins"}      onClick={() => setTab("admins")}>🛡️ Admins ({stats.admins})</TabBtn>
-        <TabBtn active={tab === "clients"}     onClick={() => setTab("clients")}>👤 Clients ({stats.clients})</TabBtn>
-        <TabBtn active={tab === "connections"} onClick={() => setTab("connections")}>🕸️ Connections ({stats.connections})</TabBtn>
-        <TabBtn active={tab === "documents"}   onClick={() => setTab("documents")}>📄 Documents ({stats.documents})</TabBtn>
-      </div>
-
-      {/* Body */}
-      <div style={{ padding: 24 }}>
+      }
+    >
+      <div key={tab}>
         {tab === "overview" && <Overview data={data} />}
         {tab === "users" && (
           <Table
@@ -163,506 +157,436 @@ export default function SuperAdminDashboard() {
             ])}
           />
         )}
-        {tab === "connections" && (
-          <ConnectionsView data={data} search={search} filterText={filterText} />
-        )}
-        {tab === "documents" && (
-          <DocumentsTable docs={data.documents} connections={data.connections} filterText={filterText} />
-        )}
+        {tab === "connections" && <ConnectionsView data={data} filterText={filterText} />}
+        {tab === "documents"   && <DocumentsTable docs={data.documents} filterText={filterText} />}
       </div>
-    </div>
+    </DashboardShell>
   );
 }
 
-/* ============================================================
- * Network Graph for Connections — admin nodes on the left,
- * client nodes on the right, with curved "spider-web" links.
- * ============================================================ */
-function ConnectionsView({ data, search, filterText }: {
-  data: SADashboard; search: string;
-  filterText: (...parts: (string | undefined)[]) => boolean;
-}) {
-  const [view, setView] = useState<"web" | "table">("web");
+/* ──────────────────────────────────────────────────────────────
+ * Overview — Power-BI-style infographic (SVG, no deps)
+ * ────────────────────────────────────────────────────────────── */
+function Overview({ data }: { data: SADashboard }) {
+  const { stats, admins, clients, connections, documents } = data;
+  const topA = [...admins].sort((a, b) => (b.client_count + b.doc_count) - (a.client_count + a.doc_count)).slice(0, 5);
+  const topC = [...clients].sort((a, b) => b.doc_count - a.doc_count).slice(0, 5);
 
-  // Filter: a connection is included if either side matches the search.
-  const visible = data.connections.filter((c) =>
-    filterText(c.admin_name, c.admin_email, c.client_name, c.client_email),
-  );
-
-  return (
-    <div>
-      <div style={{ display: "flex", gap: 8, marginBottom: 14 }}>
-        <SegBtn active={view === "web"}   onClick={() => setView("web")}>🕸️ Network View</SegBtn>
-        <SegBtn active={view === "table"} onClick={() => setView("table")}>📋 Table View</SegBtn>
-      </div>
-      {view === "web" ? (
-        <NetworkGraph data={data} visible={visible} highlight={search.trim().toLowerCase()} />
-      ) : (
-        <Table
-          head={["Admin", "→", "Client", "Initiated by", "Docs", "Linked at"]}
-          rows={visible.map((cn) => [
-            <span><strong>{cn.admin_name}</strong> <span style={{ color: "#94A3B8" }}>({cn.admin_email})</span></span>,
-            <span style={{ color: "#3801FF" }}>→</span>,
-            <span><strong>{cn.client_name}</strong> <span style={{ color: "#94A3B8" }}>({cn.client_email})</span></span>,
-            <span style={{ fontSize: 11, color: "#94A3B8" }}>{cn.initiated_by === cn.admin_id ? "Admin" : cn.initiated_by === cn.client_id ? "Client" : "—"}</span>,
-            <strong>{cn.doc_count}</strong>,
-            fmtDate(cn.created_at),
-          ])}
-        />
-      )}
-    </div>
-  );
-}
-
-function NetworkGraph({ data, visible, highlight }: {
-  data: SADashboard; visible: SAConnection[]; highlight: string;
-}) {
-  // Pick out admins/clients that participate in any visible connection.
-  const adminIds = useMemo(() => Array.from(new Set(visible.map((c) => c.admin_id))), [visible]);
-  const clientIds = useMemo(() => Array.from(new Set(visible.map((c) => c.client_id))), [visible]);
-
-  const adminMap = useMemo(() => Object.fromEntries(data.admins.map((a) => [a.id, a])), [data.admins]);
-  const clientMap = useMemo(() => Object.fromEntries(data.clients.map((c) => [c.id, c])), [data.clients]);
-
-  // Layout: admins on left column, clients on right column.
-  const nodeH = 48;
-  const gap = 14;
-  const padTop = 30;
-  const padBottom = 30;
-  const colW = 260;
-  const midGap = 380;
-  const W = colW * 2 + midGap;
-  const adminCount = adminIds.length || 1;
-  const clientCount = clientIds.length || 1;
-  const colHA = padTop + adminCount * nodeH + (adminCount - 1) * gap + padBottom;
-  const colHC = padTop + clientCount * nodeH + (clientCount - 1) * gap + padBottom;
-  const H = Math.max(colHA, colHC, 360);
-
-  const adminY = (i: number) => padTop + (H - padTop - padBottom - (adminCount * nodeH + (adminCount - 1) * gap)) / 2 + i * (nodeH + gap);
-  const clientY = (i: number) => padTop + (H - padTop - padBottom - (clientCount * nodeH + (clientCount - 1) * gap)) / 2 + i * (nodeH + gap);
-
-  const adminX = 0;
-  const clientX = colW + midGap;
-  const lineStartX = adminX + colW;
-  const lineEndX = clientX;
-
-  const adminPos: Record<string, { x: number; y: number }> = {};
-  adminIds.forEach((id, i) => { adminPos[id] = { x: lineStartX, y: adminY(i) + nodeH / 2 }; });
-  const clientPos: Record<string, { x: number; y: number }> = {};
-  clientIds.forEach((id, i) => { clientPos[id] = { x: lineEndX, y: clientY(i) + nodeH / 2 }; });
-
-  // Hover state for highlighting
-  const [hoverId, setHoverId] = useState<string | null>(null);
-
-  const isLinkActive = (cn: SAConnection) => !hoverId || cn.admin_id === hoverId || cn.client_id === hoverId;
-  const isNodeActive = (id: string) => !hoverId || id === hoverId
-    || visible.some((c) => (c.admin_id === id && c.client_id === hoverId) || (c.client_id === id && c.admin_id === hoverId));
-
-  if (visible.length === 0) {
-    return <div style={{ padding: 40, textAlign: "center", color: "#64748B", background: "#F8FAFC", borderRadius: 12, border: "1px solid #334155" }}>No connections match your search.</div>;
-  }
-
-  return (
-    <div style={{ background: "#FFFFFF", border: "1px solid #334155", borderRadius: 14, padding: 16, position: "relative" }}>
-      <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 8, padding: "0 4px" }}>
-        <div style={{ fontSize: 12, fontWeight: 800, color: "#A78BFA", textTransform: "uppercase", letterSpacing: 0.6 }}>Admins ({adminIds.length})</div>
-        <div style={{ fontSize: 12, fontWeight: 800, color: "#34D399", textTransform: "uppercase", letterSpacing: 0.6 }}>Clients ({clientIds.length})</div>
-      </div>
-      <div style={{ overflowX: "auto" }}>
-        <svg viewBox={`0 0 ${W} ${H}`} width="100%" height={H} style={{ display: "block", minWidth: 720 }}>
-          {/* faint background grid */}
-          <defs>
-            <radialGradient id="adminGrad" cx="50%" cy="50%" r="50%">
-              <stop offset="0%" stopColor="#A78BFA" stopOpacity="0.35" />
-              <stop offset="100%" stopColor="#A78BFA" stopOpacity="0" />
-            </radialGradient>
-            <radialGradient id="clientGrad" cx="50%" cy="50%" r="50%">
-              <stop offset="0%" stopColor="#34D399" stopOpacity="0.35" />
-              <stop offset="100%" stopColor="#34D399" stopOpacity="0" />
-            </radialGradient>
-            <linearGradient id="linkGrad" x1="0%" y1="0%" x2="100%" y2="0%">
-              <stop offset="0%" stopColor="#A78BFA" />
-              <stop offset="100%" stopColor="#34D399" />
-            </linearGradient>
-          </defs>
-
-          {/* connection curves */}
-          {visible.map((cn) => {
-            const a = adminPos[cn.admin_id];
-            const c = clientPos[cn.client_id];
-            if (!a || !c) return null;
-            const dx = (c.x - a.x) * 0.4;
-            const path = `M ${a.x} ${a.y} C ${a.x + dx} ${a.y}, ${c.x - dx} ${c.y}, ${c.x} ${c.y}`;
-            const active = isLinkActive(cn);
-            const matchHL = highlight && (
-              cn.admin_name.toLowerCase().includes(highlight) ||
-              cn.client_name.toLowerCase().includes(highlight) ||
-              (cn.admin_email || "").toLowerCase().includes(highlight) ||
-              (cn.client_email || "").toLowerCase().includes(highlight)
-            );
-            const stroke = matchHL ? "#3801FF" : "url(#linkGrad)";
-            return (
-              <path
-                key={cn.id}
-                d={path}
-                fill="none"
-                stroke={stroke}
-                strokeWidth={Math.min(1 + Math.log2(1 + cn.doc_count), 3.5)}
-                strokeOpacity={active ? 0.85 : 0.18}
-                strokeLinecap="round"
-              >
-                <title>{cn.admin_name} → {cn.client_name} ({cn.doc_count} docs)</title>
-              </path>
-            );
-          })}
-
-          {/* mid-link doc count badges */}
-          {visible.map((cn) => {
-            if (cn.doc_count === 0) return null;
-            const a = adminPos[cn.admin_id]; const c = clientPos[cn.client_id];
-            if (!a || !c) return null;
-            const mx = (a.x + c.x) / 2;
-            const my = (a.y + c.y) / 2;
-            const active = isLinkActive(cn);
-            return (
-              <g key={`b_${cn.id}`} opacity={active ? 1 : 0.25}>
-                <circle cx={mx} cy={my} r={11} fill="#FFFFFF" stroke="#3801FF" strokeWidth={1.5} />
-                <text x={mx} y={my + 4} textAnchor="middle" fontSize={10} fontWeight={800} fill="#3801FF">{cn.doc_count}</text>
-              </g>
-            );
-          })}
-
-          {/* Admin nodes (left column) */}
-          {adminIds.map((id, i) => {
-            const a = adminMap[id]; if (!a) return null;
-            const y = adminY(i);
-            const active = isNodeActive(id);
-            return (
-              <g key={`a_${id}`}
-                onMouseEnter={() => setHoverId(id)}
-                onMouseLeave={() => setHoverId((h) => h === id ? null : h)}
-                style={{ cursor: "pointer", opacity: active ? 1 : 0.32 }}>
-                <ellipse cx={adminX + colW / 2} cy={y + nodeH / 2} rx={colW / 2 + 8} ry={nodeH / 2 + 6} fill="url(#adminGrad)" />
-                <rect x={adminX} y={y} width={colW} height={nodeH} rx={10} fill="#1E1B4B" stroke="#A78BFA" strokeWidth={1.5} />
-                <circle cx={adminX + 22} cy={y + nodeH / 2} r={14} fill="#A78BFA22" stroke="#A78BFA" />
-                <text x={adminX + 22} y={y + nodeH / 2 + 5} textAnchor="middle" fill="#A78BFA" fontWeight={800} fontSize={14}>{a.name?.[0]?.toUpperCase() || "?"}</text>
-                <text x={adminX + 46} y={y + 19} fill="#fff" fontWeight={800} fontSize={13}>{trunc(a.name, 22)}</text>
-                <text x={adminX + 46} y={y + 35} fill="#94A3B8" fontSize={10}>{trunc(a.email || "", 30)}</text>
-                <text x={adminX + colW - 14} y={y + 19} textAnchor="end" fill="#3801FF" fontWeight={800} fontSize={12}>{a.client_count}</text>
-                <text x={adminX + colW - 14} y={y + 35} textAnchor="end" fill="#34D399" fontWeight={700} fontSize={10}>{a.doc_count} docs</text>
-              </g>
-            );
-          })}
-
-          {/* Client nodes (right column) */}
-          {clientIds.map((id, i) => {
-            const c = clientMap[id]; if (!c) return null;
-            const y = clientY(i);
-            const active = isNodeActive(id);
-            return (
-              <g key={`c_${id}`}
-                onMouseEnter={() => setHoverId(id)}
-                onMouseLeave={() => setHoverId((h) => h === id ? null : h)}
-                style={{ cursor: "pointer", opacity: active ? 1 : 0.32 }}>
-                <ellipse cx={clientX + colW / 2} cy={y + nodeH / 2} rx={colW / 2 + 8} ry={nodeH / 2 + 6} fill="url(#clientGrad)" />
-                <rect x={clientX} y={y} width={colW} height={nodeH} rx={10} fill="#064E3B" stroke="#34D399" strokeWidth={1.5} />
-                <circle cx={clientX + 22} cy={y + nodeH / 2} r={14} fill="#34D39922" stroke="#34D399" />
-                <text x={clientX + 22} y={y + nodeH / 2 + 5} textAnchor="middle" fill="#34D399" fontWeight={800} fontSize={14}>{c.name?.[0]?.toUpperCase() || "?"}</text>
-                <text x={clientX + 46} y={y + 19} fill="#fff" fontWeight={800} fontSize={13}>{trunc(c.name, 22)}</text>
-                <text x={clientX + 46} y={y + 35} fill="#94A3B8" fontSize={10}>{trunc(c.email || "", 30)}</text>
-                <text x={clientX + colW - 14} y={y + 19} textAnchor="end" fill="#3801FF" fontWeight={800} fontSize={12}>{c.admin_count}</text>
-                <text x={clientX + colW - 14} y={y + 35} textAnchor="end" fill="#34D399" fontWeight={700} fontSize={10}>{c.doc_count} docs</text>
-              </g>
-            );
-          })}
-        </svg>
-      </div>
-      <div style={{ marginTop: 12, fontSize: 11, color: "#64748B", textAlign: "center" }}>
-        Hover any node to highlight its connections · Yellow badge = doc count · Yellow lines = match your search
-      </div>
-    </div>
-  );
-}
-
-function trunc(s: string, n: number) { return s && s.length > n ? s.slice(0, n - 1) + "…" : s; }
-
-function DocumentsTable({ docs, connections, filterText }: {
-  docs: SADocument[];
-  connections: SAConnection[];
-  filterText: (...parts: (string | undefined)[]) => boolean;
-}) {
-  // ──────────────────────────────────────────────────────────────────────
-  // Group documents by their admin↔client pair, then order the resulting
-  // groups by the connection's `created_at` (oldest first ⇒ "1st" badge
-  // shows the very first relationship that ever existed in the system).
-  // ──────────────────────────────────────────────────────────────────────
-  const groups = useMemo(() => {
-    const byKey: Record<string, { conn: SAConnection | null; docs: SADocument[] }> = {};
-    // Seed every known connection so even empty connections show up below.
-    for (const cn of connections) {
-      const k = `${cn.admin_id}::${cn.client_id}`;
-      byKey[k] = { conn: cn, docs: [] };
-    }
-    for (const d of docs) {
-      const k = `${d.admin_id}::${d.client_id}`;
-      if (!byKey[k]) byKey[k] = { conn: null, docs: [] };
-      byKey[k].docs.push(d);
-    }
-    // Sort docs within each group by uploaded_at desc (newest at top of each section).
-    Object.values(byKey).forEach((g) => g.docs.sort((a, b) => (b.uploaded_at || "").localeCompare(a.uploaded_at || "")));
-    // Order groups by connection.created_at asc (oldest connection first ⇒ #1).
-    const list = Object.entries(byKey).map(([k, v]) => ({ key: k, ...v }));
-    list.sort((a, b) => {
-      const ax = a.conn?.created_at || "9999";
-      const bx = b.conn?.created_at || "9999";
-      return ax.localeCompare(bx);
+  // Documents-per-day sparkline (last 14 days)
+  const sparkData = useMemo(() => {
+    const days = 14;
+    const buckets: number[] = Array(days).fill(0);
+    const now = Date.now();
+    documents.forEach((d) => {
+      if (!d.uploaded_at) return;
+      const t = new Date(d.uploaded_at).getTime();
+      const daysAgo = Math.floor((now - t) / (1000 * 60 * 60 * 24));
+      if (daysAgo >= 0 && daysAgo < days) buckets[days - 1 - daysAgo]++;
     });
-    return list;
-  }, [docs, connections]);
-
-  const visibleGroups = groups.filter((g) =>
-    g.conn
-      ? filterText(g.conn.admin_name, g.conn.admin_email, g.conn.client_name, g.conn.client_email) || g.docs.some((d) => filterText(d.filename))
-      : g.docs.some((d) => filterText(d.admin_name, d.admin_email, d.client_name, d.client_email, d.filename)),
-  );
-
-  const totalDocs = visibleGroups.reduce((s, g) => s + g.docs.length, 0);
+    return buckets;
+  }, [documents]);
 
   return (
-    <div>
-      {/* Header bar */}
-      <div style={{
-        display: "flex", justifyContent: "space-between", alignItems: "center",
-        background: "#F8FAFC", border: "1px solid #334155", borderRadius: 12,
-        padding: "12px 16px", marginBottom: 14,
-      }}>
-        <span style={{ fontSize: 12, color: "#94A3B8" }}>📄 Read-only document log — grouped by admin↔client connection (oldest first)</span>
-        <span style={{ fontSize: 12, color: "#94A3B8" }}>
-          <strong style={{ color: "#0F172A" }}>{visibleGroups.length}</strong> connections · <strong style={{ color: "#0F172A" }}>{totalDocs}</strong> docs
-        </span>
+    <div className="sa-overview">
+      {/* KPI hero tiles */}
+      <div className="sa-kpi-grid">
+        <KpiTile color="#3801FF" label="Total Users"     value={stats.users}       icon="👥" trend={sparkData} />
+        <KpiTile color="#7C3AED" label="Admins"          value={stats.admins}      icon="🛡️" />
+        <KpiTile color="#0EA5E9" label="Clients"         value={stats.clients}     icon="🙋" />
+        <KpiTile color="#10B981" label="Connections"     value={stats.connections} icon="🔗" />
+        <KpiTile color="#F59E0B" label="Documents"       value={stats.documents}   icon="📄" trend={sparkData} />
       </div>
 
-      {visibleGroups.length === 0 ? (
-        <div style={{ padding: 40, textAlign: "center", color: "#64748B", background: "#F8FAFC", borderRadius: 12, border: "1px solid #334155" }}>
-          No connections / documents match your search.
-        </div>
-      ) : (
-        <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
-          {visibleGroups.map((g, idx) => (
-            <ConnectionGroup key={g.key} index={idx + 1} group={g} />
-          ))}
-        </div>
-      )}
-    </div>
-  );
-}
-
-function ConnectionGroup({ index, group }: {
-  index: number;
-  group: { conn: SAConnection | null; docs: SADocument[] };
-}) {
-  const cn = group.conn;
-  const adminName = cn?.admin_name ?? group.docs[0]?.admin_name ?? "?";
-  const adminEmail = cn?.admin_email ?? group.docs[0]?.admin_email ?? "—";
-  const clientName = cn?.client_name ?? group.docs[0]?.client_name ?? "?";
-  const clientEmail = cn?.client_email ?? group.docs[0]?.client_email ?? "—";
-  const adminInitial = (adminName?.[0] || "?").toUpperCase();
-  const clientInitial = (clientName?.[0] || "?").toUpperCase();
-  const docCount = group.docs.length;
-
-  return (
-    <div style={{
-      background: "linear-gradient(180deg, #F8FAFC 0%, #FFFFFF 100%)",
-      border: "1px solid #334155", borderRadius: 16, overflow: "hidden",
-      boxShadow: "0 4px 16px rgba(0,0,0,0.25)",
-    }}>
-      {/* Section header: serial + admin → client */}
-      <div style={{
-        display: "flex", alignItems: "center", gap: 14, padding: "16px 18px",
-        background: "linear-gradient(90deg, #3801FF14 0%, rgba(52,211,153,0.10) 100%)",
-        borderBottom: "1px solid #334155",
-      }}>
-        {/* Serial number badge */}
-        <div style={{
-          width: 36, height: 36, borderRadius: 10,
-          background: "linear-gradient(135deg, #3801FF, #5B2DFF)",
-          color: "#0F172A", fontWeight: 900, fontSize: 14,
-          display: "flex", alignItems: "center", justifyContent: "center",
-          boxShadow: "0 4px 14px rgba(245,158,11,0.35)",
-          flexShrink: 0,
-        }}>#{index}</div>
-
-        {/* Admin avatar + name */}
-        <div style={{ display: "flex", alignItems: "center", gap: 10, minWidth: 0, flex: 1 }}>
-          <div style={{
-            width: 38, height: 38, borderRadius: 10,
-            background: "#A78BFA22", border: "1.5px solid #A78BFA",
-            color: "#A78BFA", fontWeight: 800, fontSize: 14,
-            display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0,
-          }}>{adminInitial}</div>
-          <div style={{ minWidth: 0 }}>
-            <div style={{ fontSize: 13, fontWeight: 800, color: "#A78BFA", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{adminName}</div>
-            <div style={{ fontSize: 11, color: "#94A3B8", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{adminEmail}</div>
+      {/* Donut + Sparkline row */}
+      <div className="sa-row2">
+        <div className="sa-card">
+          <div className="sa-card-head">
+            <div>
+              <h3>User distribution</h3>
+              <span className="sa-sub">Admins vs. clients across the network</span>
+            </div>
+          </div>
+          <div className="sa-donut-wrap">
+            <DonutChart
+              segments={[
+                { label: "Admins", value: stats.admins, color: "#7C3AED" },
+                { label: "Clients", value: stats.clients, color: "#10B981" },
+              ]}
+              center={<>
+                <div className="sa-donut-value">{stats.users}</div>
+                <div className="sa-donut-label">total users</div>
+              </>}
+            />
+            <div className="sa-legend">
+              <LegendItem color="#7C3AED" label="Admins" value={stats.admins} total={stats.users} />
+              <LegendItem color="#10B981" label="Clients" value={stats.clients} total={stats.users} />
+            </div>
           </div>
         </div>
 
-        {/* Animated arrow connector */}
-        <div style={{
-          display: "flex", alignItems: "center", gap: 4,
-          color: "#3801FF", fontSize: 18, fontWeight: 800,
-          padding: "0 8px",
-        }}>
-          <span style={{ borderTop: "2px dashed #FBBF24", width: 20, height: 0 }} />
-          <span style={{ fontSize: 18 }}>→</span>
-        </div>
-
-        {/* Client avatar + name */}
-        <div style={{ display: "flex", alignItems: "center", gap: 10, minWidth: 0, flex: 1, justifyContent: "flex-end" }}>
-          <div style={{ minWidth: 0, textAlign: "right" }}>
-            <div style={{ fontSize: 13, fontWeight: 800, color: "#34D399", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{clientName}</div>
-            <div style={{ fontSize: 11, color: "#94A3B8", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{clientEmail}</div>
+        <div className="sa-card">
+          <div className="sa-card-head">
+            <div>
+              <h3>Uploads — last 14 days</h3>
+              <span className="sa-sub">Every document uploaded, by day</span>
+            </div>
+            <div className="sa-delta">
+              <span className="sa-delta-num">{sparkData.reduce((a, b) => a + b, 0)}</span>
+              <span className="sa-delta-label">docs this period</span>
+            </div>
           </div>
-          <div style={{
-            width: 38, height: 38, borderRadius: 10,
-            background: "#34D39922", border: "1.5px solid #34D399",
-            color: "#34D399", fontWeight: 800, fontSize: 14,
-            display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0,
-          }}>{clientInitial}</div>
-        </div>
-
-        {/* Meta */}
-        <div style={{
-          display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 2,
-          paddingLeft: 12, borderLeft: "1px solid #334155",
-          minWidth: 110,
-        }}>
-          <div style={{ fontSize: 11, color: "#94A3B8", fontWeight: 700, letterSpacing: 0.4, textTransform: "uppercase" }}>Connected</div>
-          <div style={{ fontSize: 11, color: "#0F172A", fontWeight: 700 }}>{fmtDate(cn?.created_at)}</div>
-          <div style={{
-            marginTop: 2, fontSize: 10, fontWeight: 800,
-            background: docCount > 0 ? "#F472B622" : "#64748B22",
-            color: docCount > 0 ? "#F472B6" : "#94A3B8",
-            padding: "2px 8px", borderRadius: 999,
-          }}>{docCount} {docCount === 1 ? "doc" : "docs"}</div>
+          <AreaChart values={sparkData} />
         </div>
       </div>
 
-      {/* Document list (timeline-style under the connection) */}
-      {docCount === 0 ? (
-        <div style={{ padding: "20px 18px", color: "#64748B", fontSize: 12, textAlign: "center" }}>
-          No documents shared in this connection yet.
+      {/* Bar charts row */}
+      <div className="sa-row2">
+        <div className="sa-card">
+          <div className="sa-card-head">
+            <div>
+              <h3>🏆 Top admins by activity</h3>
+              <span className="sa-sub">client count + doc count combined</span>
+            </div>
+          </div>
+          <BarRank
+            items={topA.map((a) => ({
+              id: a.id,
+              name: a.name,
+              sublabel: a.email || "",
+              value: a.client_count + a.doc_count,
+              breakdown: [
+                { label: "clients", value: a.client_count, color: "#7C3AED" },
+                { label: "docs", value: a.doc_count, color: "#10B981" },
+              ],
+            }))}
+          />
         </div>
-      ) : (
-        <div style={{ padding: "8px 18px 16px", position: "relative" }}>
-          {/* Vertical timeline rail */}
-          <div style={{
-            position: "absolute", left: 30, top: 16, bottom: 16, width: 2,
-            background: "linear-gradient(180deg, #3801FF 0%, #34D399 100%)",
-            opacity: 0.25, borderRadius: 2,
-          }} />
-          {group.docs.map((d, i) => (
-            <div key={d.id} style={{
-              display: "flex", alignItems: "flex-start", gap: 14,
-              padding: "10px 0",
-              borderBottom: i === group.docs.length - 1 ? "none" : "1px dashed #33415555",
-              position: "relative",
-            }}>
-              {/* Timeline node */}
-              <div style={{
-                width: 24, height: 24, borderRadius: "50%",
-                background: "#FFFFFF", border: "2px solid #FBBF24",
-                display: "flex", alignItems: "center", justifyContent: "center",
-                fontSize: 10, fontWeight: 800, color: "#3801FF",
-                flexShrink: 0, marginTop: 2, zIndex: 1,
-                boxShadow: "0 0 0 4px #1E293B",
-              }}>{i + 1}</div>
-              {/* Filename + meta */}
-              <div style={{ flex: 1, minWidth: 0 }}>
-                <div style={{ fontSize: 14, fontWeight: 700, color: "#0F172A", display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
-                  <span style={{ fontSize: 14 }}>📎</span>
-                  <span style={{ wordBreak: "break-word" }}>{d.filename}</span>
-                  {d.category && (
-                    <span style={{
-                      fontSize: 10, fontWeight: 800,
-                      background: "#3801FF22", color: "#3801FF",
-                      padding: "2px 8px", borderRadius: 6,
-                    }}>{d.category}</span>
-                  )}
+
+        <div className="sa-card">
+          <div className="sa-card-head">
+            <div>
+              <h3>📥 Top clients by docs received</h3>
+              <span className="sa-sub">who is most active on the receiving end</span>
+            </div>
+          </div>
+          <BarRank
+            items={topC.map((c) => ({
+              id: c.id,
+              name: c.name,
+              sublabel: c.email || "",
+              value: c.doc_count,
+              breakdown: [
+                { label: "docs", value: c.doc_count, color: "#10B981" },
+                { label: "admins", value: c.admin_count, color: "#7C3AED" },
+              ],
+            }))}
+          />
+        </div>
+      </div>
+
+      {/* Recent activity */}
+      <div className="sa-card">
+        <div className="sa-card-head">
+          <div>
+            <h3>🕒 Recent connections</h3>
+            <span className="sa-sub">Latest admin ↔ client handshakes</span>
+          </div>
+        </div>
+        <div className="sa-activity">
+          {connections.length === 0 ? (
+            <div className="muted" style={{ padding: 16 }}>No connections yet.</div>
+          ) : connections.slice(0, 6).map((cn) => (
+            <div key={cn.id} className="sa-activity-row">
+              <div className="sa-dot admin"><span>A</span></div>
+              <div className="sa-row-meta">
+                <div className="sa-row-title">
+                  <strong>{cn.admin_name}</strong>
+                  <span className="sa-arrow">→</span>
+                  <strong>{cn.client_name}</strong>
                 </div>
-                <div style={{ marginTop: 4, fontSize: 11, color: "#94A3B8", display: "flex", gap: 10, flexWrap: "wrap" }}>
-                  <span style={{ display: "flex", alignItems: "center", gap: 4 }}>
-                    <span style={{ fontSize: 10 }}>🕐</span>{fmtDateLong(d.uploaded_at)}
-                  </span>
-                  <span style={{ color: "#CBD5E1" }}>·</span>
-                  <span>{fmtSize(d.size_bytes)}</span>
-                </div>
+                <div className="sa-row-sub">{cn.doc_count} docs shared · {fmtDate(cn.created_at)}</div>
               </div>
+              <div className="sa-row-pill">{cn.doc_count}</div>
             </div>
           ))}
         </div>
-      )}
+      </div>
     </div>
   );
 }
 
-function fmtDateLong(iso?: string) {
-  if (!iso) return "—";
-  try {
-    const d = new Date(iso);
-    return d.toLocaleString(undefined, {
-      year: "numeric", month: "short", day: "numeric",
-      hour: "2-digit", minute: "2-digit",
-    });
-  } catch { return iso; }
-}
-
-function StatCard({ label, value, color }: { label: string; value: number; color: string }) {
+/* ──────────────────────────────────────────────────────────────
+ * KPI Tile — gradient card with value + tiny sparkline
+ * ────────────────────────────────────────────────────────────── */
+function KpiTile({ label, value, color, icon, trend }: {
+  label: string; value: number; color: string; icon?: string; trend?: number[];
+}) {
+  const displayed = useCountUp(value);
   return (
-    <div style={{ background: "#F8FAFC", border: `1px solid ${color}33`, borderRadius: 14, padding: 16 }}>
-      <div style={{ fontSize: 11, fontWeight: 700, color: "#94A3B8", textTransform: "uppercase", letterSpacing: 0.6 }}>{label}</div>
-      <div style={{ fontSize: 30, fontWeight: 800, color, marginTop: 4 }}>{value}</div>
+    <div className="sa-kpi" style={{
+      background: `linear-gradient(135deg, ${color}0D 0%, ${color}1A 100%)`,
+      borderColor: `${color}33`,
+    }}>
+      <div className="sa-kpi-top">
+        <span className="sa-kpi-label">{label}</span>
+        {icon && <span className="sa-kpi-icon" style={{ background: `${color}22`, color }}>{icon}</span>}
+      </div>
+      <div className="sa-kpi-value" style={{ color }}>{displayed}</div>
+      {trend && trend.length > 1 && <SparkLine values={trend} color={color} />}
     </div>
   );
 }
 
-function TabBtn({ active, children, onClick }: { active: boolean; children: any; onClick: () => void }) {
+function useCountUp(target: number, ms = 900): number {
+  const [v, setV] = useState(0);
+  useEffect(() => {
+    let raf: any;
+    const start = performance.now();
+    const step = (now: number) => {
+      const t = Math.min(1, (now - start) / ms);
+      const eased = 1 - Math.pow(1 - t, 3);
+      setV(Math.round(target * eased));
+      if (t < 1) raf = requestAnimationFrame(step);
+    };
+    raf = requestAnimationFrame(step);
+    return () => cancelAnimationFrame(raf);
+  }, [target, ms]);
+  return v;
+}
+
+/* ──────────────────────────────────────────────────────────────
+ * SparkLine — tiny inline area chart
+ * ────────────────────────────────────────────────────────────── */
+function SparkLine({ values, color }: { values: number[]; color: string }) {
+  const w = 100;
+  const h = 28;
+  const max = Math.max(1, ...values);
+  const pts = values.map((v, i) => {
+    const x = (i / (values.length - 1)) * w;
+    const y = h - (v / max) * h;
+    return `${x},${y}`;
+  }).join(" ");
+  const area = `0,${h} ${pts} ${w},${h}`;
   return (
-    <button onClick={onClick} style={{
-      padding: "10px 16px", borderRadius: "10px 10px 0 0",
-      border: "1px solid #1E293B",
-      borderBottom: active ? "2px solid #FACC15" : "1px solid #1E293B",
-      background: active ? "#F8FAFC" : "transparent",
-      color: active ? "#3801FF" : "#94A3B8",
-      fontWeight: 700, fontSize: 13, cursor: "pointer",
-    }}>{children}</button>
+    <svg width="100%" height={h} viewBox={`0 0 ${w} ${h}`} preserveAspectRatio="none" style={{ marginTop: 6 }}>
+      <defs>
+        <linearGradient id={`sg-${color.replace("#", "")}`} x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0%" stopColor={color} stopOpacity="0.42" />
+          <stop offset="100%" stopColor={color} stopOpacity="0" />
+        </linearGradient>
+      </defs>
+      <polyline points={area} fill={`url(#sg-${color.replace("#", "")})`} stroke="none" />
+      <polyline points={pts} fill="none" stroke={color} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
   );
 }
 
-function SegBtn({ active, children, onClick }: { active: boolean; children: any; onClick: () => void }) {
+/* ──────────────────────────────────────────────────────────────
+ * Donut chart — SVG, two or more segments
+ * ────────────────────────────────────────────────────────────── */
+function DonutChart({ segments, center }: {
+  segments: { label: string; value: number; color: string }[];
+  center?: React.ReactNode;
+}) {
+  const total = Math.max(1, segments.reduce((s, x) => s + x.value, 0));
+  const size = 220;
+  const stroke = 34;
+  const radius = (size - stroke) / 2;
+  const circumference = 2 * Math.PI * radius;
+  let acc = 0;
   return (
-    <button onClick={onClick} style={{
-      padding: "8px 14px", borderRadius: 8,
-      border: "1px solid " + (active ? "#3801FF" : "#E2E8F0"),
-      background: active ? "#3801FF22" : "transparent",
-      color: active ? "#3801FF" : "#94A3B8",
-      fontWeight: 700, fontSize: 12, cursor: "pointer",
-    }}>{children}</button>
+    <div style={{ position: "relative", width: size, height: size }}>
+      <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`} style={{ transform: "rotate(-90deg)" }}>
+        <circle
+          cx={size / 2} cy={size / 2} r={radius}
+          stroke="#EEF2F7" strokeWidth={stroke} fill="none"
+        />
+        {segments.map((s, i) => {
+          const pct = s.value / total;
+          const dash = pct * circumference;
+          const gap = circumference - dash;
+          const offset = circumference - acc * circumference;
+          acc += pct;
+          return (
+            <circle
+              key={i}
+              cx={size / 2} cy={size / 2} r={radius}
+              stroke={s.color} strokeWidth={stroke} fill="none"
+              strokeDasharray={`${dash} ${gap}`}
+              strokeDashoffset={-((acc - pct) * circumference)}
+              strokeLinecap="butt"
+              style={{ transition: "stroke-dasharray 0.8s ease" }}
+            />
+          );
+        })}
+      </svg>
+      <div style={{
+        position: "absolute", inset: 0, display: "flex",
+        flexDirection: "column", alignItems: "center", justifyContent: "center",
+        textAlign: "center",
+      }}>{center}</div>
+    </div>
+  );
+}
+function LegendItem({ color, label, value, total }: { color: string; label: string; value: number; total: number }) {
+  const pct = total ? Math.round((value / total) * 100) : 0;
+  return (
+    <div className="sa-legend-item">
+      <span className="sa-legend-dot" style={{ background: color }} />
+      <span className="sa-legend-label">{label}</span>
+      <span className="sa-legend-value">{value}</span>
+      <span className="sa-legend-pct" style={{ color }}>{pct}%</span>
+    </div>
+  );
+}
+
+/* ──────────────────────────────────────────────────────────────
+ * AreaChart — small 14-day area chart
+ * ────────────────────────────────────────────────────────────── */
+function AreaChart({ values }: { values: number[] }) {
+  const w = 520, h = 140, pad = 10;
+  const max = Math.max(1, ...values);
+  const step = (w - pad * 2) / (values.length - 1);
+  const pts = values.map((v, i) => {
+    const x = pad + i * step;
+    const y = h - pad - (v / max) * (h - pad * 2);
+    return `${x},${y}`;
+  }).join(" ");
+  const area = `${pad},${h - pad} ${pts} ${w - pad},${h - pad}`;
+  return (
+    <svg width="100%" height={h} viewBox={`0 0 ${w} ${h}`} preserveAspectRatio="none" style={{ marginTop: 8 }}>
+      <defs>
+        <linearGradient id="sa-area" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0%" stopColor="#3801FF" stopOpacity="0.45" />
+          <stop offset="100%" stopColor="#3801FF" stopOpacity="0" />
+        </linearGradient>
+      </defs>
+      {/* grid */}
+      {[0.25, 0.5, 0.75].map((g) => (
+        <line key={g} x1={pad} x2={w - pad} y1={h - pad - g * (h - pad * 2)} y2={h - pad - g * (h - pad * 2)}
+              stroke="#E2E8F0" strokeDasharray="3 6" />
+      ))}
+      <polyline points={area} fill="url(#sa-area)" stroke="none" />
+      <polyline points={pts} fill="none" stroke="#3801FF" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" />
+      {values.map((v, i) => {
+        const x = pad + i * step;
+        const y = h - pad - (v / max) * (h - pad * 2);
+        return v > 0 ? <circle key={i} cx={x} cy={y} r={3} fill="#FFF" stroke="#3801FF" strokeWidth={2} /> : null;
+      })}
+    </svg>
+  );
+}
+
+/* ──────────────────────────────────────────────────────────────
+ * Horizontal Bar Rank — stacked breakdown
+ * ────────────────────────────────────────────────────────────── */
+function BarRank({ items }: {
+  items: { id: string; name: string; sublabel: string; value: number; breakdown: { label: string; value: number; color: string }[] }[];
+}) {
+  if (items.length === 0) return <div className="muted" style={{ padding: 16 }}>Nothing to show yet.</div>;
+  const max = Math.max(1, ...items.map((x) => x.value));
+  return (
+    <div className="sa-bar-list">
+      {items.map((it) => {
+        const pct = (it.value / max) * 100;
+        return (
+          <div key={it.id} className="sa-bar-row">
+            <div className="sa-bar-meta">
+              <div className="sa-bar-name">{it.name}</div>
+              <div className="sa-bar-sub">{it.sublabel}</div>
+            </div>
+            <div className="sa-bar-track">
+              <div className="sa-bar-fill" style={{ width: `${pct}%` }}>
+                {it.breakdown.map((b, i) => {
+                  const segPct = it.value ? (b.value / it.value) * 100 : 0;
+                  return (
+                    <div key={i} title={`${b.label}: ${b.value}`}
+                      style={{ width: `${segPct}%`, background: b.color }} />
+                  );
+                })}
+              </div>
+            </div>
+            <div className="sa-bar-value">{it.value}</div>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+/* ──────────────────────────────────────────────────────────────
+ * Connections table + graph (reused / simplified from old UI)
+ * ────────────────────────────────────────────────────────────── */
+function ConnectionsView({ data, filterText }: {
+  data: SADashboard;
+  filterText: (...parts: (string | undefined)[]) => boolean;
+}) {
+  const rows = data.connections
+    .filter((c) => filterText(c.admin_name, c.admin_email, c.client_name, c.client_email))
+    .map((c) => [
+      <strong>{c.admin_name}</strong>,
+      <span className="muted">{c.admin_email}</span>,
+      <span className="sa-arrow">→</span>,
+      <strong>{c.client_name}</strong>,
+      <span className="muted">{c.client_email}</span>,
+      <strong>{c.doc_count}</strong>,
+      fmtDate(c.created_at),
+    ]);
+  return (
+    <Table
+      head={["Admin", "Admin email", "", "Client", "Client email", "Docs", "Connected on"]}
+      rows={rows}
+    />
+  );
+}
+
+function DocumentsTable({ docs, filterText }: {
+  docs: SADocument[];
+  filterText: (...parts: (string | undefined)[]) => boolean;
+}) {
+  const rows = docs
+    .filter((d) => filterText(d.filename, d.admin_name, d.client_name, d.category))
+    .map((d) => [
+      <span style={{ fontFamily: "ui-monospace, Menlo, monospace", fontSize: 12 }}>{d.filename}</span>,
+      d.category || "—",
+      fmtSize(d.size_bytes),
+      d.admin_name,
+      d.client_name,
+      fmtDate(d.uploaded_at),
+    ]);
+  return (
+    <Table
+      head={["Filename", "Category", "Size", "Admin", "Client", "Uploaded"]}
+      rows={rows}
+    />
+  );
+}
+
+/* ──────────────────────────────────────────────────────────────
+ * Small helpers
+ * ────────────────────────────────────────────────────────────── */
+function NavSvg({ path }: { path: string }) {
+  return (
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none"
+         stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <path d={path} />
+    </svg>
   );
 }
 
 function RoleBadge({ role }: { role: string }) {
   const map: Record<string, { bg: string; fg: string; label: string }> = {
-    superadmin: { bg: "#FBBF2433", fg: "#3801FF", label: "Super Admin" },
-    admin:      { bg: "#A78BFA33", fg: "#A78BFA", label: "Admin" },
-    client:     { bg: "#34D39933", fg: "#34D399", label: "Client" },
+    superadmin: { bg: "#3801FF22", fg: "#3801FF", label: "Super Admin" },
+    admin:      { bg: "#7C3AED22", fg: "#7C3AED", label: "Admin" },
+    client:     { bg: "#10B98122", fg: "#10B981", label: "Client" },
   };
-  const m = map[role] || { bg: "#64748B33", fg: "#94A3B8", label: role };
+  const m = map[role] || { bg: "#64748B22", fg: "#64748B", label: role };
   return <span style={{ background: m.bg, color: m.fg, padding: "3px 10px", borderRadius: 999, fontSize: 11, fontWeight: 800 }}>{m.label}</span>;
 }
 
 function ClientChips({ items, kind = "client" }: { items: { id: string; name: string; email: string }[]; kind?: "client" | "admin" }) {
-  if (!items.length) return <span style={{ color: "#64748B" }}>None</span>;
-  const color = kind === "client" ? "#34D399" : "#A78BFA";
+  if (!items.length) return <span className="muted">None</span>;
+  const color = kind === "client" ? "#10B981" : "#7C3AED";
   return (
     <div style={{ display: "flex", flexWrap: "wrap", gap: 4 }}>
       {items.map((i) => (
@@ -676,86 +600,21 @@ function ClientChips({ items, kind = "client" }: { items: { id: string; name: st
 
 function Table({ head, rows }: { head: any[]; rows: any[][] }) {
   return (
-    <div style={{ background: "#F8FAFC", border: "1px solid #334155", borderRadius: 12, overflow: "hidden" }}>
-      <div style={{ overflowX: "auto" }}>
-        <table style={{ width: "100%", borderCollapse: "collapse", minWidth: 720 }}>
-          <thead>
-            <tr style={{ background: "#FFFFFF" }}>
-              {head.map((h, i) => (
-                <th key={i} style={{ textAlign: "left", padding: "12px 16px", fontSize: 11, color: "#94A3B8", textTransform: "uppercase", letterSpacing: 0.6, borderBottom: "1px solid #334155" }}>{h}</th>
-              ))}
+    <div className="sa-table-wrap">
+      <table>
+        <thead>
+          <tr>{head.map((h, i) => <th key={i}>{h}</th>)}</tr>
+        </thead>
+        <tbody>
+          {rows.length === 0 ? (
+            <tr><td colSpan={head.length} style={{ padding: 40, textAlign: "center", color: "#64748B" }}>No data</td></tr>
+          ) : rows.map((r, i) => (
+            <tr key={i}>
+              {r.map((c, j) => <td key={j}>{c}</td>)}
             </tr>
-          </thead>
-          <tbody>
-            {rows.length === 0 ? (
-              <tr><td colSpan={head.length} style={{ padding: 40, textAlign: "center", color: "#64748B" }}>No data</td></tr>
-            ) : rows.map((r, i) => (
-              <tr key={i} style={{ borderBottom: "1px solid #334155" }}>
-                {r.map((c, j) => (
-                  <td key={j} style={{ padding: "12px 16px", fontSize: 13, color: "#0F172A", verticalAlign: "top" }}>{c}</td>
-                ))}
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
-    </div>
-  );
-}
-
-function Overview({ data }: { data: SADashboard }) {
-  const { admins, clients, connections } = data;
-  const topA = [...admins].sort((a, b) => (b.client_count + b.doc_count) - (a.client_count + a.doc_count)).slice(0, 5);
-  const topC = [...clients].sort((a, b) => b.doc_count - a.doc_count).slice(0, 5);
-  return (
-    <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(320px, 1fr))", gap: 16 }}>
-      <div style={{ background: "#F8FAFC", border: "1px solid #334155", borderRadius: 12, padding: 18 }}>
-        <h3 style={{ fontSize: 14, color: "#3801FF", margin: 0 }}>🏆 Top Admins (by activity)</h3>
-        <div style={{ marginTop: 12, display: "flex", flexDirection: "column", gap: 10 }}>
-          {topA.length === 0 ? <div style={{ color: "#64748B" }}>None</div> : topA.map((a) => (
-            <div key={a.id} style={{ display: "flex", alignItems: "center", gap: 10 }}>
-              <div style={{ width: 30, height: 30, borderRadius: 8, background: "#A78BFA22", color: "#A78BFA", display: "flex", alignItems: "center", justifyContent: "center", fontWeight: 800 }}>{a.name?.[0]?.toUpperCase() || "?"}</div>
-              <div style={{ flex: 1, minWidth: 0 }}>
-                <div style={{ fontWeight: 700, color: "#0F172A" }}>{a.name}</div>
-                <div style={{ fontSize: 11, color: "#94A3B8", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{a.email}</div>
-              </div>
-              <div style={{ fontSize: 11, color: "#94A3B8" }}><strong style={{ color: "#A78BFA" }}>{a.client_count}</strong> clients</div>
-              <div style={{ fontSize: 11, color: "#94A3B8" }}><strong style={{ color: "#34D399" }}>{a.doc_count}</strong> docs</div>
-            </div>
           ))}
-        </div>
-      </div>
-      <div style={{ background: "#F8FAFC", border: "1px solid #334155", borderRadius: 12, padding: 18 }}>
-        <h3 style={{ fontSize: 14, color: "#34D399", margin: 0 }}>📥 Top Clients (by docs received)</h3>
-        <div style={{ marginTop: 12, display: "flex", flexDirection: "column", gap: 10 }}>
-          {topC.length === 0 ? <div style={{ color: "#64748B" }}>None</div> : topC.map((c) => (
-            <div key={c.id} style={{ display: "flex", alignItems: "center", gap: 10 }}>
-              <div style={{ width: 30, height: 30, borderRadius: 8, background: "#34D39922", color: "#34D399", display: "flex", alignItems: "center", justifyContent: "center", fontWeight: 800 }}>{c.name?.[0]?.toUpperCase() || "?"}</div>
-              <div style={{ flex: 1, minWidth: 0 }}>
-                <div style={{ fontWeight: 700, color: "#0F172A" }}>{c.name}</div>
-                <div style={{ fontSize: 11, color: "#94A3B8", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{c.email}</div>
-              </div>
-              <div style={{ fontSize: 11, color: "#94A3B8" }}><strong style={{ color: "#A78BFA" }}>{c.admin_count}</strong> admins</div>
-              <div style={{ fontSize: 11, color: "#94A3B8" }}><strong style={{ color: "#34D399" }}>{c.doc_count}</strong> docs</div>
-            </div>
-          ))}
-        </div>
-      </div>
-      <div style={{ background: "#F8FAFC", border: "1px solid #334155", borderRadius: 12, padding: 18, gridColumn: "1 / -1" }}>
-        <h3 style={{ fontSize: 14, color: "#60A5FA", margin: 0 }}>🕒 Recent Connections (last 5)</h3>
-        <div style={{ marginTop: 12, display: "flex", flexDirection: "column", gap: 10 }}>
-          {connections.slice(0, 5).map((cn) => (
-            <div key={cn.id} style={{ display: "flex", alignItems: "center", gap: 10, fontSize: 13 }}>
-              <strong style={{ color: "#A78BFA" }}>{cn.admin_name}</strong>
-              <span style={{ color: "#3801FF" }}>→</span>
-              <strong style={{ color: "#34D399" }}>{cn.client_name}</strong>
-              <span style={{ flex: 1, color: "#64748B", fontSize: 11 }}>{cn.doc_count} docs</span>
-              <span style={{ color: "#94A3B8", fontSize: 11 }}>{fmtDate(cn.created_at)}</span>
-            </div>
-          ))}
-          {connections.length === 0 && <div style={{ color: "#64748B" }}>No connections yet.</div>}
-        </div>
-      </div>
+        </tbody>
+      </table>
     </div>
   );
 }
@@ -767,7 +626,6 @@ function fmtDate(iso?: string) {
     return d.toLocaleString(undefined, { year: "numeric", month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" });
   } catch { return iso; }
 }
-
 function fmtSize(b: number) {
   if (!b) return "—";
   if (b < 1024) return `${b} B`;
