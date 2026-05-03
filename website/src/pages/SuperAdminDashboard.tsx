@@ -239,6 +239,36 @@ function Overview({ data }: { data: SADashboard }) {
         </div>
       </div>
 
+      {/* Heatmap calendar */}
+      <div className="sa-card">
+        <div className="sa-card-head">
+          <div>
+            <h3>📅 Upload activity — last 12 weeks</h3>
+            <span className="sa-sub">Each square = one day · darker = more uploads</span>
+          </div>
+          <div className="sa-delta">
+            <span className="sa-delta-num">{documents.length}</span>
+            <span className="sa-delta-label">docs all-time</span>
+          </div>
+        </div>
+        <CalendarHeatmap docs={documents} weeks={12} />
+      </div>
+
+      {/* Trend comparison — Users vs Docs */}
+      <div className="sa-card">
+        <div className="sa-card-head">
+          <div>
+            <h3>📈 Growth — last 30 days</h3>
+            <span className="sa-sub">New user signups vs. new document uploads</span>
+          </div>
+          <div style={{ display: "flex", gap: 14 }}>
+            <div className="sa-legend-inline"><span style={{ background: "#7C3AED" }} /> Users</div>
+            <div className="sa-legend-inline"><span style={{ background: "#10B981" }} /> Docs</div>
+          </div>
+        </div>
+        <TrendCompare users={data.users} docs={documents} days={30} />
+      </div>
+
       {/* Bar charts row */}
       <div className="sa-row2">
         <div className="sa-card">
@@ -284,6 +314,24 @@ function Overview({ data }: { data: SADashboard }) {
         </div>
       </div>
 
+      {/* Funnel */}
+      <div className="sa-card">
+        <div className="sa-card-head">
+          <div>
+            <h3>🔻 User engagement funnel</h3>
+            <span className="sa-sub">How users progress from signup → active doc management</span>
+          </div>
+        </div>
+        <Funnel
+          stages={[
+            { label: "Total users", value: stats.users, color: "#3801FF" },
+            { label: "Connected users", value: [...admins, ...clients].filter((u: any) => (u.client_count || u.admin_count) > 0).length, color: "#5B2EFF" },
+            { label: "Active (≥1 doc)", value: [...admins, ...clients].filter((u: any) => (u.doc_count || 0) > 0).length, color: "#7C3AED" },
+            { label: "Power users (≥5 docs)", value: [...admins, ...clients].filter((u: any) => (u.doc_count || 0) >= 5).length, color: "#9333EA" },
+          ]}
+        />
+      </div>
+
       {/* Recent activity */}
       <div className="sa-card">
         <div className="sa-card-head">
@@ -310,6 +358,248 @@ function Overview({ data }: { data: SADashboard }) {
             </div>
           ))}
         </div>
+      </div>
+    </div>
+  );
+}
+
+/* ──────────────────────────────────────────────────────────────
+ * Funnel — SVG trapezoid stages with conversion %
+ * ────────────────────────────────────────────────────────────── */
+function Funnel({ stages }: { stages: { label: string; value: number; color: string }[] }) {
+  if (!stages.length) return null;
+  const top = Math.max(1, stages[0].value);
+  const width = 640;
+  const height = 300;
+  const stageH = height / stages.length;
+  const cx = width / 2;
+  const minHalf = 40; // narrowest half-width
+
+  const halfW = (v: number) => {
+    const pct = v / top;
+    return minHalf + pct * (cx - minHalf);
+  };
+
+  return (
+    <div style={{ display: "flex", gap: 20, alignItems: "center" }}>
+      <svg width="100%" height={height + 20} viewBox={`0 0 ${width} ${height + 20}`} style={{ flex: 1, maxWidth: 640 }}>
+        {stages.map((s, i) => {
+          const topV = i === 0 ? s.value : stages[i - 1].value;
+          const botV = s.value;
+          const y = i * stageH + 10;
+          const hw1 = halfW(topV);
+          const hw2 = halfW(botV);
+          const points = [
+            `${cx - hw1},${y}`,
+            `${cx + hw1},${y}`,
+            `${cx + hw2},${y + stageH}`,
+            `${cx - hw2},${y + stageH}`,
+          ].join(" ");
+          return (
+            <g key={i}>
+              <polygon points={points} fill={s.color} opacity={0.85 - i * 0.12}>
+                <title>{s.label}: {s.value}</title>
+              </polygon>
+              <text x={cx} y={y + stageH / 2 + 5} textAnchor="middle" fill="#fff" fontSize={14} fontWeight={800}>
+                {s.value}
+              </text>
+            </g>
+          );
+        })}
+      </svg>
+      <div style={{ display: "flex", flexDirection: "column", gap: 10, minWidth: 200 }}>
+        {stages.map((s, i) => {
+          const conv = i === 0 ? 100 : Math.round((s.value / Math.max(1, stages[i - 1].value)) * 100);
+          return (
+            <div key={i} style={{ padding: "8px 12px", borderLeft: `4px solid ${s.color}`, background: "#F8FAFC", borderRadius: 8 }}>
+              <div style={{ fontSize: 12, fontWeight: 700, color: "#0F172A" }}>{s.label}</div>
+              <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 2 }}>
+                <span style={{ fontSize: 17, fontWeight: 800, color: s.color }}>{s.value}</span>
+                {i > 0 && (
+                  <span style={{ fontSize: 11, fontWeight: 700, color: conv >= 50 ? "#10B981" : "#EF4444" }}>
+                    {conv}% ↓
+                  </span>
+                )}
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+/* ──────────────────────────────────────────────────────────────
+ * TrendCompare — Dual-line chart (Users vs Docs per day)
+ * ────────────────────────────────────────────────────────────── */
+function TrendCompare({ users, docs, days = 30 }: { users: SAUser[]; docs: SADocument[]; days?: number }) {
+  const { userSeries, docSeries, xLabels } = useMemo(() => {
+    const u: number[] = Array(days).fill(0);
+    const d: number[] = Array(days).fill(0);
+    const now = Date.now();
+    const startMs = now - (days - 1) * 24 * 60 * 60 * 1000;
+    const bucket = (iso?: string): number | null => {
+      if (!iso) return null;
+      const t = new Date(iso).getTime();
+      if (t < startMs - 12 * 3600 * 1000) return null;
+      const i = Math.floor((t - startMs) / (24 * 60 * 60 * 1000));
+      return i >= 0 && i < days ? i : null;
+    };
+    users.forEach((usr) => { const i = bucket(usr.created_at); if (i !== null) u[i]++; });
+    docs.forEach((doc)  => { const i = bucket(doc.uploaded_at); if (i !== null) d[i]++; });
+    const labels: string[] = [];
+    for (let i = 0; i < days; i++) {
+      const dt = new Date(startMs + i * 86400000);
+      labels.push(`${dt.getDate()}/${dt.getMonth() + 1}`);
+    }
+    return { userSeries: u, docSeries: d, xLabels: labels };
+  }, [users, docs, days]);
+
+  const w = 640, h = 180, pad = 12, padY = 20;
+  const max = Math.max(1, ...userSeries, ...docSeries);
+  const step = (w - pad * 2) / (days - 1);
+  const toY = (v: number) => h - padY - (v / max) * (h - padY * 2);
+  const pointsFor = (arr: number[]) => arr.map((v, i) => `${pad + i * step},${toY(v)}`).join(" ");
+
+  return (
+    <svg width="100%" height={h} viewBox={`0 0 ${w} ${h}`} preserveAspectRatio="none" style={{ marginTop: 8 }}>
+      <defs>
+        <linearGradient id="trend-u-grad" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0%" stopColor="#7C3AED" stopOpacity="0.28" />
+          <stop offset="100%" stopColor="#7C3AED" stopOpacity="0" />
+        </linearGradient>
+        <linearGradient id="trend-d-grad" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0%" stopColor="#10B981" stopOpacity="0.28" />
+          <stop offset="100%" stopColor="#10B981" stopOpacity="0" />
+        </linearGradient>
+      </defs>
+      {[0.25, 0.5, 0.75].map((g) => (
+        <line key={g} x1={pad} x2={w - pad}
+              y1={h - padY - g * (h - padY * 2)} y2={h - padY - g * (h - padY * 2)}
+              stroke="#E2E8F0" strokeDasharray="3 6" />
+      ))}
+      <polyline points={`${pad},${h - padY} ${pointsFor(userSeries)} ${w - pad},${h - padY}`} fill="url(#trend-u-grad)" />
+      <polyline points={`${pad},${h - padY} ${pointsFor(docSeries)} ${w - pad},${h - padY}`}  fill="url(#trend-d-grad)" />
+      <polyline points={pointsFor(userSeries)} fill="none" stroke="#7C3AED" strokeWidth={2.2} strokeLinecap="round" strokeLinejoin="round" />
+      <polyline points={pointsFor(docSeries)}  fill="none" stroke="#10B981" strokeWidth={2.2} strokeLinecap="round" strokeLinejoin="round" />
+      {/* dots on non-zero days */}
+      {userSeries.map((v, i) => v > 0 ? <circle key={`u${i}`} cx={pad + i * step} cy={toY(v)} r={3} fill="#fff" stroke="#7C3AED" strokeWidth={2} /> : null)}
+      {docSeries.map((v, i) => v > 0 ? <circle key={`d${i}`} cx={pad + i * step} cy={toY(v)} r={3} fill="#fff" stroke="#10B981" strokeWidth={2} /> : null)}
+      {/* axis labels: first, mid, last */}
+      {[0, Math.floor(days / 2), days - 1].map((i) => (
+        <text key={i} x={pad + i * step} y={h - 4} textAnchor="middle" fontSize={10} fill="#64748B">{xLabels[i]}</text>
+      ))}
+    </svg>
+  );
+}
+
+/* ──────────────────────────────────────────────────────────────
+ * CalendarHeatmap — GitHub-style activity grid (12 weeks × 7 days)
+ * ────────────────────────────────────────────────────────────── */
+function CalendarHeatmap({ docs, weeks = 12 }: { docs: SADocument[]; weeks?: number }) {
+  const { matrix, maxVal, total, monthLabels } = useMemo(() => {
+    const cols = weeks;
+    const now = new Date();
+    // Start from the most recent Sunday so columns align weekly
+    const end = new Date(now);
+    end.setHours(23, 59, 59, 999);
+    const dayOfWeek = end.getDay(); // 0 (Sun) .. 6 (Sat)
+    const start = new Date(end);
+    start.setDate(end.getDate() - (cols * 7 - 1) - dayOfWeek + 1);
+    start.setHours(0, 0, 0, 0);
+
+    const buckets: Record<string, number> = {};
+    docs.forEach((d) => {
+      if (!d.uploaded_at) return;
+      const t = new Date(d.uploaded_at);
+      if (t < start || t > end) return;
+      const k = `${t.getFullYear()}-${String(t.getMonth() + 1).padStart(2, "0")}-${String(t.getDate()).padStart(2, "0")}`;
+      buckets[k] = (buckets[k] || 0) + 1;
+    });
+
+    const matrix: { date: Date; key: string; value: number }[][] = [];
+    for (let w = 0; w < cols; w++) {
+      const col: { date: Date; key: string; value: number }[] = [];
+      for (let d = 0; d < 7; d++) {
+        const cellDate = new Date(start);
+        cellDate.setDate(start.getDate() + w * 7 + d);
+        const k = `${cellDate.getFullYear()}-${String(cellDate.getMonth() + 1).padStart(2, "0")}-${String(cellDate.getDate()).padStart(2, "0")}`;
+        col.push({ date: cellDate, key: k, value: buckets[k] || 0 });
+      }
+      matrix.push(col);
+    }
+    let maxVal = 0;
+    let total = 0;
+    matrix.forEach((col) => col.forEach((c) => { if (c.value > maxVal) maxVal = c.value; total += c.value; }));
+
+    // Month labels: only show if the first day of the column starts a new month
+    const monthNames = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+    const monthLabels: { col: number; text: string }[] = [];
+    let lastMonth = -1;
+    matrix.forEach((col, i) => {
+      const m = col[0].date.getMonth();
+      if (m !== lastMonth) {
+        monthLabels.push({ col: i, text: monthNames[m] });
+        lastMonth = m;
+      }
+    });
+    return { matrix, maxVal, total, monthLabels };
+  }, [docs, weeks]);
+
+  const colorFor = (v: number) => {
+    if (!v) return "#F1F5F9";
+    if (!maxVal) return "#F1F5F9";
+    const ratio = v / Math.max(1, maxVal);
+    if (ratio <= 0.2) return "#E5DEFF";
+    if (ratio <= 0.4) return "#C7B7FF";
+    if (ratio <= 0.6) return "#9A7BFF";
+    if (ratio <= 0.8) return "#6B40FF";
+    return "#3801FF";
+  };
+
+  const CELL = 14, GAP = 3;
+  const gridH = 7 * (CELL + GAP) - GAP;
+  const dayLabels = ["Mon", "Wed", "Fri"];
+
+  return (
+    <div className="sa-heatmap">
+      {/* Month labels row */}
+      <div className="sa-heatmap-months" style={{ marginLeft: 28 }}>
+        {monthLabels.map((m, i) => (
+          <span key={i} style={{ left: m.col * (CELL + GAP), position: "absolute" }}>{m.text}</span>
+        ))}
+      </div>
+      <div className="sa-heatmap-body">
+        {/* Day-of-week labels */}
+        <div className="sa-heatmap-days" style={{ height: gridH }}>
+          {dayLabels.map((d, i) => (
+            <span key={i} style={{ top: ((i * 2) + 1) * (CELL + GAP) + 2 }}>{d}</span>
+          ))}
+        </div>
+        {/* The grid */}
+        <svg width={matrix.length * (CELL + GAP)} height={gridH}>
+          {matrix.map((col, ci) => col.map((cell, ri) => (
+            <rect
+              key={`${ci}-${ri}`}
+              x={ci * (CELL + GAP)}
+              y={ri * (CELL + GAP)}
+              width={CELL}
+              height={CELL}
+              rx={3}
+              fill={colorFor(cell.value)}
+            >
+              <title>{cell.date.toDateString()} — {cell.value} {cell.value === 1 ? "doc" : "docs"}</title>
+            </rect>
+          )))}
+        </svg>
+      </div>
+      <div className="sa-heatmap-legend">
+        <span>Less</span>
+        {[0, 0.2, 0.4, 0.6, 0.8, 1].map((r, i) => (
+          <span key={i} className="sa-heatmap-sw" style={{ background: colorFor(r * maxVal) }} />
+        ))}
+        <span>More</span>
+        <span className="sa-heatmap-total">{total} uploads in the last {weeks} weeks</span>
       </div>
     </div>
   );
@@ -515,30 +805,206 @@ function BarRank({ items }: {
 }
 
 /* ──────────────────────────────────────────────────────────────
- * Connections table + graph (reused / simplified from old UI)
+ * Connections table + Network Graph (spider-web) visualisation
  * ────────────────────────────────────────────────────────────── */
 function ConnectionsView({ data, filterText }: {
   data: SADashboard;
   filterText: (...parts: (string | undefined)[]) => boolean;
 }) {
-  const rows = data.connections
-    .filter((c) => filterText(c.admin_name, c.admin_email, c.client_name, c.client_email))
-    .map((c) => [
-      <strong>{c.admin_name}</strong>,
-      <span className="muted">{c.admin_email}</span>,
-      <span className="sa-arrow">→</span>,
-      <strong>{c.client_name}</strong>,
-      <span className="muted">{c.client_email}</span>,
-      <strong>{c.doc_count}</strong>,
-      fmtDate(c.created_at),
-    ]);
+  const [view, setView] = useState<"web" | "table">("web");
+  const visible = data.connections.filter((c) =>
+    filterText(c.admin_name, c.admin_email, c.client_name, c.client_email),
+  );
   return (
-    <Table
-      head={["Admin", "Admin email", "", "Client", "Client email", "Docs", "Connected on"]}
-      rows={rows}
-    />
+    <div>
+      <div style={{ display: "flex", gap: 8, marginBottom: 14 }}>
+        <SegBtn active={view === "web"}   onClick={() => setView("web")}>🕸️ Network View</SegBtn>
+        <SegBtn active={view === "table"} onClick={() => setView("table")}>📋 Table View</SegBtn>
+      </div>
+      {view === "web" ? (
+        <NetworkGraph data={data} visible={visible} />
+      ) : (
+        <Table
+          head={["Admin", "Admin email", "", "Client", "Client email", "Docs", "Connected on"]}
+          rows={visible.map((c) => [
+            <strong>{c.admin_name}</strong>,
+            <span className="muted">{c.admin_email}</span>,
+            <span className="sa-arrow">→</span>,
+            <strong>{c.client_name}</strong>,
+            <span className="muted">{c.client_email}</span>,
+            <strong>{c.doc_count}</strong>,
+            fmtDate(c.created_at),
+          ])}
+        />
+      )}
+    </div>
   );
 }
+
+function NetworkGraph({ data, visible }: {
+  data: SADashboard; visible: SAConnection[];
+}) {
+  const adminIds = useMemo(() => Array.from(new Set(visible.map((c) => c.admin_id))), [visible]);
+  const clientIds = useMemo(() => Array.from(new Set(visible.map((c) => c.client_id))), [visible]);
+  const adminMap = useMemo(() => Object.fromEntries(data.admins.map((a) => [a.id, a])), [data.admins]);
+  const clientMap = useMemo(() => Object.fromEntries(data.clients.map((c) => [c.id, c])), [data.clients]);
+
+  const nodeH = 48;
+  const gap = 14;
+  const padTop = 30;
+  const padBottom = 30;
+  const colW = 260;
+  const midGap = 380;
+  const W = colW * 2 + midGap;
+  const adminCount = adminIds.length || 1;
+  const clientCount = clientIds.length || 1;
+  const colHA = padTop + adminCount * nodeH + (adminCount - 1) * gap + padBottom;
+  const colHC = padTop + clientCount * nodeH + (clientCount - 1) * gap + padBottom;
+  const H = Math.max(colHA, colHC, 360);
+
+  const adminY = (i: number) => padTop + (H - padTop - padBottom - (adminCount * nodeH + (adminCount - 1) * gap)) / 2 + i * (nodeH + gap);
+  const clientY = (i: number) => padTop + (H - padTop - padBottom - (clientCount * nodeH + (clientCount - 1) * gap)) / 2 + i * (nodeH + gap);
+
+  const adminX = 0;
+  const clientX = colW + midGap;
+  const lineStartX = adminX + colW;
+  const lineEndX = clientX;
+
+  const adminPos: Record<string, { x: number; y: number }> = {};
+  adminIds.forEach((id, i) => { adminPos[id] = { x: lineStartX, y: adminY(i) + nodeH / 2 }; });
+  const clientPos: Record<string, { x: number; y: number }> = {};
+  clientIds.forEach((id, i) => { clientPos[id] = { x: lineEndX, y: clientY(i) + nodeH / 2 }; });
+
+  const [hoverId, setHoverId] = useState<string | null>(null);
+  const isLinkActive = (cn: SAConnection) => !hoverId || cn.admin_id === hoverId || cn.client_id === hoverId;
+  const isNodeActive = (id: string) => !hoverId || id === hoverId
+    || visible.some((c) => (c.admin_id === id && c.client_id === hoverId) || (c.client_id === id && c.admin_id === hoverId));
+
+  if (visible.length === 0) {
+    return <div className="sa-card" style={{ textAlign: "center", padding: 40, color: "#64748B" }}>No connections match your search.</div>;
+  }
+
+  return (
+    <div className="sa-card sa-netgraph">
+      <div className="sa-netgraph-head">
+        <div className="sa-netgraph-hlabel admin">🛡️ Admins ({adminIds.length})</div>
+        <div className="sa-netgraph-hlabel client">🙋 Clients ({clientIds.length})</div>
+      </div>
+      <div style={{ overflowX: "auto" }}>
+        <svg viewBox={`0 0 ${W} ${H}`} width="100%" height={H} style={{ display: "block", minWidth: 720 }}>
+          <defs>
+            <radialGradient id="sa-adminGrad" cx="50%" cy="50%" r="50%">
+              <stop offset="0%" stopColor="#7C3AED" stopOpacity="0.22" />
+              <stop offset="100%" stopColor="#7C3AED" stopOpacity="0" />
+            </radialGradient>
+            <radialGradient id="sa-clientGrad" cx="50%" cy="50%" r="50%">
+              <stop offset="0%" stopColor="#10B981" stopOpacity="0.22" />
+              <stop offset="100%" stopColor="#10B981" stopOpacity="0" />
+            </radialGradient>
+            <linearGradient id="sa-linkGrad" x1="0%" y1="0%" x2="100%" y2="0%">
+              <stop offset="0%" stopColor="#7C3AED" />
+              <stop offset="100%" stopColor="#10B981" />
+            </linearGradient>
+          </defs>
+
+          {/* connection curves */}
+          {visible.map((cn) => {
+            const a = adminPos[cn.admin_id];
+            const c = clientPos[cn.client_id];
+            if (!a || !c) return null;
+            const dx = (c.x - a.x) * 0.4;
+            const path = `M ${a.x} ${a.y} C ${a.x + dx} ${a.y}, ${c.x - dx} ${c.y}, ${c.x} ${c.y}`;
+            const active = isLinkActive(cn);
+            return (
+              <path
+                key={cn.id}
+                d={path}
+                fill="none"
+                stroke="url(#sa-linkGrad)"
+                strokeWidth={Math.min(1 + Math.log2(1 + cn.doc_count), 3.5)}
+                strokeOpacity={active ? 0.85 : 0.2}
+                strokeLinecap="round"
+              >
+                <title>{cn.admin_name} → {cn.client_name} ({cn.doc_count} docs)</title>
+              </path>
+            );
+          })}
+
+          {/* doc count badges mid-link */}
+          {visible.map((cn) => {
+            if (cn.doc_count === 0) return null;
+            const a = adminPos[cn.admin_id]; const c = clientPos[cn.client_id];
+            if (!a || !c) return null;
+            const mx = (a.x + c.x) / 2;
+            const my = (a.y + c.y) / 2;
+            const active = isLinkActive(cn);
+            return (
+              <g key={`b_${cn.id}`} opacity={active ? 1 : 0.3}>
+                <circle cx={mx} cy={my} r={12} fill="#FFFFFF" stroke="#3801FF" strokeWidth={1.6} />
+                <text x={mx} y={my + 4} textAnchor="middle" fontSize={10} fontWeight={800} fill="#3801FF">{cn.doc_count}</text>
+              </g>
+            );
+          })}
+
+          {/* Admin nodes */}
+          {adminIds.map((id, i) => {
+            const a = adminMap[id]; if (!a) return null;
+            const y = adminY(i);
+            const active = isNodeActive(id);
+            return (
+              <g key={`a_${id}`}
+                 onMouseEnter={() => setHoverId(id)}
+                 onMouseLeave={() => setHoverId((h) => h === id ? null : h)}
+                 style={{ cursor: "pointer", opacity: active ? 1 : 0.35 }}>
+                <ellipse cx={adminX + colW / 2} cy={y + nodeH / 2} rx={colW / 2 + 8} ry={nodeH / 2 + 6} fill="url(#sa-adminGrad)" />
+                <rect x={adminX} y={y} width={colW} height={nodeH} rx={10} fill="#FFFFFF" stroke="#7C3AED" strokeWidth={1.5} />
+                <circle cx={adminX + 22} cy={y + nodeH / 2} r={14} fill="#7C3AED22" stroke="#7C3AED" />
+                <text x={adminX + 22} y={y + nodeH / 2 + 5} textAnchor="middle" fill="#7C3AED" fontWeight={800} fontSize={14}>{a.name?.[0]?.toUpperCase() || "?"}</text>
+                <text x={adminX + 46} y={y + 19} fill="#0F172A" fontWeight={800} fontSize={13}>{trunc(a.name, 22)}</text>
+                <text x={adminX + 46} y={y + 35} fill="#64748B" fontSize={10}>{trunc(a.email || "", 30)}</text>
+                <text x={adminX + colW - 14} y={y + 19} textAnchor="end" fill="#3801FF" fontWeight={800} fontSize={12}>{a.client_count}</text>
+                <text x={adminX + colW - 14} y={y + 35} textAnchor="end" fill="#10B981" fontWeight={700} fontSize={10}>{a.doc_count} docs</text>
+              </g>
+            );
+          })}
+
+          {/* Client nodes */}
+          {clientIds.map((id, i) => {
+            const c = clientMap[id]; if (!c) return null;
+            const y = clientY(i);
+            const active = isNodeActive(id);
+            return (
+              <g key={`c_${id}`}
+                 onMouseEnter={() => setHoverId(id)}
+                 onMouseLeave={() => setHoverId((h) => h === id ? null : h)}
+                 style={{ cursor: "pointer", opacity: active ? 1 : 0.35 }}>
+                <ellipse cx={clientX + colW / 2} cy={y + nodeH / 2} rx={colW / 2 + 8} ry={nodeH / 2 + 6} fill="url(#sa-clientGrad)" />
+                <rect x={clientX} y={y} width={colW} height={nodeH} rx={10} fill="#FFFFFF" stroke="#10B981" strokeWidth={1.5} />
+                <circle cx={clientX + 22} cy={y + nodeH / 2} r={14} fill="#10B98122" stroke="#10B981" />
+                <text x={clientX + 22} y={y + nodeH / 2 + 5} textAnchor="middle" fill="#10B981" fontWeight={800} fontSize={14}>{c.name?.[0]?.toUpperCase() || "?"}</text>
+                <text x={clientX + 46} y={y + 19} fill="#0F172A" fontWeight={800} fontSize={13}>{trunc(c.name, 22)}</text>
+                <text x={clientX + 46} y={y + 35} fill="#64748B" fontSize={10}>{trunc(c.email || "", 30)}</text>
+                <text x={clientX + colW - 14} y={y + 19} textAnchor="end" fill="#3801FF" fontWeight={800} fontSize={12}>{c.admin_count}</text>
+                <text x={clientX + colW - 14} y={y + 35} textAnchor="end" fill="#10B981" fontWeight={700} fontSize={10}>{c.doc_count} docs</text>
+              </g>
+            );
+          })}
+        </svg>
+      </div>
+      <div className="sa-netgraph-hint">
+        Hover any node to highlight its connections · Purple badge = doc count
+      </div>
+    </div>
+  );
+}
+
+function SegBtn({ active, children, onClick }: { active: boolean; children: any; onClick: () => void }) {
+  return (
+    <button onClick={onClick} className={`sa-seg ${active ? "active" : ""}`}>{children}</button>
+  );
+}
+
+function trunc(s: string, n: number) { return s && s.length > n ? s.slice(0, n - 1) + "…" : s; }
 
 function DocumentsTable({ docs, filterText }: {
   docs: SADocument[];
