@@ -15,6 +15,7 @@ import { FadeInItem } from "../../src/AnimatedList";
 import { colors, gradients, radius, shadow } from "../../src/theme";
 import { LinearGradient } from "expo-linear-gradient";
 import { Ic } from "../../src/Icons";
+import MobileDrawer, { DrawerHeader, DrawerItem } from "../../src/MobileDrawer";
 
 export default function ClientHome() {
   const router = useRouter();
@@ -24,6 +25,7 @@ export default function ClientHome() {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [showConnect, setShowConnect] = useState(false);
+  const [drawerOpen, setDrawerOpen] = useState(false);
 
   const removeConnection = (a: ConnectedAdmin) => {
     Alert.alert(
@@ -79,20 +81,8 @@ export default function ClientHome() {
   };
 
   return (
-    <View style={{ flex: 1, backgroundColor: "#F4F6FB" }}>
-      <View style={st.header}>
-        <SafeAreaView edges={["top"]}>
-          <View style={st.headerInner}>
-            <View style={{ flex: 1, minWidth: 0 }}>
-              <Text style={st.brand}>DocVault</Text>
-              <Text style={st.who} numberOfLines={1}>{user?.email}</Text>
-            </View>
-            <TouchableOpacity onPress={onLogout} style={st.logoutBtn}>
-              <Ic kind="logout" size={18} />
-            </TouchableOpacity>
-          </View>
-        </SafeAreaView>
-      </View>
+    <View style={{ flex: 1, backgroundColor: "#F7F8FC" }}>
+      <DrawerHeader title="DocVault" onMenu={() => setDrawerOpen(true)} />
 
       <FlatList
         data={admins}
@@ -146,6 +136,28 @@ export default function ClientHome() {
 
       <ConnectModal visible={showConnect} peerRole="admin" onClose={() => setShowConnect(false)}
         onConnected={() => { setShowConnect(false); reload(); }} />
+
+      <MobileDrawer
+        open={drawerOpen}
+        onClose={() => setDrawerOpen(false)}
+        title="Client Console"
+        subtitle={user?.email}
+        items={[
+          {
+            key: "admins",
+            label: "My Admins",
+            badge: admins.length || undefined,
+            icon: <Ionicons name="people-outline" size={20} color="#3801FF" />,
+            onPress: () => {},
+          },
+          {
+            key: "connect",
+            label: "Connect with Admin",
+            icon: <Ionicons name="link-outline" size={20} color="#3801FF" />,
+            onPress: () => setShowConnect(true),
+          },
+        ]}
+      />
     </View>
   );
 }

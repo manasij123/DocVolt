@@ -15,6 +15,7 @@ import ConnectModal from "../../src/ConnectModal";
 import { FadeInItem } from "../../src/AnimatedList";
 import { colors, gradients, radius, shadow } from "../../src/theme";
 import { Ic } from "../../src/Icons";
+import MobileDrawer, { DrawerHeader, DrawerItem } from "../../src/MobileDrawer";
 
 export default function AdminHome() {
   const router = useRouter();
@@ -24,6 +25,23 @@ export default function AdminHome() {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [showConnect, setShowConnect] = useState(false);
+  const [drawerOpen, setDrawerOpen] = useState(false);
+
+  const drawerItems: DrawerItem[] = [
+    {
+      key: "clients",
+      label: "Clients",
+      badge: clients.length || undefined,
+      icon: <Ionicons name="people-outline" size={20} color="#3801FF" />,
+      onPress: () => {},
+    },
+    {
+      key: "add",
+      label: "Add Client",
+      icon: <Ionicons name="person-add-outline" size={20} color="#3801FF" />,
+      onPress: () => setShowConnect(true),
+    },
+  ];
 
   const removeConnection = (c: ClientRow) => {
     Alert.alert(
@@ -87,21 +105,8 @@ export default function AdminHome() {
   const totalDocs = clients.reduce((s, c) => s + (c.doc_count || 0), 0);
 
   return (
-    <View style={{ flex: 1, backgroundColor: "#F4F6FB" }}>
-      <LinearGradient colors={gradients.hero} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={st.header}>
-        <SafeAreaView edges={["top"]}>
-          <View style={st.headerInner}>
-            <View style={{ flex: 1, minWidth: 0 }}>
-              <Text style={st.brand}>Admin Console</Text>
-              <Text style={st.who} numberOfLines={1}>{user?.email}</Text>
-            </View>
-            <TouchableOpacity onPress={onLogout} style={st.logoutBtn}>
-              <Ic kind="logout" size={18} />
-              <Text style={st.logoutText}>Logout</Text>
-            </TouchableOpacity>
-          </View>
-        </SafeAreaView>
-      </LinearGradient>
+    <View style={{ flex: 1, backgroundColor: "#F7F8FC" }}>
+      <DrawerHeader title="Admin Console" onMenu={() => setDrawerOpen(true)} />
 
       <FlatList
         data={clients}
@@ -156,6 +161,14 @@ export default function AdminHome() {
 
       <ConnectModal visible={showConnect} peerRole="client" onClose={() => setShowConnect(false)}
         onConnected={() => { setShowConnect(false); reload(); }} />
+
+      <MobileDrawer
+        open={drawerOpen}
+        onClose={() => setDrawerOpen(false)}
+        title="Admin Console"
+        subtitle={user?.email}
+        items={drawerItems}
+      />
     </View>
   );
 }
