@@ -390,44 +390,103 @@ async def _learn_keywords(admin_id: str, client_id: str, category_id: str, filen
         },
     )
 
-async def _suggest_category(admin_id: str, client_id: str, filename: str) -> Optional[dict]:
+async def _suggest_combined(
+    admin_id: str, client_id: str, filename: str, file_path: Optional[str] = None,
+) -> Optional[Tuple[dict, Dict[str, Any]]]:
     """
-    Score every category for this (admin, client) against tokens in the
-    filename. Returns the best-matching category dict (or None if no match).
+    Unified scoring that fuses two independent learning signals:
+      1. Filename-token score — learned `keyword_weights` + manual `keywords`
+      2. Content-template score — Jaccard similarity with stored
+         `content_signatures` of past uploads to each category.
+
+    The filename & content signals complement each other — sometimes the
+    filename tells us "this is an invoice" even if the PDF text is mostly
+    numbers; other times the filename is garbage ("Scan001.pdf") but the
+    content is clearly a tax statement. By combining them we always pick the
+    *strongest available* signal.
+
+    Returns (best_category, debug_info) or None if nothing scored.
     """
-    tokens = tokenize_filename(filename)
-    if not tokens:
-        return None
     cats: List[dict] = []
     async for c in db.categories.find({"admin_id": admin_id, "client_id": client_id}):
         cats.append(c)
     if not cats:
         return None
 
-    best = None
+    tokens = tokenize_filename(filename)
+
+    # Content signature (only if a file path was given)
+    content_sig: List[str] = []
+    if file_path:
+        try:
+            text = extract_pdf_text(file_path)
+            content_sig = content_signature(text)
+        except Exception as e:
+            logger.warning(f"content_sig extraction failed: {e}")
+
+    best: Optional[dict] = None
     best_score = 0.0
+    best_detail: Dict[str, Any] = {}
+
     for c in cats:
+        # --- Filename score (0..∞)
+        fn_score = 0.0
+        fn_matched: List[str] = []
         weights: Dict[str, int] = c.get("keyword_weights", {}) or {}
         manual = [k.lower() for k in (c.get("keywords") or []) if isinstance(k, str)]
-        score = 0.0
         for t in tokens:
             if t in weights:
-                # Learned token — weight by sqrt(count) so one-offs don't overwhelm
-                score += 1.0 + (weights[t] ** 0.5)
+                fn_score += 1.0 + (weights[t] ** 0.5)
+                fn_matched.append(t)
             elif t in manual:
-                score += 1.2  # manual keyword slightly beats a single-use learn
+                fn_score += 1.2
+                fn_matched.append(t)
             else:
-                # Substring match against manual keywords (for phrases like "monthly return")
                 for mk in manual:
                     if len(mk) >= 4 and (mk in t or t in mk):
-                        score += 0.5
+                        fn_score += 0.5
                         break
-        if score > best_score:
-            best_score = score
+
+        # --- Content score (0..1 Jaccard, boosted by template popularity)
+        ct_score = 0.0
+        ct_templates = 0
+        if content_sig:
+            sigs: List[Dict[str, Any]] = c.get("content_signatures", []) or []
+            for s in sigs:
+                j = _jaccard(content_sig, s.get("tokens", []))
+                if j > 0:
+                    ct_score = max(ct_score, j * (1.0 + 0.15 * min(5, int(s.get("count", 1)))))
+                    ct_templates += int(s.get("count", 1))
+
+        # --- Fusion
+        # Filename weight 1.0, content weight 4.0 (content is more reliable
+        # when available, because it reflects the actual document template).
+        combined = fn_score * 1.0 + ct_score * 4.0
+
+        if combined > best_score:
+            best_score = combined
             best = c
+            best_detail = {
+                "filename_score": round(fn_score, 2),
+                "filename_matched": fn_matched,
+                "content_score": round(ct_score, 2),
+                "content_templates": ct_templates,
+                "combined_score": round(combined, 2),
+            }
+
+    # Threshold — require meaningful combined signal
     if not best or best_score < 0.8:
         return None
-    return best
+    return best, best_detail
+
+
+async def _suggest_category(admin_id: str, client_id: str, filename: str) -> Optional[dict]:
+    """
+    Filename-only suggestion (used by pre-upload /categories/suggest endpoint).
+    Kept as a thin wrapper around the combined suggester.
+    """
+    r = await _suggest_combined(admin_id, client_id, filename, file_path=None)
+    return r[0] if r else None
 
 
 # ============================================================
@@ -965,25 +1024,34 @@ async def upload_document(
         except Exception as e:
             logger.warning(f"learn_content failed: {e}")
 
-    # 🧠 Content-based check: does this file's internal text match a DIFFERENT
-    # category better than the one the admin selected? If so, tell the UI so
-    # it can offer "Did you mean …?" reclassification.
+    # 🧠 Combined (filename + content) smart check — does the unified AI
+    # suggestion differ from what the admin selected? If so surface a
+    # "Did you mean..." hint. Also emit a reassuring "confirm" hint when
+    # content & filename both agree with the admin's choice.
     try:
-        result = await _suggest_by_content(current["id"], client_id, str(abs_path))
-        if result:
-            suggested_cat, score, matched_count = result
-            if suggested_cat["id"] != (doc.get("category_id") or ""):
+        combined = await _suggest_combined(
+            current["id"], client_id, file.filename, str(abs_path),
+        )
+        if combined:
+            best_cat, detail = combined
+            if best_cat["id"] != (doc.get("category_id") or ""):
                 content_hint = {
-                    "suggested_category": cat_to_meta(suggested_cat),
-                    "confidence": round(score, 2),
-                    "matched_templates": matched_count,
+                    "suggested_category": cat_to_meta(best_cat),
+                    "confidence": detail.get("combined_score", 0) / 5.0,  # normalize 0..1-ish
+                    "matched_templates": detail.get("content_templates", 0),
+                    "matched_filename_tokens": detail.get("filename_matched", []),
+                    "content_score": detail.get("content_score", 0),
+                    "filename_score": detail.get("filename_score", 0),
                     "kind": "override",
                 }
             else:
                 content_hint = {
-                    "suggested_category": cat_to_meta(suggested_cat),
-                    "confidence": round(score, 2),
-                    "matched_templates": matched_count,
+                    "suggested_category": cat_to_meta(best_cat),
+                    "confidence": detail.get("combined_score", 0) / 5.0,
+                    "matched_templates": detail.get("content_templates", 0),
+                    "matched_filename_tokens": detail.get("filename_matched", []),
+                    "content_score": detail.get("content_score", 0),
+                    "filename_score": detail.get("filename_score", 0),
                     "kind": "confirm",
                 }
     except Exception as e:
