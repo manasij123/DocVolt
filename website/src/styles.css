@@ -1388,6 +1388,74 @@ main {
   display: block;
 }
 
+/* Desktop-install (PWA) button — uses the same pill layout as the APK
+   button but with DocVault brand colour so it reads as the primary
+   "get the app" CTA on laptops / desktops. */
+.dv-desktop-install-btn {
+  cursor: pointer;
+  background: linear-gradient(135deg, #F5F3FF 0%, #FFFFFF 100%);
+  border: 1.5px solid #3801FF;
+  color: #3801FF;
+  font-family: inherit;
+  margin-left: 12px;
+}
+.dv-desktop-install-btn:hover {
+  transform: translateY(-1px);
+  background: linear-gradient(135deg, #3801FF 0%, #6E3CFF 100%);
+  color: #FFFFFF;
+  border-color: #3801FF;
+  box-shadow: 0 8px 22px rgba(56, 1, 255, 0.28);
+}
+.dv-desktop-install-btn:hover .dv-apk-inline-icon {
+  filter: brightness(0) invert(1); /* SVG logo stays visible on hover bg */
+}
+.dv-desktop-install-btn .dv-apk-inline-icon {
+  height: 32px;
+  max-width: 40px;
+  transition: filter 120ms ease;
+}
+@media (max-width: 820px) {
+  .dv-desktop-install-btn { margin-left: 0; margin-top: 10px; display: flex; }
+}
+
+/* Desktop install help modal */
+.dv-install-modal { max-width: 640px; width: 92vw; padding: 24px 26px; }
+.dv-install-head {
+  display: flex; align-items: flex-start; gap: 16px;
+  padding-bottom: 14px; margin-bottom: 16px;
+  border-bottom: 1px solid #E5E7EB;
+}
+.dv-install-icon {
+  width: 48px; height: 48px; flex: 0 0 48px;
+  border-radius: 12px; padding: 6px;
+  background: linear-gradient(135deg, #F5F3FF, #EEF2FF);
+}
+.dv-install-steps {
+  display: flex; flex-direction: column; gap: 14px;
+  max-height: 60vh; overflow-y: auto;
+}
+.dv-install-step {
+  padding: 14px 16px; border-radius: 12px;
+  background: #F8FAFC; border: 1px solid #E2E8F0;
+}
+.dv-install-step strong {
+  display: block; margin-bottom: 8px;
+  color: #0F172A; font-size: 14px;
+}
+.dv-install-step ol {
+  margin: 0; padding-left: 22px;
+  color: #334155; font-size: 13.5px; line-height: 1.55;
+}
+.dv-install-step ol li { margin-bottom: 4px; }
+
+/* When running AS an installed PWA, hide the now-pointless install buttons
+   and the Android-APK CTA in the sidebar (users who installed already
+   don't need to see them). */
+@media (display-mode: standalone), (display-mode: window-controls-overlay) {
+  .dv-desktop-install-btn { display: none !important; }
+}
+
+
 /* Hero right — Dashboard mockup + 3D logo overlay */
 .dv-hero-right { position: relative; min-height: 520px; }
 .dv-dashboard-card {

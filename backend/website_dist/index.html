@@ -4,14 +4,30 @@
     <meta charset="UTF-8" />
     <link rel="icon" type="image/png" href="/api/web/favicon.png" />
     <link rel="apple-touch-icon" href="/api/web/apple-touch-icon.png" />
+    <link rel="manifest" href="/api/web/manifest.webmanifest" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <meta name="theme-color" content="#1A73E8" />
+    <meta name="theme-color" content="#3801FF" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-title" content="DocVault" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+    <meta name="mobile-web-app-capable" content="yes" />
     <title>DocVault — Web</title>
-    <meta name="description" content="DocVault — Organised PDF storage. Web version of the mobile app." />
-    <script type="module" crossorigin src="/api/web/assets/index-CCP1shJG.js"></script>
-    <link rel="stylesheet" crossorigin href="/api/web/assets/index-DHtuCJF2.css">
+    <meta name="description" content="DocVault — Organised PDF storage. Secure, per-client privacy, real-time sync. Install as a desktop app." />
+    <script type="module" crossorigin src="/api/web/assets/index-Bfc9UhLU.js"></script>
+    <link rel="stylesheet" crossorigin href="/api/web/assets/index-CWJ0TIUR.css">
   </head>
   <body>
     <div id="root"></div>
+    <script>
+      // Register the PWA service worker so Chrome / Edge / Safari can
+      // offer the "Install DocVault" prompt (desktop app experience).
+      if ("serviceWorker" in navigator) {
+        window.addEventListener("load", function () {
+          navigator.serviceWorker
+            .register("/api/web/sw.js", { scope: "/api/web/" })
+            .catch(function (err) { console.warn("SW registration failed:", err); });
+        });
+      }
+    </script>
   </body>
 </html>

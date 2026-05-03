@@ -1,0 +1,59 @@
+{
+  "id": "/api/web/",
+  "name": "DocVault — Document Organizer",
+  "short_name": "DocVault",
+  "description": "Secure PDF storage, per-client privacy, real-time sync.",
+  "start_url": "/api/web/",
+  "scope": "/api/web/",
+  "display": "standalone",
+  "display_override": ["window-controls-overlay", "standalone", "minimal-ui"],
+  "orientation": "any",
+  "background_color": "#FFFFFF",
+  "theme_color": "#3801FF",
+  "categories": ["productivity", "business", "utilities"],
+  "lang": "en",
+  "dir": "ltr",
+  "icons": [
+    {
+      "src": "/api/web/logo.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    },
+    {
+      "src": "/api/web/favicon.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/api/web/favicon.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    },
+    {
+      "src": "/api/web/apple-touch-icon.png",
+      "sizes": "180x180",
+      "type": "image/png",
+      "purpose": "any"
+    }
+  ],
+  "shortcuts": [
+    {
+      "name": "Admin Dashboard",
+      "short_name": "Admin",
+      "description": "Open the admin workspace",
+      "url": "/api/web/admin",
+      "icons": [{ "src": "/api/web/favicon.png", "sizes": "192x192" }]
+    },
+    {
+      "name": "Client Portal",
+      "short_name": "Client",
+      "description": "Open your client portal",
+      "url": "/api/web/client",
+      "icons": [{ "src": "/api/web/favicon.png", "sizes": "192x192" }]
+    }
+  ],
+  "prefer_related_applications": false
+}
