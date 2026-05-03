@@ -1,10 +1,9 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
-import api, { ClientRow, getToken, getUser, logout, initials, colorFromString } from "../api";
-import { Ic } from "../Icons";
+import api, { ClientRow, getToken, getUser, initials, colorFromString } from "../api";
 import { useDocsSocket } from "../useDocsSocket";
-import LiveBadge from "../LiveBadge";
 import ConnectModal from "../ConnectModal";
+import DashboardShell, { NavItem } from "../layout/DashboardShell";
 
 type Toast = { id: string; title: string; sub?: string; leaving?: boolean };
 
@@ -21,6 +20,7 @@ export default function AdminHome() {
   useEffect(() => {
     if (!getToken() || me?.role !== "admin") { nav("/admin/login", { replace: true }); return; }
     reload();
+    // eslint-disable-next-line
   }, []);
 
   const reload = async () => {
@@ -52,7 +52,6 @@ export default function AdminHome() {
     }
   };
 
-  // Real-time: notify on new client signup, auto-refresh on connection events
   useDocsSocket((e) => {
     if (e.type === "client:registered") {
       const c = e.client;
@@ -78,78 +77,115 @@ export default function AdminHome() {
 
   const totalDocs = clients.reduce((s, c) => s + (c.doc_count || 0), 0);
 
-  const onLogout = () => { logout(); nav("/", { replace: true }); };
+  const navItems: NavItem[] = [
+    {
+      to: "/admin",
+      label: "Clients",
+      icon: (
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" />
+          <circle cx="9" cy="7" r="4" />
+          <path d="M23 21v-2a4 4 0 0 0-3-3.87" />
+          <path d="M16 3.13a4 4 0 0 1 0 7.75" />
+        </svg>
+      ),
+      badge: clients.length || undefined,
+    },
+    {
+      to: "#add-client",
+      label: "Add Client",
+      onPress: () => setShowConnect(true),
+      icon: (
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          <path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" />
+          <circle cx="8.5" cy="7" r="4" />
+          <line x1="20" y1="8" x2="20" y2="14" />
+          <line x1="23" y1="11" x2="17" y2="11" />
+        </svg>
+      ),
+    },
+  ];
 
   return (
-    <div className="app-shell">
-      <header className="topbar admin-bar">
-        <div className="container topbar-inner">
-          <div className="brand"><img src="/api/web/favicon.png" alt="DocVault" style={{ width: 32, height: 32, borderRadius: 8, objectFit: "cover", marginRight: 8 }} /> Admin Console</div>
-          <div className="topbar-actions">
-            <LiveBadge />
-            <span className="who-pill">{me?.name}</span>
-            <button className="btn btn-sm" style={{ background: "rgba(255,255,255,0.10)", color: "#fff", borderRadius: 9, padding: "8px 14px", display: "inline-flex", alignItems: "center", gap: 6 }} onClick={onLogout}><Ic kind="logout" size={16} /> Logout</button>
-          </div>
-        </div>
-      </header>
+    <DashboardShell
+      role="admin"
+      title="Admin Console"
+      nav={navItems}
+      pageTitle="Your clients"
+      pageSubtitle={
+        <>
+          <strong>{clients.length}</strong> connected · {totalDocs} total files · Share <span className="kbd">{me?.email}</span> with new clients
+        </>
+      }
+      headerAction={
+        <button className="btn btn-primary btn-lg" onClick={() => setShowConnect(true)}>
+          ＋ Add Client
+        </button>
+      }
+    >
+      <div className="search-row" style={{ marginTop: 4, marginBottom: 18 }}>
+        <span>🔍</span>
+        <input
+          className="search-input"
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+          placeholder="Search by name or email…"
+        />
+      </div>
 
-      <main className="container page-anim" style={{ padding: "24px 24px 60px" }}>
-        <div className="head-row">
-          <div>
-            <h1 style={{ fontSize: 28, fontWeight: 800, margin: "0 0 4px", letterSpacing: -0.5 }}>Your clients</h1>
-            <p className="muted" style={{ marginTop: 0, marginBottom: 0 }}>
-              <strong>{clients.length}</strong> connected · {totalDocs} total files · Share <span className="kbd">{me?.email}</span> with new clients
-            </p>
-          </div>
-          <button className="btn btn-primary btn-lg" onClick={() => setShowConnect(true)}>
+      {loading ? (
+        <div>
+          <div className="skeleton" />
+          <div className="skeleton" />
+          <div className="skeleton" />
+        </div>
+      ) : clients.length === 0 ? (
+        <div className="empty">
+          <div className="empty-icon">👥</div>
+          <h3>No clients yet</h3>
+          <p style={{ marginBottom: 14 }}>
+            Share your email <strong>{me?.email}</strong> with clients so they can connect during register, or click
+            <strong> ＋ Add Client</strong> above to invite an already-registered client.
+          </p>
+          <button className="btn btn-primary" onClick={() => setShowConnect(true)}>
             ＋ Add Client
           </button>
         </div>
-
-        <div className="search-row" style={{ marginTop: 18 }}>
-          <span>🔍</span>
-          <input className="search-input" value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search by name or email…" />
+      ) : filtered.length === 0 ? (
+        <div className="empty"><p>No clients match "{search}".</p></div>
+      ) : (
+        <div className="client-grid">
+          {filtered.map((c) => (
+            <Link
+              key={c.id}
+              to={`/admin/c/${c.id}`}
+              className={`client-row ${highlightId === c.id ? "highlight" : ""}`}
+            >
+              <div className="avatar" style={{ background: colorFromString(c.id) }}>
+                {initials(c.name)}
+              </div>
+              <div className="client-meta">
+                <div className="client-name">{c.name}</div>
+                <div className="client-email">{c.email}</div>
+              </div>
+              <div className="client-stats">
+                <div className="stat-num">{c.doc_count}</div>
+                <div className="stat-lbl">{c.doc_count === 1 ? "file" : "files"}</div>
+              </div>
+              <button
+                type="button"
+                className="row-remove-btn"
+                onClick={(e) => removeConnection(e, c)}
+                aria-label={`Remove connection with ${c.name}`}
+                title="Remove connection"
+              >
+                ×
+              </button>
+              <span className="client-arrow">→</span>
+            </Link>
+          ))}
         </div>
-
-        {loading ? (
-          <div><div className="skeleton" /><div className="skeleton" /><div className="skeleton" /></div>
-        ) : clients.length === 0 ? (
-          <div className="empty">
-            <div className="empty-icon">👥</div>
-            <h3>No clients yet</h3>
-            <p style={{ marginBottom: 14 }}>Share your email <strong>{me?.email}</strong> with clients so they can connect during register, or click <strong>＋ Add Client</strong> above to invite an already-registered client.</p>
-            <button className="btn btn-primary" onClick={() => setShowConnect(true)}>＋ Add Client</button>
-          </div>
-        ) : filtered.length === 0 ? (
-          <div className="empty"><p>No clients match "{search}".</p></div>
-        ) : (
-          <div className="client-grid">
-            {filtered.map((c) => (
-              <Link key={c.id} to={`/admin/c/${c.id}`} className={`client-row ${highlightId === c.id ? "highlight" : ""}`}>
-                <div className="avatar" style={{ background: colorFromString(c.id) }}>{initials(c.name)}</div>
-                <div className="client-meta">
-                  <div className="client-name">{c.name}</div>
-                  <div className="client-email">{c.email}</div>
-                </div>
-                <div className="client-stats">
-                  <div className="stat-num">{c.doc_count}</div>
-                  <div className="stat-lbl">{c.doc_count === 1 ? "file" : "files"}</div>
-                </div>
-                <button
-                  type="button"
-                  className="row-remove-btn"
-                  onClick={(e) => removeConnection(e, c)}
-                  aria-label={`Remove connection with ${c.name}`}
-                  title="Remove connection"
-                >
-                  ×
-                </button>
-                <span className="client-arrow">→</span>
-              </Link>
-            ))}
-          </div>
-        )}
-      </main>
+      )}
 
       {showConnect && (
         <ConnectModal
@@ -163,10 +199,13 @@ export default function AdminHome() {
         {toasts.map((t) => (
           <div key={t.id} className={`toast created ${t.leaving ? "leaving" : ""}`}>
             <span className="dot" />
-            <div className="body"><strong>{t.title}</strong>{t.sub && <small>{t.sub}</small>}</div>
+            <div className="body">
+              <strong>{t.title}</strong>
+              {t.sub && <small>{t.sub}</small>}
+            </div>
           </div>
         ))}
       </div>
-    </div>
+    </DashboardShell>
   );
 }

@@ -37,7 +37,7 @@ type Props = {
   toolbar?: ReactNode;
   /** Heading shown above children, optional */
   pageTitle?: string;
-  pageSubtitle?: string;
+  pageSubtitle?: ReactNode;
   /** Action button/element on the right side of the page title row */
   headerAction?: ReactNode;
   children: ReactNode;
